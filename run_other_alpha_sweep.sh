@@ -30,7 +30,7 @@ echo "LOG_FILE: $LOG_FILE"
 export PROJECT_DIR="$WORKDIR"
 export PYTHONPATH="$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
 
-# キャッシュをプロジェクト内に固定（安定＆権限事故を減らす）
+# キャッシュ設定
 export HF_HOME="$PROJECT_DIR/.hf_cache"
 export TRANSFORMERS_CACHE="$HF_HOME"
 export HF_DATASETS_CACHE="$HF_HOME/datasets"
@@ -45,13 +45,12 @@ echo "[INFO] nvidia-smi:"
 command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi || echo "(no nvidia-smi)"
 
 # ==================== Tokens ====================
-# トークンはログに出さない
 set +x
 if [ -f "$PROJECT_DIR/.hf_token" ]; then
   export HUGGINGFACE_HUB_TOKEN="$(head -n1 "$PROJECT_DIR/.hf_token" | tr -d '\r\n' | sed 's/^Bearer[[:space:]]\+//')"
 fi
 
-# ==================== Config backup & restore (safe) ====================
+# ==================== Config backup & restore ====================
 CONFIG_FILE="exp/configs/big5_vectors.yaml"
 CONFIG_BAK="exp/configs/big5_vectors.yaml.bak"
 
@@ -82,12 +81,10 @@ if [ ! -x "$VENV/bin/python" ]; then
 fi
 
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/.uv_cache}"
-
 export VIRTUAL_ENV="$VENV"
 export PATH="$VENV/bin:$PATH"
 
 if [ "${RUN_UV_SYNC:-0}" = "1" ]; then
-  export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/.uv_cache}"
   if [ -f "$PROJECT_DIR/uv.lock" ]; then
     uv sync --frozen --active
   else
@@ -110,7 +107,6 @@ for p in paths:
 print(":".join(out))
 PY
 ):${LD_LIBRARY_PATH:-}"
-echo "[INFO] injected nvidia libs into LD_LIBRARY_PATH"
 
 "$PYTHON_BIN" -V
 "$PYTHON_BIN" - <<'PY'
@@ -119,14 +115,11 @@ print("torch", torch.__version__)
 print("cuda available", torch.cuda.is_available())
 if torch.cuda.is_available():
     print("gpu", torch.cuda.get_device_name(0))
-    print("compiled cuda", torch.version.cuda)
 PY
 
 # ==================== Experiment params ====================
 TRAITS=("openness" "conscientiousness" "extraversion" "agreeableness" "neuroticism")
 
-# 1行 = "TAG|BASE_ID|INSTR_ID|ALPHAS_BASE|ALPHAS_INSTR"
-# ※ base/instructで同じなら同じ文字列を入れる
 MODEL_SPECS=(
   "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-5.5,-5,-4.5,-4,-3.5,-3,-2,-1,0,1,2,3,3.5,4,4.5,5,5.5|-5.5,-5,-4.5,-4,-3.5,-3,-2,-1,0,1,2,3,3.5,4,4.5,5,5.5"
   "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-20,-16,-12,-8,-4,0,4,8,12,16,20|-20,-16,-12,-8,-4,0,4,8,12,16,20"
@@ -143,25 +136,20 @@ prepare_axes_if_needed() {
   local model_id="$1"
   local ax_bank="$2"
   local config_file="$3"
-
   local norm_bank="${ax_bank%.npz}_rawnorms.npz"
 
   sed -i "s|^model_name: .*|model_name: ${model_id}|g" "$config_file"
 
-  # axes と rawnorms の両方があるときだけSKIP
   if is_nonempty_file "$ax_bank" && is_nonempty_file "$norm_bank"; then
     echo "[SKIP] axes+rawnorms exists: $ax_bank , $norm_bank"
   else
     echo "[RUN ] 00_prepare_vectors.py -> $ax_bank (+ $norm_bank)"
     "$PYTHON_BIN" scripts/00_prepare_vectors.py --config "$config_file" --bank_path "$ax_bank"
-    if ! is_nonempty_file "$norm_bank"; then
-      echo "[WARN] rawnorms not created (expected): $norm_bank"
-    fi
   fi
 }
 
 run_probe_if_needed() {
-  local split="$1"      # base | instruct
+  local split="$1"
   local trait="$2"
   local model_id="$3"
   local axes_bank="$4"
@@ -184,7 +172,7 @@ run_probe_if_needed() {
 
 concat_alltraits() {
   local results_dir="$1"
-  local split="$2"       # base | instruct
+  local split="$2"
   local out_all="$3"
 
   rm -f "$out_all"
@@ -193,12 +181,13 @@ concat_alltraits() {
     if is_nonempty_file "$f"; then
       cat "$f" >> "$out_all"
     else
-      echo "[WARN] missing/empty: $f (not included in alltraits)"
+      echo "[WARN] missing/empty: $f"
     fi
   done
-  echo "[INFO] wrote: $out_all ($(wc -l < "$out_all" 2>/dev/null || echo 0) lines)"
+  echo "[INFO] wrote: $out_all"
 }
 
+# ★★★ Improved Text Analysis Helper ★★★
 run_text_analysis() {
   local tag="$1"
   local results_dir="$2"
@@ -212,9 +201,10 @@ run_text_analysis() {
   fi
 
   # --- 13: Edit Distance (CPU) ---
-  # 出力: ${tag}_${split}_edit_distance.csv
   local dist_csv="${results_dir}/${tag}_${split}_edit_distance.csv"
-  if [ -s "$dist_csv" ]; then
+  
+  # Check if exists and not empty
+  if is_nonempty_file "$dist_csv"; then
     echo "[SKIP] 13_text_change_vs_alpha.py exists: $dist_csv"
   else
     echo "[RUN ] 13_text_change_vs_alpha.py -> $dist_csv"
@@ -224,9 +214,10 @@ run_text_analysis() {
   fi
 
   # --- 14: Personality Score (GPU) ---
-  # 出力: ${tag}_${split}_personality_scores.csv
   local score_csv="${results_dir}/${tag}_${split}_personality_scores.csv"
-  if [ -s "$score_csv" ]; then
+  
+  # Check if exists and not empty
+  if is_nonempty_file "$score_csv"; then
     echo "[SKIP] 14_calc_personality_score.py exists: $score_csv"
   else
     echo "[RUN ] 14_calc_personality_score.py -> $score_csv"
@@ -247,7 +238,7 @@ run_alpha_select_and_viz() {
   for SPLIT in base instruct; do
     for trait in "${TRAITS[@]}"; do
       local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_with_rms.jsonl"
-      [ -s "$in_jsonl" ] || { echo "[WARN] missing $in_jsonl (skip)"; continue; }
+      [ -s "$in_jsonl" ] || continue
 
       "$PYTHON_BIN" scripts/06_alpha_eval_v13.py \
         --in "$in_jsonl" \
@@ -284,22 +275,19 @@ run_alpha_select_and_viz() {
 run_slopes_and_viz() {
   local tag="$1"
   local results_dir="$2"
-
   local base_all="${results_dir}/${tag}_base_alltraits.jsonl"
   local instr_all="${results_dir}/${tag}_instruct_alltraits.jsonl"
 
   if ! is_nonempty_file "$base_all" || ! is_nonempty_file "$instr_all"; then
-    echo "[WARN] missing alltraits jsonl for slopes: base=$base_all instr=$instr_all (skip 02/03)"
+    echo "[WARN] missing alltraits jsonl for slopes (skip)"
     return 0
   fi
 
   local slopes_dir="${results_dir}/slopes"
   local figs_dir="${slopes_dir}/figs"
   mkdir -p "$slopes_dir" "$figs_dir"
-
   local out_csv="${slopes_dir}/slopes_${tag}_asst_pairwise.csv"
 
-  # --- 02: compute slopes CSV ---
   if is_nonempty_file "$out_csv"; then
     echo "[SKIP] slopes csv exists: $out_csv"
   else
@@ -312,18 +300,9 @@ run_slopes_and_viz() {
       --axis_mode pairwise
   fi
 
-  # --- 03: visualize slopes ---
-  echo "[RUN ] 03_slopes_visualize.py (alpha01 slope) -> $figs_dir"
-  "$PYTHON_BIN" scripts/03_slopes_visualize.py \
-    --input_dir "$out_csv" \
-    --out_dir   "$figs_dir" \
-    --value_col slope_delta_score_vs_alpha01
-
-  echo "[RUN ] 03_slopes_visualize.py (raw slope) -> $figs_dir"
-  "$PYTHON_BIN" scripts/03_slopes_visualize.py \
-    --input_dir "$out_csv" \
-    --out_dir   "$figs_dir" \
-    --value_col slope_delta_score_vs_alpha
+  echo "[RUN ] 03_slopes_visualize.py"
+  "$PYTHON_BIN" scripts/03_slopes_visualize.py --input_dir "$out_csv" --out_dir "$figs_dir" --value_col slope_delta_score_vs_alpha01
+  "$PYTHON_BIN" scripts/03_slopes_visualize.py --input_dir "$out_csv" --out_dir "$figs_dir" --value_col slope_delta_score_vs_alpha
 }
 
 run_one_model_pair() {
@@ -348,7 +327,8 @@ run_one_model_pair() {
       "${results_dir}/${tag}_base_${trait}_with_rms.jsonl" "$alphas_base"
   done
   concat_alltraits "$results_dir" "base" "${results_dir}/${tag}_base_alltraits.jsonl"
-
+  
+  # Base Text Analysis
   run_text_analysis "$tag" "$results_dir" "base"
 
   # --- Instruct axes ---
@@ -362,12 +342,13 @@ run_one_model_pair() {
   done
   concat_alltraits "$results_dir" "instruct" "${results_dir}/${tag}_instruct_alltraits.jsonl"
 
+  # Instruct Text Analysis
   run_text_analysis "$tag" "$results_dir" "instruct"
 
-  # --- 02/03 ---
+  # --- 02/03 Slopes ---
   run_slopes_and_viz "$tag" "$results_dir"
 
-  # --- 06/07 ---
+  # --- 06/07 Alpha Select ---
   local sel_rng_root="${results_dir}/selected_range"
   run_alpha_select_and_viz "$tag" "$results_dir" "$sel_rng_root"
 
@@ -383,68 +364,56 @@ done
 
 echo "==== GLOBAL CORR (all models) ===="
 
-GLOBAL_DIR="exp/_all/asst_pairwise_results/selected_range"
-mkdir -p "$GLOBAL_DIR/_summary" "$GLOBAL_DIR/_corr"
-
-# 1) range_summary を全モデルから結合
+# 1) Join range summaries
 "$PYTHON_BIN" - <<'PY'
 import glob, os
 import pandas as pd
 
 paths = sorted(glob.glob("exp/*/asst_pairwise_results/selected_range/_summary/range_summary.csv"))
-assert paths, "range_summary.csv not found"
-
-dfs=[]
-for p in paths:
-    df=pd.read_csv(p)
-    if "kind" in df.columns:
-        df=df[df["kind"].astype(str).str.lower()=="range"].copy()
-    dfs.append(df)
-
-out=pd.concat(dfs, ignore_index=True)
-os.makedirs("exp/_all/asst_pairwise_results/selected_range/_summary", exist_ok=True)
-out_path="exp/_all/asst_pairwise_results/selected_range/_summary/range_summary.csv"
-out.to_csv(out_path, index=False)
-print("saved:", out_path, "rows:", len(out))
-print("unique tags:", out["tag"].nunique(), "splits:", out["split"].nunique(), "traits:", out["trait"].nunique())
+if paths:
+    dfs=[]
+    for p in paths:
+        try:
+            df=pd.read_csv(p)
+            if "kind" in df.columns:
+                df=df[df["kind"].astype(str).str.lower()=="range"].copy()
+            dfs.append(df)
+        except Exception as e:
+            print(f"Skipping {p}: {e}")
+    
+    if dfs:
+        out=pd.concat(dfs, ignore_index=True)
+        os.makedirs("exp/_all/asst_pairwise_results/selected_range/_summary", exist_ok=True)
+        out.to_csv("exp/_all/asst_pairwise_results/selected_range/_summary/range_summary.csv", index=False)
+        print("Merged range summaries.")
+else:
+    print("No range summaries found.")
 PY
 
-# 2) 全モデル横断で 08 を実行（ここがメイン）
+# 2) Run Global Analysis
 "$PYTHON_BIN" scripts/08_corr_range_vs_rms_v9.py \
-  --per_prompt_jsonl_glob "exp/mistral_7b/asst_pairwise_results/selected_range/range/*_per_prompt.jsonl" \
-  --probe_jsonl_glob "exp/mistral_7b/asst_pairwise_results/*with_rms.jsonl" \
-  --out_dir "exp/mistral_7b/asst_pairwise_results/selected_range/_corr_v9" \
+  --per_prompt_jsonl_glob "exp/*/asst_pairwise_results/selected_range/range/*_per_prompt.jsonl" \
+  --probe_jsonl_glob "exp/*/asst_pairwise_results/*with_rms.jsonl" \
+  --out_dir "exp/_all/asst_pairwise_results/selected_range/_corr_v9" \
   --make_plots \
   --min_n 8
 
-"$PYTHON_BIN" scripts/09_corr_and_scaling_from_merged.py \
-  --in_csv "exp/_all/asst_pairwise_results/selected_range/_corr_v9/merged_metrics.csv" \
-  --out_dir "exp/_all/asst_pairwise_results/selected_range/_corr_v9"
-
-"$PYTHON_BIN" scripts/09_visualize_summaries.py \
-  --corr "exp/_all/asst_pairwise_results/selected_range/_corr_v9/corr_pred_summary.csv" \
-  --disp "exp/_all/asst_pairwise_results/selected_range/_corr_v9/scaling_dispersion.csv" \
-  --outdir "exp/_all/asst_pairwise_results/selected_range/_corr_v9/plot" \
-  --methods spearman
-
-"$PYTHON_BIN" scripts/10_scatter_from_merged.py \
-  --merged "exp/_all/asst_pairwise_results/selected_range/_corr_v9/merged_metrics.csv" \
-  --outdir "exp/_all/asst_pairwise_results/selected_range/_corr_v9/plot"
-
-"$PYTHON_BIN" scripts/10_within_model_and_lomo.py \
-  --merged "exp/_all/asst_pairwise_results/selected_range/_corr_v9/merged_metrics.csv" \
-  --outdir "exp/_all/within_model_and_lomo" \
-  --xcols rms0_mean \
-  --min_train_points 6 \
-  --min_test_points 3
-
-"$PYTHON_BIN" scripts/11_build_prompt_alpha_table.py \
-  --jsonl_glob 'exp/*/asst_pairwise_results/*_with_rms.jsonl' \
-  --out_csv exp/_all/prompt_alpha_table.csv
-
-"$PYTHON_BIN" scripts/12_join_boundaries_and_label.py \
-  --table exp/_all/prompt_alpha_table.csv \
-  --merged "exp/_all/asst_pairwise_results/selected_range/_corr_v9/merged_metrics.csv" \
-  --out_csv exp/_all/prompt_alpha_labeled.csv
-
 echo "=== PIPELINE COMPLETED ==="
+
+echo "=== VISUALIZING TEXT METRICS FOR ALL MODELS ==="
+
+for spec in "${MODEL_SPECS[@]}"; do
+  IFS='|' read -r TAG BASE_ID INSTR_ID ALPHAS_BASE ALPHAS_INSTR <<< "$spec"
+  
+  echo "[Viz] Generating radar charts for: $TAG"
+  OUT_DIR="exp/${TAG}/asst_pairwise_results/plots"
+  mkdir -p "$OUT_DIR"
+
+  "$PYTHON_BIN" scripts/15_text_sensitivity_visualize.py \
+    --dist_glob "exp/${TAG}/asst_pairwise_results/*_edit_distance.csv" \
+    --score_glob "exp/${TAG}/asst_pairwise_results/*_personality_scores.csv" \
+    --out_dir "$OUT_DIR" \
+    --tag "$TAG"
+    
+  echo " -> Saved to $OUT_DIR"
+done
