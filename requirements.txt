@@ -1,0 +1,22 @@
+# === Core ===
+numpy==1.26.4
+pyyaml==6.0.2
+matplotlib==3.9.0
+tqdm==4.66.4
+protobuf==4.25.3
+
+# === HF stack ===
+transformers==4.44.2
+accelerate==0.34.2
+safetensors==0.4.4
+tokenizers==0.19.1
+sentencepiece==0.2.0
+
+# === Torch (install one of the following; comment out the unused) ===
+# For CUDA 12.1 (Linux, NVIDIA GPUs)
+# torch==2.3.1+cu121 --index-url https://download.pytorch.org/whl/cu121
+# For CPU-only
+# torch==2.3.1+cpu --index-url https://download.pytorch.org/whl/cpu
+
+# === Optional (Linux/NVIDIA only) ===
+# bitsandbytes==0.43.3

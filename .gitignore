@@ -1,0 +1,21 @@
+.cache
+bigfive_score_steer
+log
+
+# Generated files
+result.txt
+run.out
+
+# Directories
+exp/
+persona_steering/
+
+# Caches and Tokens
+.hf_cache/
+.hf_token
+.uv_cache/
+.ssh/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
