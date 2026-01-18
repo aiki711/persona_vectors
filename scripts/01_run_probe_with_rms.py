@@ -348,6 +348,10 @@ def main():
     ap.add_argument("--include_prefill", action="store_true", help="prefill(プロンプト処理)段階にも介入/ログする。デフォルトはdecode(T=1)のみ")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default="exp/<trait>_probe_all_layers.jsonl")
+    ap.add_argument("--layer_start", type=int, default=0, 
+                        help="Intervention start layer index (default: 0)")
+    ap.add_argument("--layer_end", type=int, default=None, 
+                        help="Intervention end layer index (default: None -> All layers)")
     args = ap.parse_args()
 
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
@@ -372,12 +376,23 @@ def main():
         L for (L, ax) in axes_bank.keys() if ax == args.trait and L > 0
     ])))
     
+    # 1. まず候補リストを作成 (--layers引数があればそれを優先、なければ全層)
     if layers_arg:
-        layers_to_process = [L for L in all_available_layers if L in layers_arg]
-        print(f"Filtering to --layers argument. Processing {len(layers_to_process)} layers: {layers_to_process}")
+        candidates = [L for L in all_available_layers if L in layers_arg]
     else:
-        layers_to_process = all_available_layers
-        print(f"No --layers specified. Processing ALL {len(layers_to_process)} available layers (L>0): {layers_to_process}")
+        candidates = all_available_layers
+
+    # 2. ★追加: 層の範囲フィルタリング (Start/End)
+    # コード上の L (L_state) は 1-based なので、L-1 して 0-based に直して判定します
+    target_end = args.layer_end if args.layer_end is not None else 99999
+    
+    layers_to_process = []
+    for L in candidates:
+        L_idx = L - 1  # 0-based index (実際のモデル層インデックス)
+        if args.layer_start <= L_idx < target_end:
+            layers_to_process.append(L)
+
+    print(f"Layer filter applied: Index [{args.layer_start}, {target_end}). Processing {len(layers_to_process)} layers: {layers_to_process}")
         
     if not layers_to_process:
         raise ValueError(f"No valid layers found for trait '{args.trait}' in axes_bank. Check --layers or 00_prepare_vectors.py.")
