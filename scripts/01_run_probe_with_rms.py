@@ -11,7 +11,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 
-from live_axes_and_hook import (
+from persona_vectors.live_axes import (
     AXES,
     get_layer_stack,
     _infer_main_device,

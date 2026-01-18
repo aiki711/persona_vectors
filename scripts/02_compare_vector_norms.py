@@ -32,7 +32,7 @@ try:
 except Exception:
     yaml = None
 
-from live_axes_and_hook import (
+from persona_vectors.live_axes import (
     AXES,                      # ["openness", ...]
     load_model_and_tokenizer,
     _ensure_pad_token,

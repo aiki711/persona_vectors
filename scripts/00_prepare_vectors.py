@@ -27,7 +27,7 @@ import yaml
 from datasets import load_dataset
 
 # ★ live_axes_and_hook から共通ヘルパを import
-from live_axes_and_hook import (
+from persona_vectors.live_axes import (
     AXES as AXES_CANON,
     load_model_and_tokenizer,
     _ensure_pad_token,

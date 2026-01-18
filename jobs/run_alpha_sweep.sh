@@ -28,7 +28,7 @@ echo "LOG_FILE: $LOG_FILE"
 
 # ==================== Project ====================
 export PROJECT_DIR="$WORKDIR"
-export PYTHONPATH="$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
+export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
 
 # キャッシュをプロジェクト内に固定（安定＆権限事故を減らす）
 export HF_HOME="$PROJECT_DIR/.hf_cache"

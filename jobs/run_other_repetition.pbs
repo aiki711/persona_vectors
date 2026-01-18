@@ -39,7 +39,7 @@ if [ -f "$PROJECT_DIR/.hf_token" ]; then
 fi
 set -x
 
-export PYTHONPATH="$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
+export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
 
 export OMP_NUM_THREADS=1
 export CUDA_LAUNCH_BLOCKING=1

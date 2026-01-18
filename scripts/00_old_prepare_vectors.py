@@ -17,7 +17,7 @@ import torch
 from huggingface_hub import login
 
 # live_axes_and_hook.py から必要なヘルパーをインポート
-from live_axes_and_hook import (
+from persona_vectors.live_axes import (
     load_model_and_tokenizer, get_layer_stack,
     _infer_main_device, _is_bnb_quantized,
     _ensure_pad_token, _ensure_dialog_tokens,
