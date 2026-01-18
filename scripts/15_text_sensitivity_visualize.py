@@ -30,6 +30,9 @@ def load_data(edit_dist_pattern, score_pattern):
     df_score_list = []
     for f in score_files:
         tmp = pd.read_csv(f)
+        if 'x' in tmp.columns and 'prompt' not in tmp.columns:
+            print(f"Renaming 'x' to 'prompt' in score data from {f}")
+            tmp.rename(columns={'x': 'prompt'}, inplace=True)
         df_score_list.append(tmp)
 
     if not df_score_list:
@@ -38,15 +41,34 @@ def load_data(edit_dist_pattern, score_pattern):
 
     df_score = pd.concat(df_score_list, ignore_index=True)
 
+    # Rename score columns based on Minej/bert-base-personality mapping
+    # 0: extraversion, 1: neuroticism, 2: agreeableness, 3: conscientiousness, 4: openness
+    label_mapping = {
+        'score_LABEL_0': 'score_extraversion',
+        'score_LABEL_1': 'score_neuroticism',
+        'score_LABEL_2': 'score_agreeableness',
+        'score_LABEL_3': 'score_conscientiousness',
+        'score_LABEL_4': 'score_openness'
+    }
+    df_score.rename(columns=label_mapping, inplace=True)
+
     # 結合 (trait, prompt, alpha_total がキーになると仮定)
     # 重複カラムを避けるための処理
-    merge_keys = ['trait', 'prompt', 'alpha_total', 'x', 'y']
-    # 実際のデータに合わせて調整してください。ここでは単純化のため、共通キーでマージします。
-    # データ量が多い場合、効率化のために必要なカラムだけ残してマージ推奨
+    # Safe merge keys:
+    merge_keys = ['trait', 'prompt', 'alpha_total']
+    
+    print(f"Merging on {merge_keys}...")
+    
+    # Check if keys exist in both
+    for key in merge_keys:
+        if key not in df_score.columns:
+             raise KeyError(f"Key '{key}' not in score data columns: {df_score.columns.tolist()}")
+        if key not in df_dist.columns:
+             raise KeyError(f"Key '{key}' not in dist data columns: {df_dist.columns.tolist()}")
     
     # df_scoreから必要なスコア列だけ抜き出す
     score_cols = [c for c in df_score.columns if c.startswith('score_')]
-    df_score_subset = df_score[merge_keys + score_cols].drop_duplicates(subset=['trait', 'prompt', 'alpha_total'])
+    df_score_subset = df_score[merge_keys + score_cols].drop_duplicates(subset=merge_keys)
     
     # マージ
     df_merged = pd.merge(df_dist, df_score_subset, on=merge_keys, how='inner')
