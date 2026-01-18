@@ -414,6 +414,12 @@ for spec in "${MODEL_SPECS[@]}"; do
     --score_glob "exp/${TAG}/asst_pairwise_results/*_personality_scores.csv" \
     --out_dir "$OUT_DIR" \
     --tag "$TAG"
+
+  "$PYTHON_BIN" scripts/16_visualize_combined_metrics.py \
+  --internal_csv "exp/${TAG}/asst_pairwise_results/slopes/slopes_${TAG}_asst_pairwise.csv" \
+  --external_csv "exp/${TAG}/asst_pairwise_results/plots/${TAG}_text_sensitivities.csv" \
+  --out_dir "exp/${TAG}/asst_pairwise_results/plots" \
+  --tag "${TAG}"
     
   echo " -> Saved to $OUT_DIR"
 done

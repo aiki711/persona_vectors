@@ -437,10 +437,10 @@ def main():
 
     args = ap.parse_args()
 
-    if not SKLEARN_AVAILABLE:
-        print("[WARN] scikit-learn not found. Using Jaccard instead of TF-IDF.")
-    else:
-        print("[INFO] Using TF-IDF for semantic check.")
+    #if not SKLEARN_AVAILABLE:
+    #    print("[WARN] scikit-learn not found. Using Jaccard instead of TF-IDF.")
+    #else:
+    #    print("[INFO] Using TF-IDF for semantic check.")
 
     c = SafetyConstraints(
         sem_min=args.sem_min,
@@ -724,8 +724,8 @@ def main():
     out_path = out_dir / f"alpha_range_{meta.split}_{meta.trait}_per_prompt.jsonl"
     write_jsonl(str(out_path), out_rows)
 
-    print(f"[OK] Safety Analysis v14 (per_prompt): {out_path}")
-    print(f"     prompts(sid): {len(out_rows)}")
+    #print(f"[OK] Safety Analysis v14 (per_prompt): {out_path}")
+    #print(f"     prompts(sid): {len(out_rows)}")
     # quick summary
     vals_hi = [r["alpha_hi"] for r in out_rows if r.get("alpha_hi") is not None]
     vals_lo = [r["alpha_lo"] for r in out_rows if r.get("alpha_lo") is not None]
