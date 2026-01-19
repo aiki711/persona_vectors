@@ -428,3 +428,6 @@ echo "=== CROSS MODEL COMPARISON ==="
 "$PYTHON_BIN" scripts/17_cross_model_comparison.py \
   --root_dir "exp" \
   --out_dir "exp/_all/comparison_plots"
+
+echo "=== SCATTER PLOT VISUALIZATION ==="
+"$PYTHON_BIN" scripts/18_visualize_scatter.py --root_dir "exp" --suffix ""

@@ -307,4 +307,7 @@ mkdir -p "$OUT_ALL"
   --pattern "*/asst_pairwise_results${SUFFIX}/plots/*_combined_metrics.csv" \
   --out_dir "$OUT_ALL"
 
+echo "=== SCATTER PLOT VISUALIZATION ==="
+"$PYTHON_BIN" scripts/18_visualize_scatter.py --root_dir "exp" --suffix "$SUFFIX"
+
 echo "=== PIPELINE COMPLETED ===" 

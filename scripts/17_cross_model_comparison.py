@@ -110,12 +110,12 @@ def plot_efficiency_bar(df, output_path):
     
     splits = df['split'].unique()
     for split in splits:
-        subset = df[df['split'] == split].copy()
+        subset = df[df['split'] == split]
         if subset.empty:
             continue
         
         plt.figure(figsize=(12, 6))
-        # 特性順序を固定するためにカテゴリ型に変換してもよいが、ここではTRAIT_ORDER順にソート
+        # 特性順序を固定
         subset['trait'] = pd.Categorical(subset['trait'], categories=TRAIT_ORDER, ordered=True)
         subset = subset.sort_values('trait')
 
@@ -124,7 +124,10 @@ def plot_efficiency_bar(df, output_path):
         plt.title(f"Steering Efficiency (Score / TextChange) - {split}")
         plt.ylabel("Efficiency (Score gain per unit of text disruption)")
         plt.grid(axis='y', linestyle='--', alpha=0.7)
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        
+        # ★★★ 修正箇所: 凡例を内側・右上に配置 ★★★
+        plt.legend(loc='upper right')
+        
         plt.tight_layout()
         
         save_file = output_path.replace(".png", f"_{split}.png")
@@ -133,13 +136,8 @@ def plot_efficiency_bar(df, output_path):
         print(f"Saved efficiency chart to {save_file}")
 
 def plot_radar_comparison(df, value_col, title, output_path):
-    """
-    モデル間比較用のレーダーチャートを描画
-    splitごとに作成し、全モデルを重ねて表示する
-    """
+    """モデル間比較用のレーダーチャート"""
     splits = df['split'].unique()
-    
-    # カラーパレットの準備（モデル用）
     models = df['model_tag'].unique()
     colors = plt.cm.tab10(np.linspace(0, 1, len(models)))
     model_color_map = dict(zip(models, colors))
@@ -149,49 +147,40 @@ def plot_radar_comparison(df, value_col, title, output_path):
         if subset.empty:
             continue
 
-        # 軸の設定（特性）
         categories = [t for t in TRAIT_ORDER if t in subset['trait'].unique()]
         N = len(categories)
         if N < 3:
-            print(f"Not enough traits to plot radar for {split} (needs >= 3)")
             continue
 
         angles = [n / float(N) * 2 * pi for n in range(N)]
-        angles += angles[:1] # 閉じるため
+        angles += angles[:1]
 
         fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
         plt.xticks(angles[:-1], categories, color='black', size=12)
-        
-        # 軸のメモリ設定（データの最大値に合わせて調整したい場合は自動でもよい）
-        # ここでは自動スケールに任せつつ、グリッドを見やすくする
         ax.yaxis.grid(True, linestyle='--')
 
-        # モデルごとにプロット
         for model in models:
             model_data = subset[subset['model_tag'] == model]
             if model_data.empty:
                 continue
             
-            # 特性順序に合わせて値を抽出
-            # データがない特性は0埋めするかスキップするかだが、ここでは再インデックスして0埋め
             pivot = model_data.set_index('trait')
             values = []
             for t in categories:
                 if t in pivot.index:
                     val = pivot.loc[t, value_col]
-                    # ピボットの結果がSeriesになる場合とスカラーになる場合をケア（念のため平均）
-                    if isinstance(val, pd.Series):
-                        val = val.mean()
-                    values.append(abs(val)) # Impactは絶対値で比較
+                    if isinstance(val, pd.Series): val = val.mean()
+                    values.append(abs(val))
                 else:
                     values.append(0.0)
             
-            values += values[:1] # 閉じる
-            
+            values += values[:1]
             ax.plot(angles, values, linewidth=2, linestyle='solid', label=model, color=model_color_map[model])
             ax.fill(angles, values, alpha=0.05, color=model_color_map[model])
 
         plt.title(f"{title} ({split})", size=15, y=1.1)
+        
+        # レーダーチャートの凡例も見やすいように少し調整（必要なら）
         plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1))
         
         save_file = output_path.replace(".png", f"_{split}.png")
@@ -215,44 +204,19 @@ def main():
         print("No data found.")
         return
 
-    # スケール補正（Impact計算）
     df = calculate_impact(df)
-
-    # 保存
     df.to_csv(os.path.join(args.out_dir, "all_models_metrics_impact.csv"), index=False)
-    print(f"Saved processed data to {os.path.join(args.out_dir, 'all_models_metrics_impact.csv')}")
 
-    # --- 1. ヒートマップ (Heatmap) ---
-    plot_heatmap(df, 'internal_impact', 
-                 "Internal Impact (Total Vector Change)", 
-                 os.path.join(args.out_dir, "heatmap_internal_impact.png"), cmap="Blues")
-
-    plot_heatmap(df, 'score_impact', 
-                 "External Score Impact (Total Score Shift)", 
-                 os.path.join(args.out_dir, "heatmap_score_impact.png"), cmap="Greens")
-
-    plot_heatmap(df, 'text_change_impact', 
-                 "Text Change Impact (Total Edit Distance)", 
-                 os.path.join(args.out_dir, "heatmap_text_change_impact.png"), cmap="Reds")
-
-    # --- 2. 棒グラフ (Efficiency Bar) ---
+    # Plots
+    plot_heatmap(df, 'internal_impact', "Internal Impact", os.path.join(args.out_dir, "heatmap_internal_impact.png"), cmap="Blues")
+    plot_heatmap(df, 'score_impact', "External Score Impact", os.path.join(args.out_dir, "heatmap_score_impact.png"), cmap="Greens")
+    plot_heatmap(df, 'text_change_impact', "Text Change Impact", os.path.join(args.out_dir, "heatmap_text_change_impact.png"), cmap="Reds")
+    
     plot_efficiency_bar(df, os.path.join(args.out_dir, "bar_efficiency.png"))
 
-    # --- 3. レーダーチャート (Radar Chart) ---
-    # Internal Impact
-    plot_radar_comparison(df, 'internal_impact',
-                          "Internal Impact Comparison",
-                          os.path.join(args.out_dir, "radar_internal_impact.png"))
-    
-    # Score Impact
-    plot_radar_comparison(df, 'score_impact',
-                          "External Score Impact Comparison",
-                          os.path.join(args.out_dir, "radar_score_impact.png"))
-
-    # Text Change Impact
-    plot_radar_comparison(df, 'text_change_impact',
-                          "Text Change Impact Comparison",
-                          os.path.join(args.out_dir, "radar_text_change_impact.png"))
+    plot_radar_comparison(df, 'internal_impact', "Internal Impact Comparison", os.path.join(args.out_dir, "radar_internal_impact.png"))
+    plot_radar_comparison(df, 'score_impact', "External Score Impact Comparison", os.path.join(args.out_dir, "radar_score_impact.png"))
+    plot_radar_comparison(df, 'text_change_impact', "Text Change Impact Comparison", os.path.join(args.out_dir, "radar_text_change_impact.png"))
 
 if __name__ == "__main__":
     main()
