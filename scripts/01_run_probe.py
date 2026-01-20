@@ -17,6 +17,8 @@ from persona_vectors.live_axes import (
     _infer_main_device,
     load_model_and_tokenizer,
 )
+from datasets import load_dataset
+from collections import defaultdict
 
 @dataclass
 class ResidualSteerer:
@@ -86,6 +88,133 @@ def build_prompt(question: str) -> str:
     01_run_probe 内で完結するプロンプト整形関数。
     """
     return PROMPT_TEMPLATE.format(question=question)
+
+def get_unseen_prompts(trait: str, cnt: int, vector_seed: int = 2025, vector_count: int = 1000) -> List[str]:
+    """
+    big5-chat データセットから、ベクトル作成(00_prepare_vectors.py)に使われていない
+    プロンプト(train_input)をランダムに cnt 件抽出して返す。
+    """
+    print(f"[get_unseen_prompts] Loading big5-chat dataset to exclude first {vector_count} pairs (seed={vector_seed})...")
+    
+    # 1. データセット読み込み
+    ds_all = load_dataset("wenkai-li/big5_chat")
+    if isinstance(ds_all, dict):
+        split_name = next(iter(ds_all.keys()))
+        ds = ds_all[split_name]
+    else:
+        ds = ds_all
+
+    # 2. 00_prepare_vectors.py と同じロジックでペア抽出 & シャッフル
+    #    (全軸に対して行わないと乱数平仄が合わない可能性があるため、全軸回す)
+    
+    # buckets: (trait, orig_idx) -> {high:[], low:[]}
+    buckets = defaultdict(lambda: {"high": [], "low": [], "input": []})
+    
+    # dataset は streamモードでないと仮定(メモリに乗るサイズ)
+    for ex in ds:
+        tr_raw = (ex.get("trait") or "").strip().lower()
+        lv = (ex.get("level") or "").strip().lower()
+        if tr_raw not in AXES: 
+            continue
+            
+        orig_idx = ex.get("original_index")
+        if orig_idx is None:
+            continue
+            
+        to = (ex.get("train_output") or "").strip()
+        ti = (ex.get("train_input") or "").strip() # ここが必要
+        
+        if not to: continue
+        
+        # 00_prepare では <asst> 接頭辞をつけるが、ID特定には影響しない
+        # buckets には input も保存しておく
+        if lv in ["high", "low"]:
+            buckets[(tr_raw, orig_idx)][lv].append(to)
+            # inputはhigh/low共通のはずだが、エントリ毎に入っている
+            buckets[(tr_raw, orig_idx)]["input"].append(ti)
+
+    # PAIRS構築: {trait: [(orig_idx, high_to, low_to), ...]}
+    # ※ 00_prepare では (text_high, text_low) のリストだが、
+    #    ここでは除外判定のために orig_idx を保持したい。
+    #    random.shuffle の挙動を合わせるため、リストの長さを合わせる必要がある。
+    #    00_prepare: PAIRS[tr].append((text_high, text_low))
+    #    ここでも要素数が同じになるように構成する。
+    
+    temp_pairs = {ax: [] for ax in AXES}
+    
+    # 辞書のイテレーション順序は挿入順(Python 3.7+)。
+    # ds のイテレーション順が一定なら buckets のキー順も一定。
+    for (tr, orig_idx), d in buckets.items():
+        highs = d["high"]
+        lows = d["low"]
+        if not highs or not lows:
+            continue
+        
+        # 00_prepare: text_high = highs[0], text_low = lows[0]
+        # 要素として (orig_idx, ...) を入れているが、shuffle はリストの「要素の位置」を入れ替えるだけなので
+        # 要素の中身がオブジェクトかタプルかで乱数消費は変わらない(はず)。
+        # ただし、sort順などが絡むと変わるが、random.shuffleはin-placeランダムスワップ。
+        
+        # input テキストも保持しておく (候補として使うため)
+        inp_text = d["input"][0] if d["input"] else ""
+        
+        temp_pairs[tr].append({
+            "orig_idx": orig_idx,
+            "input": inp_text
+        })
+        
+    # 3. 再現のためのシャッフル
+    #    00_prepare_vectors.py:
+    #      random.seed(seed)
+    #      for ax in AXES_CANON: ... random.shuffle(PAIRS[ax]) ...
+    
+    rng_state_backup = random.getstate()
+    try:
+        random.seed(vector_seed)
+        
+        used_indices = set()
+        
+        for ax in AXES:
+            lst = temp_pairs[ax]
+            random.shuffle(lst)
+            
+            # ターゲット特性の場合、先頭 vector_count 件が「使用済み」
+            if ax == trait:
+                seen_list = lst[:vector_count]
+                for item in seen_list:
+                    used_indices.add(item["orig_idx"])
+                    
+        # 4. 未使用プロンプトの抽出
+        #    ターゲット特性のリストのうち、vector_count 以降のもの、
+        #    または buckets に入らなかったもの... はペアが成立しなかったものなので
+        #    「ベクトル作成に使われていない」定義ならOKだが、
+        #    品質担保のため「ペア成立したが採用されなかったもの」から選ぶのが無難。
+        #    ここでは temp_pairs[trait] の残りの部分から選ぶ。
+        
+        candidates = []
+        target_list = temp_pairs[trait]
+        
+        # vector_count以降を候補とする
+        # リスト自体は既にシャッフルされているので、そのまま上から取ればランダム
+        remaining = target_list[vector_count:]
+        
+        print(f"  [trait={trait}] Total pairs: {len(target_list)}, Used: {vector_count}, Remaining: {len(remaining)}")
+        
+        for item in remaining:
+             if item["input"] and item["input"].strip():
+                 candidates.append(item["input"])
+        
+        if len(candidates) < cnt:
+            print(f"Warning: Only {len(candidates)} unseen prompts found (requested {cnt}). Returning all.")
+            return candidates
+            
+        # 既にシャッフルされているので先頭から取るだけでよいが、
+        # 念のため今回の実行用の乱数で再選出してもよい。
+        # ここではシンプルに先頭から取る(ランダム性はshuffleで担保されている)
+        return candidates[:cnt]
+
+    finally:
+        random.setstate(rng_state_backup)
 
 # ---- 引数ユーティリティ ----
 def parse_floats_csv(s: str):
@@ -261,6 +390,8 @@ def main():
                         help="Intervention start layer index (default: 0)")
     ap.add_argument("--layer_end", type=int, default=None, 
                         help="Intervention end layer index (default: None -> All layers)")
+    ap.add_argument("--use_dataset", action="store_true", help="hardcoded prompt ではなくデータセットから未使用プロンプトをサンプリングする")
+    ap.add_argument("--vector_seed", type=int, default=2025, help="00_prepare_vectors.py で使ったシード (未使用データ特定のため)")
     args = ap.parse_args()
 
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
@@ -316,20 +447,24 @@ def main():
         
         print(f"Starting [probe] mode. Simultaneous intervention on {num_steered_layers} layers.")
         
-        prompts = [
-            "What is a good weekend plan?",
-            "How would you approach learning a new skill quickly?",
-            "Suggest a gift for a friend with unique tastes.",
-            "How do you handle unexpected changes at work?",
-            "Convince me to try something outside my comfort zone.",
-            "Discuss pros and cons of unconventional ideas in research.",
-            "What are some creative ways to improve team collaboration?",
-            "How do you evaluate new ideas objectively?",
-            "Propose an unusual but practical solution to reduce stress.",
-            "How would you explain a complex topic in a novel way?",
-            "Share a time you adapted to something unexpected.",
-            "What inspires you to try new experiences?",
-        ][:args.samples]
+        if args.use_dataset:
+            print(f"Sampling {args.samples} unseen prompts from dataset for trait '{args.trait}'...")
+            prompts = get_unseen_prompts(args.trait, args.samples, vector_seed=args.vector_seed)
+        else:
+            prompts = [
+                "What is a good weekend plan?",
+                "How would you approach learning a new skill quickly?",
+                "Suggest a gift for a friend with unique tastes.",
+                "How do you handle unexpected changes at work?",
+                "Convince me to try something outside my comfort zone.",
+                "Discuss pros and cons of unconventional ideas in research.",
+                "What are some creative ways to improve team collaboration?",
+                "How do you evaluate new ideas objectively?",
+                "Propose an unusual but practical solution to reduce stress.",
+                "How would you explain a complex topic in a novel way?",
+                "Share a time you adapted to something unexpected.",
+                "What inspires you to try new experiences?",
+            ][:args.samples]
         
         gen_kwargs = dict(
             max_new_tokens=args.max_new_tokens,

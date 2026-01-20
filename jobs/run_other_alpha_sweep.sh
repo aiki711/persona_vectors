@@ -121,7 +121,7 @@ PY
 TRAITS=("openness" "conscientiousness" "extraversion" "agreeableness" "neuroticism")
 
 MODEL_SPECS=(
-  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-5.5,-5,-4.5,-4,-3.5,-3,-2,-1,0,1,2,3,3.5,4,4.5,5,5.5|-5.5,-5,-4.5,-4,-3.5,-3,-2,-1,0,1,2,3,3.5,4,4.5,5,5.5"
+  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-5,-4,-3,-2,-1,0,1,2,3,4,5|-5,-4,-3,-2,-1,0,1,2,3,4,5"
   "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-20,-16,-12,-8,-4,0,4,8,12,16,20|-20,-16,-12,-8,-4,0,4,8,12,16,20"
   "olmo3_7b|allenai/Olmo-3-1025-7B|allenai/Olmo-3-7B-Instruct|-50,-40,-30,-20,-10,0,10,20,30,40,50|-50,-40,-30,-20,-10,0,10,20,30,40,50"
   "qwen25_7b|Qwen/Qwen2.5-7B|Qwen/Qwen2.5-7B-Instruct|-160,-140,-120,-100,-80,0,80,100,120,140,160|-160,-140,-120,-100,-80,0,80,100,120,140,160"
@@ -167,7 +167,8 @@ run_probe_if_needed() {
     --axes_bank   "$axes_bank" \
     --trait       "$trait" \
     --alpha_list="$alpha_list" \
-    --out         "$out_jsonl"
+    --out         "$out_jsonl" \
+    --use_dataset
 }
 
 concat_alltraits() {
