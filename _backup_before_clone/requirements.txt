@@ -1,0 +1,18 @@
+numpy
+pandas
+pyyaml
+tqdm
+matplotlib
+scipy
+scikit-learn
+
+transformers
+accelerate
+huggingface_hub
+tokenizers
+safetensors
+sentencepiece
+protobuf
+
+# optional (8bit)
+bitsandbytes

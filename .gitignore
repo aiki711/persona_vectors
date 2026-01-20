@@ -2,10 +2,6 @@
 bigfive_score_steer
 log
 
-# Generated files
-result.txt
-run.out
-
 # Directories
 exp/
 persona_steering/
