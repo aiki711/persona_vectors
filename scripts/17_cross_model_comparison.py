@@ -110,7 +110,7 @@ def plot_efficiency_bar(df, output_path):
     
     splits = df['split'].unique()
     for split in splits:
-        subset = df[df['split'] == split]
+        subset = df[df['split'] == split].copy()
         if subset.empty:
             continue
         

@@ -262,14 +262,14 @@ run_alpha_select_and_viz() {
     --out_csv "$sel_rng_root/_summary/per_prompt_summary.csv" \
     --out_dir "$sel_rng_root/_summary/per_prompt_figs"
 
-  mkdir -p "$sel_rng_root/_corr"
-  "$PYTHON_BIN" scripts/08_corr_range_vs_rms_v8.py \
-    --range_csv "$sel_rng_root/_summary/per_prompt_summary.csv" \
-    --probe_jsonl_glob "${results_dir}/${tag}_*_*_with_rms.jsonl" \
-    --rawnorm_npz_glob "exp/${tag}/axes_*_rawnorms.npz" \
-    --out_dir "$sel_rng_root/_corr" \
-    --make_plots \
-    --corr_group split
+  #mkdir -p "$sel_rng_root/_corr"
+  #"$PYTHON_BIN" scripts/08_corr_range_vs_rms_v8.py \
+  #  --range_csv "$sel_rng_root/_summary/per_prompt_summary.csv" \
+  #  --probe_jsonl_glob "${results_dir}/${tag}_*_*_with_rms.jsonl" \
+  #  --rawnorm_npz_glob "exp/${tag}/axes_*_rawnorms.npz" \
+  #  --out_dir "$sel_rng_root/_corr" \
+  #  --make_plots \
+  #  --corr_group split
 }
 
 run_slopes_and_viz() {
@@ -390,13 +390,13 @@ else:
     print("No range summaries found.")
 PY
 
-# 2) Run Global Analysis
-"$PYTHON_BIN" scripts/08_corr_range_vs_rms_v9.py \
-  --per_prompt_jsonl_glob "exp/*/asst_pairwise_results/selected_range/range/*_per_prompt.jsonl" \
-  --probe_jsonl_glob "exp/*/asst_pairwise_results/*with_rms.jsonl" \
-  --out_dir "exp/_all/asst_pairwise_results/selected_range/_corr_v9" \
-  --make_plots \
-  --min_n 8
+## 2) Run Global Analysis
+#"$PYTHON_BIN" scripts/08_corr_range_vs_rms_v9.py \
+#  --per_prompt_jsonl_glob "exp/*/asst_pairwise_results/selected_range/range/*_per_prompt.jsonl" \
+#  --probe_jsonl_glob "exp/*/asst_pairwise_results/*with_rms.jsonl" \
+#  --out_dir "exp/_all/asst_pairwise_results/selected_range/_corr_v9" \
+#  --make_plots \
+#  --min_n 8
 
 echo "=== PIPELINE COMPLETED ==="
 

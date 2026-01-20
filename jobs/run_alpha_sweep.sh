@@ -250,13 +250,13 @@ EOF
     --out_dir "$SEL_RNG_ROOT/_summary/range_figs" \
     --compare_splits
 
-  mkdir -p "$SEL_RNG_ROOT/_corr"
-  "$PYTHON_BIN" scripts/08_corr_range_vs_rms_v8.py \
-    --range_csv "$SEL_RNG_ROOT/_summary/range_summary.csv" \
-    --probe_jsonl_glob "${RESULTS_DIR_CLUSTER}/${TAG}_*_*_with_rms.jsonl" \
-    --out_dir "$SEL_RNG_ROOT/_corr" \
-    --make_plots \
-    --corr_group split
+  #mkdir -p "$SEL_RNG_ROOT/_corr"
+  #"$PYTHON_BIN" scripts/08_corr_range_vs_rms_v8.py \
+  #  --range_csv "$SEL_RNG_ROOT/_summary/range_summary.csv" \
+  #  --probe_jsonl_glob "${RESULTS_DIR_CLUSTER}/${TAG}_*_*_with_rms.jsonl" \
+  #  --out_dir "$SEL_RNG_ROOT/_corr" \
+  #  --make_plots \
+  #  --corr_group split
 
   set +x
   echo "==== ${TAG} END ===="
