@@ -126,8 +126,8 @@ run_probe_if_needed() {
     return 0
   fi
 
-  echo "[RUN ] 01_run_probe_with_rms.py (Layer ${l_start}-${l_end})"
-  "$PYTHON_BIN" scripts/01_run_probe_with_rms.py \
+  echo "[RUN ] 01_run_probe.py (Layer ${l_start}-${l_end})"
+  "$PYTHON_BIN" scripts/01_run_probe.py \
     --model       "$model_id" \
     --axes_bank   "$axes_bank" \
     --trait       "$trait" \
@@ -143,7 +143,7 @@ concat_alltraits() {
   local out_all="$3"
   rm -f "$out_all"
   for trait in "${TRAITS[@]}"; do
-    local f="${results_dir}/${tag}_${split}_${trait}_with_rms.jsonl"
+    local f="${results_dir}/${tag}_${split}_${trait}_probe_results.jsonl"
     if is_nonempty_file "$f"; then cat "$f" >> "$out_all"; fi
   done
 }
@@ -177,7 +177,7 @@ run_alpha_select_and_viz() {
 
   for SPLIT in base instruct; do
     for trait in "${TRAITS[@]}"; do
-      local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_with_rms.jsonl"
+      local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_probe_results.jsonl"
       [ -s "$in_jsonl" ] || continue
       "$PYTHON_BIN" scripts/06_alpha_eval_v13.py --in "$in_jsonl" --out_root "$sel_rng_root" --per_prompt --pass_rate_min 0.8
     done
@@ -229,7 +229,7 @@ run_one_model_pair_layered() {
   prepare_axes_if_needed "$base_id" "$ax_base" "$CONFIG_FILE"
   for trait in "${TRAITS[@]}"; do
     run_probe_if_needed "base" "$trait" "$base_id" "$ax_base" \
-      "${results_dir}/${tag}_base_${trait}_with_rms.jsonl" "$alphas_base" \
+      "${results_dir}/${tag}_base_${trait}_probe_results.jsonl" "$alphas_base" \
       "$LAYER_START" "$LAYER_END"
   done
   concat_alltraits "$results_dir" "base" "${results_dir}/${tag}_base_alltraits.jsonl"
@@ -240,7 +240,7 @@ run_one_model_pair_layered() {
   prepare_axes_if_needed "$instr_id" "$ax_instr" "$CONFIG_FILE"
   for trait in "${TRAITS[@]}"; do
     run_probe_if_needed "instruct" "$trait" "$instr_id" "$ax_instr" \
-      "${results_dir}/${tag}_instruct_${trait}_with_rms.jsonl" "$alphas_instr" \
+      "${results_dir}/${tag}_instruct_${trait}_probe_results.jsonl" "$alphas_instr" \
       "$LAYER_START" "$LAYER_END"
   done
   concat_alltraits "$results_dir" "instruct" "${results_dir}/${tag}_instruct_alltraits.jsonl"

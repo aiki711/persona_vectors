@@ -1,24 +1,77 @@
 # scripts/01_run_probe.py
-# (★ 全レイヤー同時介入 (All-Layer Intervention) 版)
+# (★ 全レイヤー同時介入 (All-Layer Intervention) 版 - 純粋ステアリング用)
 
 import argparse, os, json, numpy as np, random
 import torch
 import re
-from typing import Dict, List, Tuple, Iterable, Any, Optional
+import math
+from typing import Dict, List, Tuple, Iterable, Any, Optional, Sequence
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from contextlib import ExitStack
+from dataclasses import dataclass, field
 
 from persona_vectors.live_axes import (
     AXES,
-    ResidualSteerer,
     get_layer_stack,
     _infer_main_device,
     load_model_and_tokenizer,
 )
 
+@dataclass
+class ResidualSteerer:
+    """
+    指定の層の residual stream に一定ベクトルを加算する context manager。
+    live_axes_and_hook とほぼ同等だが、単純な加算のみを行う。
+    """
+    model: torch.nn.Module
+    layer: int
+    v_mix: np.ndarray
+    alpha: float
+    answer_only: bool = False
+    
+    def __post_init__(self):
+        self.handle = None
+
+    def __enter__(self):
+        stack, _, _ = get_layer_stack(self.model)
+        target_mod = stack[self.layer]
+        v = torch.tensor(self.v_mix, dtype=torch.float32)
+
+        def hook(mod, inp, out):
+            hs = out[0] if isinstance(out, tuple) else out
+            if self.answer_only:
+                # cacheあり: decodeは T=1 → そのまま通す
+                if hs.size(1) != 1:
+                    # cacheなし: 最初に見た長さを prefill とみなしてスキップ
+                    if not hasattr(self, "_prefill_T"):
+                        self._prefill_T = int(hs.size(1))
+                        return out
+                    # それ以降(=生成が進んで長さが増えた)は適用してOK
+                    if int(hs.size(1)) == self._prefill_T:
+                        return out
+            
+            # ここで初回だけキャッシュ (device/dtype合わせ)
+            if not hasattr(self, "_add_cache") or self._add_cache.device != hs.device or self._add_cache.dtype != hs.dtype:
+                self._add_cache = v.to(device=hs.device, dtype=hs.dtype).view(1, 1, -1)
+                self._alpha_cache = torch.tensor(self.alpha, device=hs.device, dtype=hs.dtype)
+
+            hs2 = hs + self._alpha_cache * self._add_cache
+
+            if isinstance(out, tuple):
+                return (hs2, *out[1:])
+            return hs2
+
+        self.handle = target_mod.register_forward_hook(hook)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.handle is not None:
+            self.handle.remove()
+            self.handle = None
+
 # ==============================
-# プロンプトテンプレート（★ここを追加）
+# プロンプトテンプレート
 # ==============================
 
 PROMPT_TEMPLATE = """You are a helpful, polite assistant.
@@ -31,11 +84,8 @@ Assistant:"""
 def build_prompt(question: str) -> str:
     """
     01_run_probe 内で完結するプロンプト整形関数。
-    question: 純粋な質問文 (prompts の各要素) を受け取り、
-              上記テンプレートにはめ込んだ最終プロンプト文字列を返す。
     """
     return PROMPT_TEMPLATE.format(question=question)
-
 
 # ---- 引数ユーティリティ ----
 def parse_floats_csv(s: str):
@@ -43,12 +93,6 @@ def parse_floats_csv(s: str):
     if not s:
         return []
     return [float(x) for x in s.split(",") if x.strip()]
-
-def build_e(trait: str, sign: float):
-    """操舵方向の辞書 e を作成する (generate_with_steer 互換)"""
-    e = {ax: 0.0 for ax in AXES}
-    e[trait] = 1.0 if sign >= 0 else -1.0
-    return e
 
 def load_axes_bank(path_npz: str):
     """00_prepare_vectors.py で作成した .npz ファイルを読み込む"""
@@ -75,8 +119,6 @@ def load_axes_bank(path_npz: str):
 def style_from_y(model, tok, text: str, *, v_axes: dict, layer: int, trait: str, k: float = 3.0) -> float:
     """
     text のトークン列の *最終トークン* の隠れ状態を (layer, trait) の軸に投影 → [-1,1]
-    
-    v_axes: load_axes_bank で読み込んだ辞書
     """
     dev = _infer_main_device(model)
     max_len = getattr(model.config, "max_position_embeddings", 4096) - 10
@@ -118,8 +160,85 @@ def style_from_y(model, tok, text: str, *, v_axes: dict, layer: int, trait: str,
         v = v / v_norm_val
     
     cos_sim = float(np.dot(h, v))             # [-1, 1]
-    return cos_sim
     
+    return cos_sim
+
+def _prepare_axes_tensor(
+    v_axes: dict,
+    layers: Sequence[int],
+    trait: str,
+    *,
+    device: torch.device,
+) -> tuple[torch.Tensor, dict[int, int]]:
+    """
+    axes_bank (dict[(L, trait)] -> np.ndarray) から、
+    指定 layers の軸ベクトルを (n_layers, H) の torch.Tensor にまとめて返す。
+    ついでに layer -> row_index の対応も返す。
+    """
+    layer2i = {L: i for i, L in enumerate(layers)}
+    vecs = []
+    for L in layers:
+        v_key = (L, trait)
+        if v_key not in v_axes:
+            raise KeyError(f"Vector for {v_key} not found in axes bank.")
+        v = v_axes[v_key]
+        vt = torch.tensor(v, dtype=torch.float32, device=device)  # (H,)
+        vt = vt / (vt.norm(p=2) + 1e-12)
+        vecs.append(vt)
+    V = torch.stack(vecs, dim=0)  # (n_layers, H)
+    return V, layer2i
+
+
+@torch.no_grad()
+def style_from_text_all_layers(
+    model,
+    tok,
+    text: str,
+    *,
+    layers: Sequence[int],         # state layer index (L>0)
+    V_axes: torch.Tensor,           # (n_layers, H) 正規化済み
+    layer2i: dict[int, int],
+    max_len_margin: int = 10,
+) -> dict[int, float]:
+    """
+    text を 1回 forward して、指定 layers すべての
+    「最終有効トークン hidden」を軸に射影した cos を返す。
+    戻り値: {L: cos_sim}
+    """
+    if not text or not text.strip():
+        return {int(L): 0.0 for L in layers}
+
+    dev = _infer_main_device(model)
+    max_len = getattr(model.config, "max_position_embeddings", 4096) - max_len_margin
+
+    tokd = tok(text, return_tensors="pt", max_length=max_len, truncation=True).to(dev)
+    out = model(**tokd, output_hidden_states=True, use_cache=False)
+
+    # 最終有効トークン index（pad を除外）
+    att = tokd["attention_mask"][0].bool()  # (T,)
+    idxs = torch.nonzero(att, as_tuple=False).view(-1)
+    if idxs.numel() == 0:
+        return {int(L): 0.0 for L in layers}
+    last_idx = int(idxs[-1].item())
+
+    # 各層の last token hidden を積む
+    hs_list = []
+    for L in layers:
+        if L >= len(out.hidden_states):
+            # 念のため
+            hs_list.append(torch.zeros_like(V_axes[0]))
+            continue
+        hsL = out.hidden_states[L][0, last_idx, :].to(dtype=torch.float32)  # (H,)
+        hs_list.append(hsL)
+
+    H = torch.stack(hs_list, dim=0)  # (n_layers, H)
+    H = H / (H.norm(p=2, dim=1, keepdim=True) + 1e-12)  # 行ごと正規化
+
+    # cos: (n_layers,)
+    cos = torch.sum(H * V_axes, dim=1).detach().cpu().numpy().tolist()
+
+    return {int(L): float(cos[layer2i[L]]) for L in layers}
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -131,13 +250,17 @@ def main():
                     help="comma-separated floats (e.g. '-2,0,2')。全レイヤーに「分配」される合計の強さ。")
     ap.add_argument("--alpha_mode", choices=["distribute", "additive"], default="distribute",
                     help="[distribute]: alphaを全層に分配 (安全) / [additive]: alphaを各層に適用 (危険)")
-    ap.add_argument("--rank", type=int, default=1, help="mix_top_k (単軸検証は1推奨)")
     ap.add_argument("--samples", type=int, default=12, help="プローブ用プロンプトの数")
     ap.add_argument("--temperature", type=float, default=0.3)
     ap.add_argument("--top_p", type=float, default=0.90)
     ap.add_argument("--max_new_tokens", type=int, default=80)
+    ap.add_argument("--include_prefill", action="store_true", help="prefill(プロンプト処理)段階にも介入する。デフォルトはdecode(T=1)のみ")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--out", default="exp/<trait>_probe_all_layers.jsonl")
+    ap.add_argument("--out", default="exp/<trait>_probe_results.jsonl")
+    ap.add_argument("--layer_start", type=int, default=0, 
+                        help="Intervention start layer index (default: 0)")
+    ap.add_argument("--layer_end", type=int, default=None, 
+                        help="Intervention end layer index (default: None -> All layers)")
     args = ap.parse_args()
 
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
@@ -152,7 +275,7 @@ def main():
     print(f"Alpha mode: {args.alpha_mode}")
 
     mdl, tok = load_model_and_tokenizer(
-        args.model, quant="8bit", device_map={"": "cuda:0"}
+        args.model, quant="8bit", device_map="auto"
     )
     device = _infer_main_device(mdl)
 
@@ -162,18 +285,30 @@ def main():
         L for (L, ax) in axes_bank.keys() if ax == args.trait and L > 0
     ])))
     
+    # 1. まず候補リストを作成 (--layers引数があればそれを優先、なければ全層)
     if layers_arg:
-        layers_to_process = [L for L in all_available_layers if L in layers_arg]
-        print(f"Filtering to --layers argument. Processing {len(layers_to_process)} layers: {layers_to_process}")
+        candidates = [L for L in all_available_layers if L in layers_arg]
     else:
-        layers_to_process = all_available_layers
-        print(f"No --layers specified. Processing ALL {len(layers_to_process)} available layers (L>0): {layers_to_process}")
+        candidates = all_available_layers
+
+    # 2. 層の範囲フィルタリング (Start/End)
+    target_end = args.layer_end if args.layer_end is not None else 99999
+    
+    layers_to_process = []
+    for L in candidates:
+        L_idx = L - 1  # 0-based index (実際のモデル層インデックス)
+        if args.layer_start <= L_idx < target_end:
+            layers_to_process.append(L)
+
+    print(f"Layer filter applied: Index [{args.layer_start}, {target_end}). Processing {len(layers_to_process)} layers: {layers_to_process}")
         
     if not layers_to_process:
         raise ValueError(f"No valid layers found for trait '{args.trait}' in axes_bank. Check --layers or 00_prepare_vectors.py.")
         
     num_steered_layers = len(layers_to_process)
-
+    V_axes, layer2i = _prepare_axes_tensor(
+        axes_bank, layers_to_process, args.trait, device=device
+    )
     out_path = args.out.replace("<trait>", args.trait)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
@@ -203,6 +338,7 @@ def main():
             do_sample=(args.temperature > 0),
             pad_token_id=tok.pad_token_id,
             eos_token_id=tok.eos_token_id,
+            use_cache=True,
         )
 
         # --- ベースライン (alpha=0) ---
@@ -211,7 +347,27 @@ def main():
         for i, x in enumerate(prompts):
             full_prompt = build_prompt(x)
             inputs = tok(full_prompt, return_tensors="pt").to(device)
-            out_ids = mdl.generate(**inputs, **gen_kwargs)
+            inputs.pop("token_type_ids", None)
+
+            # ベースライン生成時は介入なし
+            # ただしコードの整合性のため ResidualSteerer で alpha=0 を呼び出しても良いが、
+            # ここでは単純に generate するだけでも結果は同じ。
+            # 一応「alpha=0介入」として通すなら以下。
+            with ExitStack() as stack:
+                for L_state in layers_to_process:
+                    L_stack = L_state - 1
+                    v_key = (L_state, args.trait)
+                    if v_key not in axes_bank:
+                        continue
+                    vec = axes_bank[v_key]
+                    stack.enter_context(
+                        ResidualSteerer(
+                            mdl, L_stack, vec, alpha=0.0,
+                            answer_only=(not args.include_prefill)
+                        )
+                    )
+                out_ids = mdl.generate(**inputs, **gen_kwargs)
+            
             prompt_len = inputs["input_ids"].shape[1]
             gen_ids = out_ids[0, prompt_len:]
             y0 = tok.decode(gen_ids, skip_special_tokens=True).strip()
@@ -223,13 +379,19 @@ def main():
             y0 = baseline_ys[i]
             full_prompt = build_prompt(x)
             inputs = tok(full_prompt, return_tensors="pt").to(device)
+            inputs.pop("token_type_ids", None)
             
-            baseline_scores = {}
-            for L in layers_to_process:
-                baseline_scores[L] = style_from_y(mdl, tok, y0, v_axes=axes_bank, layer=L, trait=args.trait)
+            # Baseline score calculation
+            baseline_scores = style_from_text_all_layers(
+                mdl, tok, y0,
+                layers=layers_to_process,
+                V_axes=V_axes,
+                layer2i=layer2i
+            )
             s0_avg = np.mean(list(baseline_scores.values())) if baseline_scores else 0.0
 
             for a_total in alphas:
+                # alpha=0 は baseline_ys[i] をそのまま再利用できる
                 if a_total == 0.0:
                     rec = {
                         "i": i, "trait": args.trait, "layers": layers_to_process,
@@ -247,6 +409,7 @@ def main():
                 else:
                     alpha_per_layer = a_total
 
+                L_state = None
                 y = ""
                 try:
                     with ExitStack() as stack:
@@ -261,7 +424,10 @@ def main():
                             vec = axes_bank[v_key]
                             
                             stack.enter_context(
-                                ResidualSteerer(mdl, L_stack, vec, alpha_per_layer, answer_only=True)
+                                ResidualSteerer(
+                                    mdl, L_stack, vec, alpha_per_layer,
+                                    answer_only=(not args.include_prefill)
+                                )
                             )
 
                         out_ids = mdl.generate(**inputs, **gen_kwargs)
@@ -276,9 +442,13 @@ def main():
 
                 steered_scores = {}
                 if y.strip() and "GENERATION_ERROR" not in y:
-                    for L in layers_to_process:
-                        steered_scores[L] = style_from_y(mdl, tok, y, v_axes=axes_bank, layer=L, trait=args.trait)
-                
+                    steered_scores = style_from_text_all_layers(
+                        mdl, tok, y,
+                        layers=layers_to_process,
+                        V_axes=V_axes,
+                        layer2i=layer2i
+                    )
+
                 s_avg = np.mean(list(steered_scores.values())) if steered_scores else 0.0
 
                 rec = {

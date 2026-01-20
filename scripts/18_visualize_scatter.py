@@ -159,7 +159,7 @@ def process_internal_sensitivity(root_dir, suffix):
     """
     *_with_rms.jsonl を探して散布図を描く
     """
-    pattern = os.path.join(root_dir, f"*/asst_pairwise_results{suffix}/*_with_rms.jsonl")
+    pattern = os.path.join(root_dir, f"*/asst_pairwise_results{suffix}/*_probe_results.jsonl")
     files = glob.glob(pattern)
     
     print(f"[Internal] Found {len(files)} JSONL files.")
@@ -187,7 +187,7 @@ def process_internal_sensitivity(root_dir, suffix):
             model_tag = os.path.basename(model_dir)
             
             # split & trait extraction
-            parts = basename.replace("_with_rms.jsonl", "").split('_')
+            parts = basename.replace("_probe_results.jsonl", "").split('_')
             
             if "base" in parts:
                 idx = parts.index("base")

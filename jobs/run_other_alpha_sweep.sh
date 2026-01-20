@@ -161,8 +161,8 @@ run_probe_if_needed() {
     return 0
   fi
 
-  echo "[RUN ] 01_run_probe_with_rms.py -> $out_jsonl (split=$split trait=$trait)"
-  "$PYTHON_BIN" scripts/01_run_probe_with_rms.py \
+  echo "[RUN ] 01_run_probe.py -> $out_jsonl (split=$split trait=$trait)"
+  "$PYTHON_BIN" scripts/01_run_probe.py \
     --model       "$model_id" \
     --axes_bank   "$axes_bank" \
     --trait       "$trait" \
@@ -177,7 +177,7 @@ concat_alltraits() {
 
   rm -f "$out_all"
   for trait in "${TRAITS[@]}"; do
-    local f="${results_dir}/${tag}_${split}_${trait}_with_rms.jsonl"
+    local f="${results_dir}/${tag}_${split}_${trait}_probe_results.jsonl"
     if is_nonempty_file "$f"; then
       cat "$f" >> "$out_all"
     else
@@ -237,7 +237,7 @@ run_alpha_select_and_viz() {
 
   for SPLIT in base instruct; do
     for trait in "${TRAITS[@]}"; do
-      local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_with_rms.jsonl"
+      local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_probe_results.jsonl"
       [ -s "$in_jsonl" ] || continue
 
       "$PYTHON_BIN" scripts/06_alpha_eval_v13.py \
@@ -262,14 +262,7 @@ run_alpha_select_and_viz() {
     --out_csv "$sel_rng_root/_summary/per_prompt_summary.csv" \
     --out_dir "$sel_rng_root/_summary/per_prompt_figs"
 
-  #mkdir -p "$sel_rng_root/_corr"
-  #"$PYTHON_BIN" scripts/08_corr_range_vs_rms_v8.py \
-  #  --range_csv "$sel_rng_root/_summary/per_prompt_summary.csv" \
-  #  --probe_jsonl_glob "${results_dir}/${tag}_*_*_with_rms.jsonl" \
-  #  --rawnorm_npz_glob "exp/${tag}/axes_*_rawnorms.npz" \
-  #  --out_dir "$sel_rng_root/_corr" \
-  #  --make_plots \
-  #  --corr_group split
+
 }
 
 run_slopes_and_viz() {
@@ -324,7 +317,7 @@ run_one_model_pair() {
 
   for trait in "${TRAITS[@]}"; do
     run_probe_if_needed "base" "$trait" "$base_id" "$ax_base" \
-      "${results_dir}/${tag}_base_${trait}_with_rms.jsonl" "$alphas_base"
+      "${results_dir}/${tag}_base_${trait}_probe_results.jsonl" "$alphas_base"
   done
   concat_alltraits "$results_dir" "base" "${results_dir}/${tag}_base_alltraits.jsonl"
   
@@ -338,7 +331,7 @@ run_one_model_pair() {
 
   for trait in "${TRAITS[@]}"; do
     run_probe_if_needed "instruct" "$trait" "$instr_id" "$ax_instr" \
-      "${results_dir}/${tag}_instruct_${trait}_with_rms.jsonl" "$alphas_instr"
+      "${results_dir}/${tag}_instruct_${trait}_probe_results.jsonl" "$alphas_instr"
   done
   concat_alltraits "$results_dir" "instruct" "${results_dir}/${tag}_instruct_alltraits.jsonl"
 
@@ -390,13 +383,7 @@ else:
     print("No range summaries found.")
 PY
 
-## 2) Run Global Analysis
-#"$PYTHON_BIN" scripts/08_corr_range_vs_rms_v9.py \
-#  --per_prompt_jsonl_glob "exp/*/asst_pairwise_results/selected_range/range/*_per_prompt.jsonl" \
-#  --probe_jsonl_glob "exp/*/asst_pairwise_results/*with_rms.jsonl" \
-#  --out_dir "exp/_all/asst_pairwise_results/selected_range/_corr_v9" \
-#  --make_plots \
-#  --min_n 8
+
 
 echo "=== PIPELINE COMPLETED ==="
 
