@@ -5,6 +5,7 @@ log
 # Directories
 exp/
 persona_steering/
+_backup_before_clone/
 
 # Caches and Tokens
 .hf_cache/
