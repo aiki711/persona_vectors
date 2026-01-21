@@ -523,7 +523,8 @@ def main():
 
         print("Generating steered responses (ALL-LAYER intervention)...")
         for i, x in enumerate(prompts):
-            print(f"  Probe sample {i+1}/{len(prompts)}...")
+            if (i + 1) % 25 == 0 or (i + 1) == len(prompts):
+                print(f"  Probe sample {i+1}/{len(prompts)}...")
             y0 = baseline_ys[i]
             full_prompt = build_prompt(x)
             inputs = tok(full_prompt, return_tensors="pt").to(device)

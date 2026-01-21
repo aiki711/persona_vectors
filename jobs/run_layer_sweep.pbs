@@ -153,7 +153,8 @@ run_probe_if_needed() {
     --out         "$out_jsonl" \
     --layer_start "$l_start" \
     --layer_end   "$l_end" \
-    --prompt_file "exp/01_probe_inputs/all_traits_unseen_100.json"
+    --prompt_file "exp/01_probe_inputs/all_traits_unseen_100.json" \
+    --samples     100
 }
 
 concat_alltraits() {
