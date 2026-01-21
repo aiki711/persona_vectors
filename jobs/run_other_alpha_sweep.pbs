@@ -74,25 +74,38 @@ fi
 
 # ==================== uv venv ====================
 VENV="$PROJECT_DIR/persona_steering"
-if [ ! -x "$VENV/bin/python" ]; then
-  echo "[ERROR] venv not found: $VENV"
-  echo "Run on login node: uv venv persona_steering --python 3.10 && uv sync --active"
-  exit 1
-fi
+if [ -x "$VENV/bin/python" ]; then
+  # UV environment exists
+  export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/.uv_cache}"
+  export VIRTUAL_ENV="$VENV"
+  export PATH="$VENV/bin:$PATH"
+  export PYTHON_BIN="$VENV/bin/python"
 
-export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/.uv_cache}"
-export VIRTUAL_ENV="$VENV"
-export PATH="$VENV/bin:$PATH"
-
-if [ "${RUN_UV_SYNC:-0}" = "1" ]; then
-  if [ -f "$PROJECT_DIR/uv.lock" ]; then
-    uv sync --frozen --active
+  if [ "${RUN_UV_SYNC:-0}" = "1" ]; then
+    if [ -f "$PROJECT_DIR/uv.lock" ]; then
+      uv sync --frozen --active
+    else
+      uv sync --active
+    fi
+  fi
+else
+  CONDA_PYTHON="/home/s2550009/anaconda3/envs/persona_vectors/bin/python"
+  if [ -x "$CONDA_PYTHON" ]; then
+    echo "[WARN] venv not found at $VENV. Using conda env: $CONDA_PYTHON"
+    export PYTHON_BIN="$CONDA_PYTHON"
+    # Assuming conda env handles library paths reasonably well, but we still might want to be careful.
+    # We are NOT activating it fully (no source activate), just using the binary.
   else
-    uv sync --active
+    # Fallback to system python (e.g. for ksgayai)
+    echo "[WARN] venv not found at $VENV. Falling back to system python."
+    if ! command -v python >/dev/null 2>&1; then
+       echo "[ERROR] python not found in PATH."
+       exit 1
+    fi
+    export PYTHON_BIN="$(command -v python)"
+    echo "Using PYTHON_BIN=$PYTHON_BIN"
   fi
 fi
-
-export PYTHON_BIN="$VENV/bin/python"
 
 # --- Make pip-installed NVIDIA libs visible ---
 export LD_LIBRARY_PATH="$($PYTHON_BIN - <<'PY'

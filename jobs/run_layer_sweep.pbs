@@ -61,7 +61,25 @@ fi
 
 # ==================== venv ====================
 VENV="$PROJECT_DIR/persona_steering"
-export PYTHON_BIN="$VENV/bin/python"
+if [ -x "$VENV/bin/python" ]; then
+  # UV environment exists
+  export PYTHON_BIN="$VENV/bin/python"
+else
+  CONDA_PYTHON="/home/s2550009/anaconda3/envs/persona_vectors/bin/python"
+  if [ -x "$CONDA_PYTHON" ]; then
+    echo "[WARN] venv not found at $VENV. Using conda env: $CONDA_PYTHON"
+    export PYTHON_BIN="$CONDA_PYTHON"
+  else
+    # Fallback to system python
+    echo "[WARN] venv not found at $VENV. Falling back to system python."
+    if ! command -v python >/dev/null 2>&1; then
+       echo "[ERROR] python not found in PATH."
+       exit 1
+    fi
+    export PYTHON_BIN="$(command -v python)"
+    echo "Using PYTHON_BIN=$PYTHON_BIN"
+  fi
+fi
 export LD_LIBRARY_PATH="$($PYTHON_BIN - <<'PY'
 import site, glob, os
 paths=[]
