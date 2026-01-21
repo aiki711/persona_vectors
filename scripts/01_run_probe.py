@@ -392,6 +392,7 @@ def main():
                         help="Intervention end layer index (default: None -> All layers)")
     ap.add_argument("--use_dataset", action="store_true", help="hardcoded prompt ではなくデータセットから未使用プロンプトをサンプリングする")
     ap.add_argument("--vector_seed", type=int, default=2025, help="00_prepare_vectors.py で使ったシード (未使用データ特定のため)")
+    ap.add_argument("--prompt_file", type=str, default=None, help="JSON file containing list of prompts to use (overrides --use_dataset)")
     args = ap.parse_args()
 
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
@@ -447,7 +448,19 @@ def main():
         
         print(f"Starting [probe] mode. Simultaneous intervention on {num_steered_layers} layers.")
         
-        if args.use_dataset:
+        if args.prompt_file:
+             print(f"Loading prompts from file: {args.prompt_file}")
+             with open(args.prompt_file, "r", encoding="utf-8") as f:
+                 prompts = json.load(f)
+             if not isinstance(prompts, list):
+                 raise ValueError("prompt_file must contain a JSON list of strings")
+             # Limit to samples if needed? No, user probably wants all in file if specified.
+             # But let's respect samples if it's smaller than len(prompts)?
+             # Usually file implies exact set. Let's just use all of them or slice by samples.
+             if args.samples < len(prompts):
+                  print(f"Warning: --samples {args.samples} is smaller than file count {len(prompts)}. Truncating.")
+                  prompts = prompts[:args.samples]
+        elif args.use_dataset:
             print(f"Sampling {args.samples} unseen prompts from dataset for trait '{args.trait}'...")
             prompts = get_unseen_prompts(args.trait, args.samples, vector_seed=args.vector_seed)
         else:

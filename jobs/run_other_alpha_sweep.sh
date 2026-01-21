@@ -168,7 +168,7 @@ run_probe_if_needed() {
     --trait       "$trait" \
     --alpha_list="$alpha_list" \
     --out         "$out_jsonl" \
-    --use_dataset
+    --prompt_file "exp/01_probe_inputs/all_traits_unseen_100.json"
 }
 
 concat_alltraits() {

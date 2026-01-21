@@ -135,7 +135,7 @@ run_probe_if_needed() {
     --out         "$out_jsonl" \
     --layer_start "$l_start" \
     --layer_end   "$l_end" \
-    --use_dataset
+    --prompt_file "exp/01_probe_inputs/all_traits_unseen_100.json"
 }
 
 concat_alltraits() {
