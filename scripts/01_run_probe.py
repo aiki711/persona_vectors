@@ -24,12 +24,12 @@ from collections import defaultdict
 class ResidualSteerer:
     """
     指定の層の residual stream に一定ベクトルを加算する context manager。
-    live_axes_and_hook とほぼ同等だが、単純な加算のみを行う。
+    Batched alpha に対応: alpha が list/tensor の場合、(B, 1, 1) に拡張して適用する。
     """
     model: torch.nn.Module
     layer: int
     v_mix: np.ndarray
-    alpha: float
+    alpha: Any # float or List[float] or torch.Tensor
     answer_only: bool = False
     
     def __post_init__(self):
@@ -38,10 +38,12 @@ class ResidualSteerer:
     def __enter__(self):
         stack, _, _ = get_layer_stack(self.model)
         target_mod = stack[self.layer]
-        v = torch.tensor(self.v_mix, dtype=torch.float32)
+        v = torch.tensor(self.v_mix, dtype=torch.float32) # (H,)
 
         def hook(mod, inp, out):
             hs = out[0] if isinstance(out, tuple) else out
+            # hs: (B, T, H)
+            
             if self.answer_only:
                 # cacheあり: decodeは T=1 → そのまま通す
                 if hs.size(1) != 1:
@@ -53,11 +55,28 @@ class ResidualSteerer:
                     if int(hs.size(1)) == self._prefill_T:
                         return out
             
-            # ここで初回だけキャッシュ (device/dtype合わせ)
+            # キャッシュ作成 (device/dtype合わせ)
             if not hasattr(self, "_add_cache") or self._add_cache.device != hs.device or self._add_cache.dtype != hs.dtype:
+                # v: (H) -> (1, 1, H)
                 self._add_cache = v.to(device=hs.device, dtype=hs.dtype).view(1, 1, -1)
-                self._alpha_cache = torch.tensor(self.alpha, device=hs.device, dtype=hs.dtype)
+                
+                # Alphaの処理
+                if isinstance(self.alpha, (float, int)):
+                     #Scalar
+                     self._alpha_cache = torch.tensor(self.alpha, device=hs.device, dtype=hs.dtype)
+                else:
+                     # Batch: (B,) -> (B, 1, 1) or Tensor
+                     if isinstance(self.alpha, torch.Tensor):
+                         a_t = self.alpha.detach().clone().to(device=hs.device, dtype=hs.dtype)
+                     else:
+                         a_t = torch.tensor(self.alpha, device=hs.device, dtype=hs.dtype)
+                     
+                     if a_t.ndim == 1:
+                         a_t = a_t.view(-1, 1, 1)
+                     self._alpha_cache = a_t
 
+            # 加算: hs (B,T,H) + alpha (B,1,1) * v (1,1,H) -> Broadcast
+            # alphaのバッチサイズがBと一致している必要あり
             hs2 = hs + self._alpha_cache * self._add_cache
 
             if isinstance(out, tuple):
@@ -322,51 +341,73 @@ def _prepare_axes_tensor(
 def style_from_text_all_layers(
     model,
     tok,
-    text: str,
+    texts: List[str],
     *,
     layers: Sequence[int],         # state layer index (L>0)
     V_axes: torch.Tensor,           # (n_layers, H) 正規化済み
     layer2i: dict[int, int],
     max_len_margin: int = 10,
-) -> dict[int, float]:
+) -> List[dict[int, float]]:
     """
-    text を 1回 forward して、指定 layers すべての
-    「最終有効トークン hidden」を軸に射影した cos を返す。
-    戻り値: {L: cos_sim}
+    Batched version: texts をまとめて forward して、
+    各バッチ要素の「最終有効トークン hidden」を軸に射影した cos を返す。
+    戻り値: List[{L: cos_sim}] (len = len(texts))
     """
-    if not text or not text.strip():
-        return {int(L): 0.0 for L in layers}
+    if not texts:
+        return []
 
     dev = _infer_main_device(model)
     max_len = getattr(model.config, "max_position_embeddings", 4096) - max_len_margin
+    
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
 
-    tokd = tok(text, return_tensors="pt", max_length=max_len, truncation=True).to(dev)
+    # Paddingありでバッチ化
+    tokd = tok(texts, return_tensors="pt", max_length=max_len, truncation=True, padding=True).to(dev)
     out = model(**tokd, output_hidden_states=True, use_cache=False)
 
-    # 最終有効トークン index（pad を除外）
-    att = tokd["attention_mask"][0].bool()  # (T,)
-    idxs = torch.nonzero(att, as_tuple=False).view(-1)
-    if idxs.numel() == 0:
-        return {int(L): 0.0 for L in layers}
-    last_idx = int(idxs[-1].item())
+    # 最終有効トークン index
+    # paddingは右側に入ると仮定 (tokenizerのデフォルト)
+    att = tokd["attention_mask"] # (B, T)
+    last_indices = att.sum(dim=1) - 1 # (B,)
+    
+    batch_size = len(texts)
+    
+    # 結果のコンテナ: {L: [score_b0, score_b1, ...]}
+    batched_scores = {L: [] for L in layers}
 
-    # 各層の last token hidden を積む
-    hs_list = []
     for L in layers:
         if L >= len(out.hidden_states):
-            # 念のため
-            hs_list.append(torch.zeros_like(V_axes[0]))
+            batched_scores[L] = [0.0] * batch_size
             continue
-        hsL = out.hidden_states[L][0, last_idx, :].to(dtype=torch.float32)  # (H,)
-        hs_list.append(hsL)
+            
+        hs_all = out.hidden_states[L] # (B, T, H)
+        
+        # torch.gather等使ってもいいが、Indexingで取得
+        # (B, H)
+        hs_last = hs_all[torch.arange(batch_size, device=dev), last_indices].to(dtype=torch.float32)
+        
+        # Normalize
+        hs_last = hs_last / (hs_last.norm(p=2, dim=1, keepdim=True) + 1e-12)
 
-    H = torch.stack(hs_list, dim=0)  # (n_layers, H)
-    H = H / (H.norm(p=2, dim=1, keepdim=True) + 1e-12)  # 行ごと正規化
+        # 該当層の軸ベクトル
+        v_idx = layer2i[L]
+        v_vec = V_axes[v_idx] # (H,)
+        
+        # Cosine similarity: (B, H) @ (H,) -> (B,)
+        # v_vecは既に正規化済み
+        cos_b = torch.matmul(hs_last, v_vec).detach().cpu().numpy()
+        batched_scores[L] = cos_b.tolist()
 
-    # cos: (n_layers,)
-    cos = torch.sum(H * V_axes, dim=1).detach().cpu().numpy().tolist()
-
-    return {int(L): float(cos[layer2i[L]]) for L in layers}
+    # List[Dict] に変換
+    ret = []
+    for i in range(batch_size):
+        d = {}
+        for L in layers:
+            d[L] = batched_scores[L][i]
+        ret.append(d)
+        
+    return ret
 
 
 def main():
@@ -401,6 +442,9 @@ def main():
     alphas = parse_floats_csv(args.alpha_list)
     if 0.0 not in alphas:
         alphas = sorted(alphas + [0.0])
+    
+    # alphasソート (一貫性のため)
+    alphas = sorted(list(set(alphas)))
 
     print(f"Target trait: {args.trait}")
     print(f"Target alphas (total): {alphas}")
@@ -410,6 +454,9 @@ def main():
         args.model, quant="8bit", device_map="auto"
     )
     device = _infer_main_device(mdl)
+    
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
 
     axes_bank = load_axes_bank(args.axes_bank)
     
@@ -446,7 +493,7 @@ def main():
 
     with open(out_path, "w", encoding="utf-8") as fout:
         
-        print(f"Starting [probe] mode. Simultaneous intervention on {num_steered_layers} layers.")
+        print(f"Starting [probe] mode (Batched). Simultaneous intervention on {num_steered_layers} layers.")
         
         if args.prompt_file:
              print(f"Loading prompts from file: {args.prompt_file}")
@@ -454,9 +501,6 @@ def main():
                  prompts = json.load(f)
              if not isinstance(prompts, list):
                  raise ValueError("prompt_file must contain a JSON list of strings")
-             # Limit to samples if needed? No, user probably wants all in file if specified.
-             # But let's respect samples if it's smaller than len(prompts)?
-             # Usually file implies exact set. Let's just use all of them or slice by samples.
              if args.samples < len(prompts):
                   print(f"Warning: --samples {args.samples} is smaller than file count {len(prompts)}. Truncating.")
                   prompts = prompts[:args.samples]
@@ -489,133 +533,103 @@ def main():
             use_cache=True,
         )
 
-        # --- ベースライン (alpha=0) ---
-        baseline_ys = {}
-        print("Generating baseline (alpha=0) responses...")
-        for i, x in enumerate(prompts):
-            full_prompt = build_prompt(x)
-            inputs = tok(full_prompt, return_tensors="pt").to(device)
-            inputs.pop("token_type_ids", None)
-
-            # ベースライン生成時は介入なし
-            # ただしコードの整合性のため ResidualSteerer で alpha=0 を呼び出しても良いが、
-            # ここでは単純に generate するだけでも結果は同じ。
-            # 一応「alpha=0介入」として通すなら以下。
-            with ExitStack() as stack:
-                for L_state in layers_to_process:
-                    L_stack = L_state - 1
-                    v_key = (L_state, args.trait)
-                    if v_key not in axes_bank:
-                        continue
-                    vec = axes_bank[v_key]
-                    stack.enter_context(
-                        ResidualSteerer(
-                            mdl, L_stack, vec, alpha=0.0,
-                            answer_only=(not args.include_prefill)
-                        )
-                    )
-                out_ids = mdl.generate(**inputs, **gen_kwargs)
+        # Batch Steering Setup
+        alphas_tensor = torch.tensor(alphas, dtype=torch.float32, device=device)
+        if args.alpha_mode == "distribute":
+            alphas_per_layer = alphas_tensor / num_steered_layers
+        else:
+            alphas_per_layer = alphas_tensor
             
-            prompt_len = inputs["input_ids"].shape[1]
-            gen_ids = out_ids[0, prompt_len:]
-            y0 = tok.decode(gen_ids, skip_special_tokens=True).strip()
-            baseline_ys[i] = y0
+        try:
+             idx_zero = alphas.index(0.0)
+        except ValueError:
+             idx_zero = 0
 
-        print("Generating steered responses (ALL-LAYER intervention)...")
         for i, x in enumerate(prompts):
             if (i + 1) % 25 == 0 or (i + 1) == len(prompts):
                 print(f"  Probe sample {i+1}/{len(prompts)}...")
-            y0 = baseline_ys[i]
-            full_prompt = build_prompt(x)
-            inputs = tok(full_prompt, return_tensors="pt").to(device)
+
+            # 1. Prepare Batch Input (Prompt repeated for each alpha)
+            # 全てのalphaについて同じプロンプトを使用
+            batch_prompts = [build_prompt(x) for _ in alphas]
+            
+            # Tokenize batch
+            inputs = tok(batch_prompts, return_tensors="pt", padding=True).to(device)
             inputs.pop("token_type_ids", None)
             
-            # Baseline score calculation
-            baseline_scores = style_from_text_all_layers(
-                mdl, tok, y0,
+            # 2. Steered Generation
+            try:
+                with ExitStack() as stack:
+                    for L_state in layers_to_process:
+                        L_stack = L_state - 1
+                        
+                        v_key = (L_state, args.trait)
+                        if v_key not in axes_bank:
+                            continue
+                        vec = axes_bank[v_key]
+                        
+                        stack.enter_context(
+                            ResidualSteerer(
+                                mdl, L_stack, vec, alphas_per_layer, 
+                                answer_only=(not args.include_prefill)
+                            )
+                        )
+                    
+                    # Generate batch
+                    out_ids = mdl.generate(**inputs, **gen_kwargs)
+
+            except Exception as e:
+                print(f"!! ERROR during batched generation at index {i}: {e}")
+                continue
+
+            # 3. Decode
+            prompt_len = inputs["input_ids"].shape[1]
+            generated_texts = []
+            
+            # バッチサイズ分デコード
+            for j in range(len(alphas)):
+                gen_id = out_ids[j, prompt_len:]
+                y = tok.decode(gen_id, skip_special_tokens=True).strip()
+                generated_texts.append(y)
+
+            # 4. Scoring (Batched)
+            scores_list = style_from_text_all_layers(
+                mdl, tok, generated_texts,
                 layers=layers_to_process,
                 V_axes=V_axes,
                 layer2i=layer2i
             )
-            s0_avg = np.mean(list(baseline_scores.values())) if baseline_scores else 0.0
+            
+            # 5. Extract Baseline info
+            baseline_res = scores_list[idx_zero]
+            y0 = generated_texts[idx_zero]
+            s0_avg = np.mean(list(baseline_res.values())) if baseline_res else 0.0
 
-            for a_total in alphas:
-                # alpha=0 は baseline_ys[i] をそのまま再利用できる
-                if a_total == 0.0:
-                    rec = {
-                        "i": i, "trait": args.trait, "layers": layers_to_process,
-                        "alpha_total": 0.0, "alpha_mode": args.alpha_mode,
-                        "alpha_per_layer": 0.0,
-                        "x": x, "y": y0,
-                        "s_avg": s0_avg, "s0_avg": s0_avg, "ds_avg": 0.0,
-                        "s_by_layer": baseline_scores,
-                    }
-                    fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
-                    continue
-
-                if args.alpha_mode == "distribute":
-                    alpha_per_layer = a_total / num_steered_layers
-                else:
-                    alpha_per_layer = a_total
-
-                L_state = None
-                y = ""
-                try:
-                    with ExitStack() as stack:
-                        for L_state in layers_to_process:
-                            L_stack = L_state - 1
-                            
-                            v_key = (L_state, args.trait)
-                            if v_key not in axes_bank:
-                                print(f"Warning: Skipping state {L_state}, vector not in bank.")
-                                continue
-                                
-                            vec = axes_bank[v_key]
-                            
-                            stack.enter_context(
-                                ResidualSteerer(
-                                    mdl, L_stack, vec, alpha_per_layer,
-                                    answer_only=(not args.include_prefill)
-                                )
-                            )
-
-                        out_ids = mdl.generate(**inputs, **gen_kwargs)
-                    
-                    prompt_len = inputs["input_ids"].shape[1]
-                    gen_ids = out_ids[0, prompt_len:]
-                    y = tok.decode(gen_ids, skip_special_tokens=True).strip()
+            # 6. Write Records
+            for j, a_total in enumerate(alphas):
+                y = generated_texts[j]
+                s_dict = scores_list[j]
+                s_avg = np.mean(list(s_dict.values())) if s_dict else 0.0
                 
-                except Exception as e:
-                    print(f"!! ERROR during generation (alpha={a_total}, last_L_state={L_state}): {e}")
-                    y = f"GENERATION_ERROR: {e}"
-
-                steered_scores = {}
-                if y.strip() and "GENERATION_ERROR" not in y:
-                    steered_scores = style_from_text_all_layers(
-                        mdl, tok, y,
-                        layers=layers_to_process,
-                        V_axes=V_axes,
-                        layer2i=layer2i
-                    )
-
-                s_avg = np.mean(list(steered_scores.values())) if steered_scores else 0.0
+                a_per = alphas_per_layer[j].item()
 
                 rec = {
                     "i": i, "trait": args.trait, "layers": layers_to_process,
                     "alpha_total": float(a_total),
                     "alpha_mode": args.alpha_mode,
-                    "alpha_per_layer": float(alpha_per_layer),
+                    "alpha_per_layer": float(a_per),
                     "x": x, "y": y,
                     "s_avg": s_avg,
                     "s0_avg": s0_avg,
                     "ds_avg": s_avg - s0_avg,
-                    "s_by_layer": steered_scores,
+                    "s_by_layer": s_dict,
                 }
                 fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
             
             fout.flush()
 
-    print(f"[done/probe_all_layers] wrote {out_path} (layers={layers_to_process}, trait={args.trait})")
+    print(f"[done/probe_batched] wrote {out_path} (layers={layers_to_process}, trait={args.trait})")
+
 
 if __name__ == "__main__":
     main()
