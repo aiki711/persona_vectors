@@ -52,3 +52,9 @@ def create_notion_page(content):
 if __name__ == "__main__":
     commits = get_weekly_commits()
     create_notion_page(commits)
+
+if __name__ == "__main__":
+    commits = get_weekly_commits()
+    print(f"取得されたコミット内容:\n{commits}") # デバッグ用
+    response = create_notion_page(commits)
+    print(f"Notion APIからの返答: {response}") # ここでエラー内容がわかります
