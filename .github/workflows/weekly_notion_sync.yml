@@ -1,0 +1,30 @@
+name: Weekly Notion Sync
+
+on:
+  schedule:
+    - cron: '0 0 * * 1' # 毎週月曜日の午前0時(UTC)に実行
+  workflow_dispatch: # 手動実行用ボタン
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # すべての履歴を取得
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run sync script
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: python .github/scripts/sync_to_notion.py
