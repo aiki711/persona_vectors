@@ -23,10 +23,10 @@ def create_notion_page(content):
     url = "https://api.notion.com/v1/pages"
     date_str = datetime.now().strftime("%Y-%m-%d")
     
-    # 【修正ポイント】2000文字制限対策
-    # 安全のために1990文字でカットし、省略記号を追加します
-    if len(content) > 1990:
-        content = content[:1990] + "\n... (以下、文字数制限のため省略)"
+    # 【重要】合計が2000文字を超えないよう、余裕を持って1900文字でカット
+    limit = 1900
+    if len(content) > limit:
+        content = content[:limit] + "\n\n... (文字数制限のため、これ以降のログは省略されました)"
 
     payload = {
         "parent": {"database_id": DATABASE_ID},
@@ -54,6 +54,6 @@ def create_notion_page(content):
 
 if __name__ == "__main__":
     commits = get_weekly_commits()
-    print(f"取得されたコミット内容（長さ: {len(commits)}）")
+    print(f"取得されたコミット内容の元の長さ: {len(commits)}")
     response = create_notion_page(commits)
     print(f"Notion APIからの返答: {response}")
