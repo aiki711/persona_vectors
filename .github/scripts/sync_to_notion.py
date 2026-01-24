@@ -22,11 +22,20 @@ headers = {
 
 def get_weekly_commits():
     import subprocess
+    # コミットメッセージとハッシュを | で繋いで取得
     cmd = ['git', 'log', '--since="1 week ago" --no-merges', '--pretty=format:%s|%h']
     result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
     if not result.stdout.strip():
         return []
-    return [line.split('|') for line in result.stdout.strip().split('\n')]
+    
+    commits = []
+    for line in result.stdout.strip().split('\n'):
+        if '|' in line:
+            # 右側から1回だけ分割することで、メッセージ内の | に影響されないようにする
+            parts = line.rsplit('|', 1)
+            if len(parts) == 2:
+                commits.append(parts)
+    return commits
 
 def generate_ai_summary(commits):
     if not commits:
@@ -35,7 +44,7 @@ def generate_ai_summary(commits):
     commit_list = "\n".join([f"- {msg}" for msg, _ in commits])
     prompt = f"以下はリポジトリ「{REPO_NAME}」の今週のコミット履歴である。簡潔に3項目程度の「だである調」で要約せよ。\n\n{commit_list}"
     
-    # モデルの候補リスト（2.0がダメなら1.5を試す）
+    # 1.5-flashを優先（無料枠の制限が緩いため）
     models = ['gemini-1.5-flash', 'gemini-2.0-flash']
     
     for model_name in models:
@@ -47,10 +56,9 @@ def generate_ai_summary(commits):
             return response.text.strip()
         except Exception as e:
             print(f"Model {model_name} failed: {e}")
-            time.sleep(2) # 少し待機
             continue
             
-    return "（AI要約はクォータ制限のため生成できなかった。詳細はログを確認せよ。）"
+    return "（AI要約はクォータ制限のため生成できなかった。）"
 
 def build_blocks(commits, ai_summary):
     blocks = [
@@ -66,7 +74,6 @@ def build_blocks(commits, ai_summary):
         blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": "今週の更新はない。"}}]}})
         return blocks
 
-    # カテゴリ分けロジック
     categories = {"Features ✨": ["feat"], "Fixes 🛠️": ["fix"], "Refactoring ♻️": ["refactor"], "Others 📄": []}
     grouped = {cat: [] for cat in categories}
     for msg, hash_id in commits:
