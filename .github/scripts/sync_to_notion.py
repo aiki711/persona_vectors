@@ -12,7 +12,11 @@ REPO_PATH = os.environ["GITHUB_REPOSITORY"]
 
 # Gemini設定
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+try:
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except:
+    # 1.5がダメな場合、2026年の標準である2.0を試行
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
 headers = {
     "Authorization": f"Bearer {TOKEN}",
