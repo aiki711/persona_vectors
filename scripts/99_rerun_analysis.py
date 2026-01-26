@@ -32,19 +32,19 @@ def process_model(tag):
             continue
 
         # Paths
-        dist_csv = f"{results_dir}/{tag}_{split}_edit_distance.csv"
+        metrics_csv = f"{results_dir}/{tag}_{split}_text_metrics.csv"
         score_csv = f"{results_dir}/{tag}_{split}_personality_scores.csv"
 
         # Delete old files
-        if os.path.exists(dist_csv):
-            print(f"Deleting old {dist_csv}")
-            os.remove(dist_csv)
+        if os.path.exists(metrics_csv):
+            print(f"Deleting old {metrics_csv}")
+            os.remove(metrics_csv)
         if os.path.exists(score_csv):
             print(f"Deleting old {score_csv}")
             os.remove(score_csv)
 
-        # Run 13
-        cmd_13 = f"{python_bin} scripts/13_text_change_vs_alpha.py '{input_jsonl}' --output '{dist_csv}' --baseline 0"
+        # Run 13 (New Metrics Script)
+        cmd_13 = f"{python_bin} scripts/13_text_metrics_vs_alpha.py '{input_jsonl}' --output '{metrics_csv}' --baseline 0"
         run_cmd(cmd_13)
 
         # Run 14
@@ -77,8 +77,8 @@ def process_model(tag):
     out_plots_dir = f"{results_dir}/plots"
     os.makedirs(out_plots_dir, exist_ok=True)
 
-    # 15
-    cmd_15 = f"{python_bin} scripts/15_text_sensitivity_visualize.py --dist_glob '{results_dir}/*_edit_distance.csv' --score_glob '{results_dir}/*_personality_scores.csv' --out_dir '{out_plots_dir}' --tag '{tag}'"
+    # 15 (Update to use metrics_glob)
+    cmd_15 = f"{python_bin} scripts/15_text_sensitivity_visualize.py --metrics_glob '{results_dir}/*_text_metrics.csv' --score_glob '{results_dir}/*_personality_scores.csv' --out_dir '{out_plots_dir}' --tag '{tag}'"
     run_cmd(cmd_15)
 
     # 16
