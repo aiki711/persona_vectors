@@ -191,8 +191,8 @@ def plot_disentanglement(df, output_dir):
         group['delta_score'] = group[score_col] - group['baseline_score']
         
         # Filter out alpha=0 points for the plot (or keep them at 0,0)
-        # Usually interesting to see high alphas.
-        plot_data = group[group['alpha_total'] > 0].copy()
+        # We include negative alphas now as requested.
+        plot_data = group[group['alpha_total'] != 0].copy()
         
         if plot_data.empty:
             continue

@@ -112,7 +112,7 @@ def calculate_metrics_batch(df, baseline_alpha, device="cuda", mode="all"):
     print(f"Processing {len(grouped)} groups...")
 
     # 進捗表示
-    for (trait, prompt), group in tqdm(grouped):
+    for (trait, prompt), group in tqdm(grouped, disable=True):
         baseline_row = group[group['alpha_total'] == baseline_alpha]
         if baseline_row.empty:
             continue

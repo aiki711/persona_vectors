@@ -74,7 +74,7 @@ def get_personality_scores(texts, model_name, batch_size=16):
     
     print("Calculating scores...")
     with torch.no_grad():
-        for i in tqdm(range(0, len(texts), batch_size), total=total_batches, unit="batch"):
+        for i in tqdm(range(0, len(texts), batch_size), total=total_batches, unit="batch", disable=True):
             batch_texts = texts[i : i + batch_size]
             
             # トークナイズ

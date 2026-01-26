@@ -6,6 +6,7 @@ log
 exp/
 persona_steering/
 _backup_before_clone/
+analysis_results/
 
 # Caches and Tokens
 .hf_cache/

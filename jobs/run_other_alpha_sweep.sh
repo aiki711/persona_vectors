@@ -189,8 +189,6 @@ concat_alltraits() {
   echo "[INFO] wrote: $out_all"
 }
 
-# ★★★ Improved Text Analysis Helper ★★★
-# ★★★ Improved Text Analysis Helper ★★★
 run_text_analysis() {
   local tag="$1"
   local results_dir="$2"
