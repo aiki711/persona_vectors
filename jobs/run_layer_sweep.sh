@@ -178,19 +178,20 @@ run_alpha_select_and_viz() {
   local tag="$1"
   local results_dir="$2"
   local sel_rng_root="$3"
-  mkdir -p "$sel_rng_root"
+  # mkdir -p "$sel_rng_root"
 
-  for SPLIT in base instruct; do
-    for trait in "${TRAITS[@]}"; do
-      local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_probe_results.jsonl"
-      [ -s "$in_jsonl" ] || continue
-      "$PYTHON_BIN" scripts/06_alpha_eval_v13.py --in "$in_jsonl" --out_root "$sel_rng_root" --per_prompt --pass_rate_min 0.8
-    done
-  done
+  # for SPLIT in base instruct; do
+  #   for trait in "${TRAITS[@]}"; do
+  #     local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_probe_results.jsonl"
+  #     [ -s "$in_jsonl" ] || continue
+  #     "$PYTHON_BIN" scripts/06_alpha_eval_v13.py --in "$in_jsonl" --out_root "$sel_rng_root" --per_prompt --pass_rate_min 0.8
+  #   done
+  # done
 
-  mkdir -p "$sel_rng_root/_summary"
-  "$PYTHON_BIN" scripts/07_alpha_visualize.py --globs "$sel_rng_root/range/*_per_prompt.jsonl" \
-    --out_csv "$sel_rng_root/_summary/per_prompt_summary.csv" --out_dir "$sel_rng_root/_summary/per_prompt_figs"
+  # mkdir -p "$sel_rng_root/_summary"
+  # "$PYTHON_BIN" scripts/07_alpha_visualize.py --globs "$sel_rng_root/range/*_per_prompt.jsonl" \
+  #   --out_csv "$sel_rng_root/_summary/per_prompt_summary.csv" --out_dir "$sel_rng_root/_summary/per_prompt_figs"
+  echo "[SKIP] run_alpha_select_and_viz (archived)"
 }
 
 run_slopes_and_viz() {
@@ -286,20 +287,21 @@ echo "=== GLOBAL ANALYSIS FOR LAYERED EXPERIMENT ==="
 # ★★★ 修正: 読み込み先も出力先も ${SUFFIX} 付きのフォルダにする ★★★
 
 # 1) Range Summary
-"$PYTHON_BIN" - <<'PY'
-import glob, os
-import pandas as pd
-# SUFFIX にマッチするパスだけを探す
-paths = sorted(glob.glob(f"exp/*/asst_pairwise_results_L10-30/selected_range/_summary/range_summary.csv"))
-if paths:
-    dfs = [pd.read_csv(p) for p in paths]
-    out = pd.concat(dfs, ignore_index=True)
-    os.makedirs(f"exp/_all/asst_pairwise_results_L10-30/selected_range/_summary", exist_ok=True)
-    out.to_csv(f"exp/_all/asst_pairwise_results_L10-30/selected_range/_summary/range_summary.csv", index=False)
-    print("Merged range summaries.")
-else:
-    print("No range summaries found.")
-PY
+# "$PYTHON_BIN" - <<'PY'
+# import glob, os
+# import pandas as pd
+# # SUFFIX にマッチするパスだけを探す
+# paths = sorted(glob.glob(f"exp/*/asst_pairwise_results_L10-30/selected_range/_summary/range_summary.csv"))
+# if paths:
+#     dfs = [pd.read_csv(p) for p in paths]
+#     out = pd.concat(dfs, ignore_index=True)
+#     os.makedirs(f"exp/_all/asst_pairwise_results_L10-30/selected_range/_summary", exist_ok=True)
+#     out.to_csv(f"exp/_all/asst_pairwise_results_L10-30/selected_range/_summary/range_summary.csv", index=False)
+#     print("Merged range summaries.")
+# else:
+#     print("No range summaries found.")
+# PY
+echo "[SKIP] Range summary (archived)"
 
 # 2) Cross Model Comparison (17)
 # SUFFIXフォルダ内のCSVを探して比較

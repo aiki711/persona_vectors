@@ -237,35 +237,35 @@ run_alpha_select_and_viz() {
   local results_dir="$2"
   local sel_rng_root="$3"
 
-  mkdir -p "$sel_rng_root"
+  # mkdir -p "$sel_rng_root"
 
-  for SPLIT in base instruct; do
-    for trait in "${TRAITS[@]}"; do
-      local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_probe_results.jsonl"
-      [ -s "$in_jsonl" ] || continue
+  # for SPLIT in base instruct; do
+  #   for trait in "${TRAITS[@]}"; do
+  #     local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_probe_results.jsonl"
+  #     [ -s "$in_jsonl" ] || continue
+  #
+  #     "$PYTHON_BIN" scripts/06_alpha_eval_v13.py \
+  #       --in "$in_jsonl" \
+  #       --out_root "$sel_rng_root" \
+  #       --per_prompt \
+  #       --pass_rate_min 0.8 \
+  #       --sem_min 0.0 \
+  #       --len_ratio_min 0.5 \
+  #       --len_ratio_max 2.0 \
+  #       --distinct2_min 0.3 \
+  #       --punct_ratio_max 0.85 \
+  #       --min_phrase_tokens 3 \
+  #       --max_run_token_max 8 \
+  #       --max_run_phrase_max 2
+  #   done
+  # done
 
-      "$PYTHON_BIN" scripts/06_alpha_eval_v13.py \
-        --in "$in_jsonl" \
-        --out_root "$sel_rng_root" \
-        --per_prompt \
-        --pass_rate_min 0.8 \
-        --sem_min 0.0 \
-        --len_ratio_min 0.5 \
-        --len_ratio_max 2.0 \
-        --distinct2_min 0.3 \
-        --punct_ratio_max 0.85 \
-        --min_phrase_tokens 3 \
-        --max_run_token_max 8 \
-        --max_run_phrase_max 2
-    done
-  done
-
-  mkdir -p "$sel_rng_root/_summary"
-  "$PYTHON_BIN" scripts/07_alpha_visualize.py \
-    --globs "$sel_rng_root/range/*_per_prompt.jsonl" \
-    --out_csv "$sel_rng_root/_summary/per_prompt_summary.csv" \
-    --out_dir "$sel_rng_root/_summary/per_prompt_figs"
-
+  # mkdir -p "$sel_rng_root/_summary"
+  # "$PYTHON_BIN" scripts/07_alpha_visualize.py \
+  #   --globs "$sel_rng_root/range/*_per_prompt.jsonl" \
+  #   --out_csv "$sel_rng_root/_summary/per_prompt_summary.csv" \
+  #   --out_dir "$sel_rng_root/_summary/per_prompt_figs"
+  echo "[SKIP] run_alpha_select_and_viz (archived)"
 
 }
 
@@ -362,30 +362,32 @@ done
 echo "==== GLOBAL CORR (all models) ===="
 
 # 1) Join range summaries
-"$PYTHON_BIN" - <<'PY'
-import glob, os
-import pandas as pd
+# "$PYTHON_BIN" - <<'PY'
+# import glob, os
+# import pandas as pd
+# 
+# paths = sorted(glob.glob("exp/*/asst_pairwise_results/selected_range/_summary/range_summary.csv"))
+# if paths:
+#     dfs=[]
+#     for p in paths:
+#         try:
+#             df=pd.read_csv(p)
+#             if "kind" in df.columns:
+#                 df=df[df["kind"].astype(str).str.lower()=="range"].copy()
+#             dfs.append(df)
+#         except Exception as e:
+#             print(f"Skipping {p}: {e}")
+#     
+#     if dfs:
+#         out=pd.concat(dfs, ignore_index=True)
+#         os.makedirs("exp/_all/asst_pairwise_results/selected_range/_summary", exist_ok=True)
+#         out.to_csv("exp/_all/asst_pairwise_results/selected_range/_summary/range_summary.csv", index=False)
+#         print("Merged range summaries.")
+# else:
+#     print("No range summaries found.")
+# PY
+echo "[SKIP] Range summary (archived)"
 
-paths = sorted(glob.glob("exp/*/asst_pairwise_results/selected_range/_summary/range_summary.csv"))
-if paths:
-    dfs=[]
-    for p in paths:
-        try:
-            df=pd.read_csv(p)
-            if "kind" in df.columns:
-                df=df[df["kind"].astype(str).str.lower()=="range"].copy()
-            dfs.append(df)
-        except Exception as e:
-            print(f"Skipping {p}: {e}")
-    
-    if dfs:
-        out=pd.concat(dfs, ignore_index=True)
-        os.makedirs("exp/_all/asst_pairwise_results/selected_range/_summary", exist_ok=True)
-        out.to_csv("exp/_all/asst_pairwise_results/selected_range/_summary/range_summary.csv", index=False)
-        print("Merged range summaries.")
-else:
-    print("No range summaries found.")
-PY
 
 
 
