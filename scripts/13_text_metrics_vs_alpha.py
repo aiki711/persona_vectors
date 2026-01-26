@@ -40,10 +40,14 @@ def load_data(file_path):
 
     return pd.DataFrame(data)
 
-def load_models(device):
+def load_models(device, mode="all"):
     """
     Perplexity用のGPT2と、類似度用のSentence-BERTを読み込みます。
+    mode="distance_only" の場合はNoneを返します。
     """
+    if mode == "distance_only":
+        return None, None, None
+
     print("Loading evaluation models...")
     
     # Perplexity (GPT-2)
@@ -64,35 +68,13 @@ def calculate_perplexity_batch(model, tokenizer, texts, device, batch_size=32):
     """
     GPT-2を使用してPerplexityをバッチ計算します。
     """
+    if model is None:
+        return [float('nan')] * len(texts)
+
     ppls = []
-    
-    for i in range(0, len(texts), batch_size):
-        batch_texts = texts[i:i + batch_size]
-        
-        # Tokenize
-        encodings = tokenizer(
-            batch_texts, 
-            return_tensors='pt', 
-            padding=True, 
-            truncation=True, 
-            max_length=512 # GPT2 default context size
-        ).to(device)
-        
-        with torch.no_grad():
-            outputs = model(**encodings, labels=encodings.input_ids)
-            # loss is the cross-entropy loss (average negative log-likelihood)
-            # We calculate PPL for each item in batch.
-            # Transformer's default loss is averaged over the batch/tokens, so strictly speaking
-            # getting per-sample PPL in one forward pass requires setting reduction='none' manually
-            # or looping. For speed, standard HF implementation averages. 
-            # To be accurate per sentence without loop, we need a slight workaround or loop.
-            # For simplicity and speed in "batch", let's loop inside no_grad if batch_size is small,
-            # OR we compute log_likelihood manually.
-            pass
     
     # リファレンス実装として、バッチ処理は少し複雑になるため（padding maskの考慮など）、
     # ここではシンプルに1つずつ計算するが、torch.no_grad()内で回すことで高速化を図る方針にします。
-    # 完全にバッチ化するとpadding部分のloss除外などケアが必要。
     
     model.eval()
     results = []
@@ -116,26 +98,19 @@ def calculate_perplexity_batch(model, tokenizer, texts, device, batch_size=32):
             
     return results
 
-def calculate_metrics_batch(df, baseline_alpha, device="cuda"):
+def calculate_metrics_batch(df, baseline_alpha, device="cuda", mode="all"):
     """
     編集距離、Perplexity、類似度を一括計算します。
+    mode="distance_only" の場合、Perplexityと類似度は計算しません。
     """
     
     # モデルロード
-    ppl_model, ppl_tokenizer, sim_model = load_models(device)
+    ppl_model, ppl_tokenizer, sim_model = load_models(device, mode)
     
     results = []
     grouped = df.groupby(['trait', 'x'])
     print(f"Processing {len(grouped)} groups...")
 
-    # 全データのPerplexityを先に計算するか、グループごとにやるか。
-    # グループごとのほうがベースライン比較のロジックと合わせやすい。
-    
-    # ただし、類似度は (Base, Target) のペアで計算するため、こちらはグループ内処理必須。
-    # PPLは単独テキストの属性なので、DataFrame全体に対して一括計算も可能だが、
-    # メモリ節約のためグループループ内で処理するか、あるいは全体を一気にembeddingするか検討。
-    # ここでは可読性重視でグループループ内で処理します。
-    
     # 進捗表示
     for (trait, prompt), group in tqdm(grouped):
         baseline_row = group[group['alpha_total'] == baseline_alpha]
@@ -143,9 +118,6 @@ def calculate_metrics_batch(df, baseline_alpha, device="cuda"):
             continue
             
         base_text = baseline_row.iloc[0]['y']
-        
-        # Base text embedding (cache this)
-        base_emb = sim_model.encode(base_text, convert_to_tensor=True, show_progress_bar=False)
         
         # Target texts
         target_texts = group['y'].tolist()
@@ -168,14 +140,17 @@ def calculate_metrics_batch(df, baseline_alpha, device="cuda"):
             lengths.append(len(t_text) - len(base_text))
 
         # 2. Semantic Similarity (GPU Batch)
-        # util.cos_sim returns query x corpus matrix. Here query=base, corpus=targets
-        target_embs = sim_model.encode(target_texts, convert_to_tensor=True, show_progress_bar=False)
-        # cos_sim returns tensor on same device
-        sem_sims = util.cos_sim(base_emb, target_embs)[0].cpu().numpy().tolist()
+        sem_sims = [float('nan')] * len(target_texts)
+        if mode == "all" and sim_model is not None:
+             # Base text embedding
+            base_emb = sim_model.encode(base_text, convert_to_tensor=True, show_progress_bar=False)
+            target_embs = sim_model.encode(target_texts, convert_to_tensor=True, show_progress_bar=False)
+            sem_sims = util.cos_sim(base_emb, target_embs)[0].cpu().numpy().tolist()
         
         # 3. Perplexity (GPU Sequential/Small Batch)
-        # 今回は実装簡易化のため1文ずつno_gradで回す関数を使用
-        ppls = calculate_perplexity_batch(ppl_model, ppl_tokenizer, target_texts, device)
+        ppls = [float('nan')] * len(target_texts)
+        if mode == "all" and ppl_model is not None:
+             ppls = calculate_perplexity_batch(ppl_model, ppl_tokenizer, target_texts, device)
         
         # 結果格納
         for i in range(len(target_texts)):
@@ -201,14 +176,15 @@ def main():
     parser.add_argument("--output", "-o", type=str, default="13_text_metrics.csv")
     parser.add_argument("--baseline", "-b", type=float, default=0.0)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--mode", type=str, choices=["all", "distance_only"], default="all", help="Calculation mode: 'all' (default) or 'distance_only'.")
     
     args = parser.parse_args()
     
     print(f"Loading data from {args.input_file}...")
     df = load_data(args.input_file)
     
-    print(f"Calculating metrics on {args.device}...")
-    result_df = calculate_metrics_batch(df, args.baseline, args.device)
+    print(f"Calculating metrics on {args.device} in '{args.mode}' mode...")
+    result_df = calculate_metrics_batch(df, args.baseline, args.device, args.mode)
     
     print(f"Saving results to {args.output}...")
     result_df.sort_values(by=['trait', 'prompt', 'alpha_total'], inplace=True)
