@@ -158,10 +158,13 @@ run_text_analysis() {
   local input_jsonl="${results_dir}/${tag}_${split}_alltraits.jsonl"
   if ! is_nonempty_file "$input_jsonl"; then return 0; fi
 
-  local dist_csv="${results_dir}/${tag}_${split}_edit_distance.csv"
-  if ! is_nonempty_file "$dist_csv"; then
-    echo "[RUN ] 13_text_change_vs_alpha.py"
-    "$PYTHON_BIN" scripts/13_text_change_vs_alpha.py "$input_jsonl" --output "$dist_csv" --baseline 0
+  local metrics_csv="${results_dir}/${tag}_${split}_text_metrics.csv"
+  if ! is_nonempty_file "$metrics_csv"; then
+    echo "[RUN ] 13_text_metrics_vs_alpha.py"
+    "$PYTHON_BIN" scripts/13_text_metrics_vs_alpha.py "$input_jsonl" \
+      --output "$metrics_csv" \
+      --baseline 0 \
+      --mode all
   fi
 
   local score_csv="${results_dir}/${tag}_${split}_personality_scores.csv"
@@ -259,7 +262,7 @@ run_one_model_pair_layered() {
   
   echo "[Viz] 15_text_sensitivity (Layered)"
   "$PYTHON_BIN" scripts/15_text_sensitivity_visualize.py \
-    --dist_glob "${results_dir}/*_edit_distance.csv" \
+    --metrics_glob "${results_dir}/*_text_metrics.csv" \
     --score_glob "${results_dir}/*_personality_scores.csv" \
     --out_dir "$plot_dir" \
     --tag "${tag}${SUFFIX}"

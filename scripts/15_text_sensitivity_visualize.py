@@ -197,7 +197,7 @@ def plot_radar(slope_df, output_dir, title_prefix="", metric_col='text_change_sl
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--metrics_glob", type=str, required=True, help="Glob pattern for text metrics csv")
+    parser.add_argument("--metrics_glob", type=str, help="Glob pattern for text metrics csv")
     parser.add_argument("--score_glob", type=str, required=True)
     parser.add_argument("--out_dir", type=str, default="analysis_plots")
     parser.add_argument("--tag", type=str, default="Experiment")
@@ -208,6 +208,10 @@ def main():
     args = parser.parse_args()
 
     metrics_glob = args.metrics_glob if args.metrics_glob else args.dist_glob
+    
+    if not metrics_glob:
+        print("Error: Either --metrics_glob or --dist_glob must be provided.")
+        return
     
     df, metrics_found = load_data(metrics_glob, args.score_glob)
     if df.empty:

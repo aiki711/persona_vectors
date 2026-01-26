@@ -190,6 +190,7 @@ concat_alltraits() {
 }
 
 # ★★★ Improved Text Analysis Helper ★★★
+# ★★★ Improved Text Analysis Helper ★★★
 run_text_analysis() {
   local tag="$1"
   local results_dir="$2"
@@ -202,17 +203,18 @@ run_text_analysis() {
     return 0
   fi
 
-  # --- 13: Edit Distance (CPU) ---
-  local dist_csv="${results_dir}/${tag}_${split}_edit_distance.csv"
+  # --- 13: Text Metrics (Distance, PPL, Sim) ---
+  local metrics_csv="${results_dir}/${tag}_${split}_text_metrics.csv"
   
   # Check if exists and not empty
-  if is_nonempty_file "$dist_csv"; then
-    echo "[SKIP] 13_text_change_vs_alpha.py exists: $dist_csv"
+  if is_nonempty_file "$metrics_csv"; then
+    echo "[SKIP] 13_text_metrics_vs_alpha.py exists: $metrics_csv"
   else
-    echo "[RUN ] 13_text_change_vs_alpha.py -> $dist_csv"
-    "$PYTHON_BIN" scripts/13_text_change_vs_alpha.py "$input_jsonl" \
-      --output "$dist_csv" \
-      --baseline 0
+    echo "[RUN ] 13_text_metrics_vs_alpha.py -> $metrics_csv"
+    "$PYTHON_BIN" scripts/13_text_metrics_vs_alpha.py "$input_jsonl" \
+      --output "$metrics_csv" \
+      --baseline 0 \
+      --mode all
   fi
 
   # --- 14: Personality Score (GPU) ---
@@ -399,7 +401,7 @@ for spec in "${MODEL_SPECS[@]}"; do
   mkdir -p "$OUT_DIR"
 
   "$PYTHON_BIN" scripts/15_text_sensitivity_visualize.py \
-    --dist_glob "exp/${TAG}/asst_pairwise_results/*_edit_distance.csv" \
+    --metrics_glob "exp/${TAG}/asst_pairwise_results/*_text_metrics.csv" \
     --score_glob "exp/${TAG}/asst_pairwise_results/*_personality_scores.csv" \
     --out_dir "$OUT_DIR" \
     --tag "$TAG"
