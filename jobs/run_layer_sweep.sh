@@ -315,4 +315,11 @@ mkdir -p "$OUT_ALL"
 echo "=== SCATTER PLOT VISUALIZATION ==="
 "$PYTHON_BIN" scripts/18_visualize_scatter.py --root_dir "exp" --suffix "$SUFFIX"
 
+echo "___ Running Thesis Analysis Plots ___"
+"$PYTHON_BIN" scripts/21_thesis_analysis_plots.py \
+    --score_glob "exp/*/asst_pairwise_results${SUFFIX}/*_personality_scores.csv" \
+    --metrics_glob "exp/*/asst_pairwise_results${SUFFIX}/*_text_metrics.csv" \
+    --out_dir "exp/_all/analysis_results/thesis_comparison${SUFFIX}"
+
+
 echo "=== PIPELINE COMPLETED ===" 

@@ -422,3 +422,9 @@ echo "=== CROSS MODEL COMPARISON ==="
 
 echo "=== SCATTER PLOT VISUALIZATION ==="
 "$PYTHON_BIN" scripts/18_visualize_scatter.py --root_dir "exp" --suffix ""
+
+echo "___ Running Thesis Analysis Plots ___"
+"$PYTHON_BIN" scripts/21_thesis_analysis_plots.py \
+    --score_glob "exp/*/asst_pairwise_results/*_personality_scores.csv" \
+    --metrics_glob "exp/*/asst_pairwise_results/*_text_metrics.csv" \
+    --out_dir "exp/_all/analysis_results/thesis_comparison"
