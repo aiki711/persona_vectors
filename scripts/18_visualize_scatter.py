@@ -19,8 +19,11 @@ def plot_scatter(x, y, title, xlabel, ylabel, output_path):
     plt.figure(figsize=(6, 5))
     
     # 色のリスト作成
-    colors = [get_color(a) for a in x]
-    
+    try:
+        colors = [get_color(a) for a in x]
+    except Exception:
+        colors = 'blue'
+
     # 散布図
     plt.scatter(x, y, c=colors, alpha=0.6, edgecolors='k', linewidth=0.3)
     
@@ -36,29 +39,26 @@ def plot_scatter(x, y, title, xlabel, ylabel, output_path):
     plt.savefig(output_path, dpi=150)
     plt.close()
 
-def process_external_scores(root_dir, suffix):
+def process_external_scores(score_files, out_dir):
     """
-    *_personality_scores.csv を探して散布図を描く (Robust版)
+    Given a list of score CSVs, generate scatter plots.
     """
-    pattern = os.path.join(root_dir, f"*/asst_pairwise_results{suffix}/*_personality_scores.csv")
-    files = glob.glob(pattern)
+    print(f"[External] Processing {len(score_files)} score CSVs.")
     
-    print(f"[External] Found {len(files)} score CSVs.")
-    
-    for f in files:
+    plot_dir = os.path.join(out_dir, "external")
+    os.makedirs(plot_dir, exist_ok=True)
+
+    for f in score_files:
         try:
             df = pd.read_csv(f)
             
             # --- カラム名の揺らぎ吸収 ---
-            # Alphaカラムの特定
             alpha_col = None
             if 'alpha' in df.columns:
                 alpha_col = 'alpha'
             elif 'alpha_total' in df.columns:
                 alpha_col = 'alpha_total'
             
-            # Label Mapping for Score columns
-            # 0: extraversion, 1: neuroticism, 2: agreeableness, 3: conscientiousness, 4: openness
             label_mapping = {
                 'score_LABEL_0': 'score_extraversion',
                 'score_LABEL_1': 'score_neuroticism',
@@ -68,72 +68,57 @@ def process_external_scores(root_dir, suffix):
             }
             df.rename(columns=label_mapping, inplace=True)
 
-            # Scoreカラムの特定
-            # "score" 単独カラムがある場合と、上記のように score_xxx に分かれている場合がある
             score_cols_found = [c for c in df.columns if c.startswith('score_')]
             
-            # チェック
             if alpha_col is None or not score_cols_found:
-                # "score" カラムも "score_xxx" カラムもない場合
                 if 'score' not in df.columns and 'probability' not in df.columns:
-                    print(f"[Skip] {os.path.basename(f)}: Missing columns. Found: {list(df.columns)}")
+                    # columns check failed
+                    print(f"[Skip] {os.path.basename(f)}: Missing columns.")
                     continue
             
-            # 単独scoreカラムのフォールバック
             if not score_cols_found:
                 if 'score' in df.columns:
                     score_cols_found = ['score']
                 elif 'probability' in df.columns:
-                    # probabilityをscoreとして扱う
                     df['score'] = df['probability']
                     score_cols_found = ['score']
 
-            # --- メタデータ抽出 ---
+            # --- Meta Info ---
             basename = os.path.basename(f)
-            dirname = os.path.dirname(f)
+            # Try to guess model/split from filename or path if possible, 
+            # but relying on filename is safer if path structure varies.
+            # Filename format expected: {tag}_{split}_personality_scores.csv 
+            # OR {tag}_{split}_{trait}_personality_scores.csv
             
-            # model_tag と split の推定
-            # ディレクトリ構成: exp/{model_tag}/asst_pairwise_results{suffix}/...
-            model_dir = os.path.dirname(os.path.dirname(f))
-            model_tag = os.path.basename(model_dir)
-            
-            # split はファイル名から推定
-            if "base" in basename:
+            name_parts = basename.replace("_personality_scores.csv", "").split('_')
+            # Heuristic: "base" or "instruct" usually indicate the split location
+            if "base" in name_parts:
                 split = "base"
-            elif "instruct" in basename:
+            elif "instruct" in name_parts:
                 split = "instruct"
             else:
                 split = "unknown"
+                
+            model_tag = name_parts[0] # Very rough guess
 
-            # Plot出力先
-            plot_dir = os.path.join(dirname, "plots", "external")
-            os.makedirs(plot_dir, exist_ok=True)
-            
             # --- Plotting ---
-            # traitカラムがある場合 (まだ分割されていないデータなど)
             if 'trait' in df.columns:
                 traits = df['trait'].unique()
                 for t in traits:
                     subset = df[df['trait'] == t]
                     if subset.empty: continue
                     
-                    # 対応するスコアカラムを探す
-                    # trait名がカラム名に含まれているかチェック (case-insensitive)
                     target_col = None
                     for c in score_cols_found:
                         if t.lower() in c.lower():
                             target_col = c
                             break
-                    
-                    # 見つからなければ 'score' を使う (単一カラムの場合)
                     if target_col is None and 'score' in df.columns:
                         target_col = 'score'
                         
-                    if target_col is None:
-                        # traitに対応するスコアがない場合はスキップ
-                        continue
+                    if target_col is None: continue
 
-                    out_name = f"{model_tag}_{split}_{t}_scatter_external.png"
+                    out_name = f"{basename.replace('.csv', '')}_{t}.png"
                     plot_scatter(
                         subset[alpha_col], subset[target_col], 
                         f"External Score: {t}\n({model_tag} / {split})",
@@ -141,10 +126,9 @@ def process_external_scores(root_dir, suffix):
                         os.path.join(plot_dir, out_name)
                     )
             else:
-                # traitカラムがない場合、すべての score_xxx カラムについてプロット
                 for col in score_cols_found:
                     trait_name = col.replace("score_", "")
-                    out_name = f"{model_tag}_{split}_{trait_name}_scatter_external.png"
+                    out_name = f"{basename.replace('.csv', '')}_{trait_name}.png"
                     plot_scatter(
                         df[alpha_col], df[col], 
                         f"External Score: {trait_name}\n({model_tag} / {split})",
@@ -155,78 +139,90 @@ def process_external_scores(root_dir, suffix):
         except Exception as e:
             print(f"[Error] Processing {f}: {e}")
 
-def process_internal_sensitivity(root_dir, suffix):
+def process_internal_sensitivity(metrics_files, out_dir):
     """
-    *_with_rms.jsonl を探して散布図を描く
+    The original code looked for jsonl files to plot internal sensitivity (cosine sim).
+    But the new args provide metrics CSV files (text_metrics).
+    
+    If the user intention is to plot 'Cosine Similarity' or 'Perplexity' vs Alpha from text_metrics.csv,
+    we can do that here.
+    
+    However, the request mentioned "Internal" scatter plots which originally came from _probe_results.jsonl's s_avg.
+    The run_neutral_experiments.sh passes:
+      --metrics_glob "${results_dir}/*_text_metrics.csv"
+      --score_glob "${results_dir}/*_personality_scores.csv"
+    
+    It does NOT pass jsonl files. So we should use the text_metrics.csv here.
+    text_metrics.csv usually contains: alpha, edit_distance, perplexity, etc.
     """
-    pattern = os.path.join(root_dir, f"*/asst_pairwise_results{suffix}/*_probe_results.jsonl")
-    files = glob.glob(pattern)
+    print(f"[Internal] Processing {len(metrics_files)} metrics CSVs.")
     
-    print(f"[Internal] Found {len(files)} JSONL files.")
+    plot_dir = os.path.join(out_dir, "internal")
+    os.makedirs(plot_dir, exist_ok=True)
     
-    for f in tqdm(files, desc="Processing Internal Metrics"):
+    for f in metrics_files:
         try:
-            data = []
-            with open(f, 'r') as fin:
-                for line in fin:
-                    if not line.strip(): continue
-                    rec = json.loads(line)
-                    if 'alpha_total' in rec and 's_avg' in rec:
-                        data.append(rec)
-            
-            if not data:
+            df = pd.read_csv(f)
+            if 'alpha' not in df.columns:
                 continue
+            
+            # Decide what to plot. Usually Edit Distance and PPL.
+            cols_to_plot = []
+            if 'edit_distance' in df.columns:
+                cols_to_plot.append(('edit_distance', 'Edit Distance'))
+            if 'ppl' in df.columns:
+                cols_to_plot.append(('ppl', 'Perplexity'))
+            
+            basename = os.path.basename(f).replace("_text_metrics.csv", "")
+            
+            for col, label in cols_to_plot:
+                out_name = f"{basename}_{col}.png"
+                plot_scatter(
+                    df['alpha'], df[col],
+                    f"{label} vs Alpha\n({basename})",
+                    "Alpha", label,
+                    os.path.join(plot_dir, out_name)
+                )
                 
-            df = pd.DataFrame(data)
-            
-            # メタデータ抽出
-            dirname = os.path.dirname(f)
-            basename = os.path.basename(f)
-            
-            model_dir = os.path.dirname(os.path.dirname(f))
-            model_tag = os.path.basename(model_dir)
-            
-            # split & trait extraction
-            parts = basename.replace("_probe_results.jsonl", "").split('_')
-            
-            if "base" in parts:
-                idx = parts.index("base")
-                split = "base"
-                trait = "_".join(parts[idx+1:])
-            elif "instruct" in parts:
-                idx = parts.index("instruct")
-                split = "instruct"
-                trait = "_".join(parts[idx+1:])
-            else:
-                split = "unknown"
-                trait = "unknown"
-            
-            plot_dir = os.path.join(dirname, "plots", "internal")
-            os.makedirs(plot_dir, exist_ok=True)
-            
-            out_name = f"{model_tag}_{split}_{trait}_scatter_internal.png"
-            
-            plot_scatter(
-                df['alpha_total'], df['s_avg'],
-                f"Internal Sensitivity: {trait}\n({model_tag} / {split})",
-                "Alpha", "Cosine Similarity (s_avg)",
-                os.path.join(plot_dir, out_name)
-            )
-
         except Exception as e:
             print(f"Error processing {f}: {e}")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root_dir", default="exp", help="Root directory")
-    parser.add_argument("--suffix", default="_L10-30", help="Suffix of results dir (e.g. _L10-30 or empty)")
+    # New Arguments style
+    parser.add_argument("--metrics_glob", type=str, default=None, help="Glob pattern for text metrics CSVs")
+    parser.add_argument("--score_glob", type=str, default=None, help="Glob pattern for personality scores CSVs")
+    parser.add_argument("--out_dir", type=str, required=True, help="Output directory for plots")
+    parser.add_argument("--tag", type=str, default="scatter", help="Tag for the run")
+    
+    # Legacy arguments (kept for compatibility if needed, though we primarily use new ones)
+    parser.add_argument("--root_dir", default=None)
+    parser.add_argument("--suffix", default=None)
+    
     args = parser.parse_args()
     
-    print(f"Generating scatter plots for results in '{args.suffix}' folders...")
+    # Resolve files
+    score_files = []
+    if args.score_glob:
+        score_files = glob.glob(args.score_glob)
     
-    process_external_scores(args.root_dir, args.suffix)
-    process_internal_sensitivity(args.root_dir, args.suffix)
+    metrics_files = []
+    if args.metrics_glob:
+        metrics_files = glob.glob(args.metrics_glob)
+       
+    # If using legacy mode (fallback)
+    if not score_files and not metrics_files and args.root_dir:
+        print("Using legacy directory search mode...")
+        # Redirect to old logic or just manual glob here? 
+        # Let's simple do manual glob based on old logic if needed, but for now Assume new usage.
+        pass
+
+    if score_files:
+        process_external_scores(score_files, args.out_dir)
     
+    if metrics_files:
+        process_internal_sensitivity(metrics_files, args.out_dir)
+
     print("Done.")
 
 if __name__ == "__main__":

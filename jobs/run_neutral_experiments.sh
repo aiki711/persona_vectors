@@ -50,12 +50,12 @@ PY
 TRAITS=("openness" "conscientiousness" "extraversion" "agreeableness" "neuroticism")
 
 MODEL_SPECS=(
-  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-5,-4,-3,-2,-1,0,1,2,3,4,5|-5,-4,-3,-2,-1,0,1,2,3,4,5"
-  "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-20,-16,-12,-8,-4,0,4,8,12,16,20|-20,-16,-12,-8,-4,0,4,8,12,16,20"
-  "olmo3_7b|allenai/Olmo-3-1025-7B|allenai/Olmo-3-7B-Instruct|-50,-40,-30,-20,-10,0,10,20,30,40,50|-50,-40,-30,-20,-10,0,10,20,30,40,50"
-  "qwen25_7b|Qwen/Qwen2.5-7B|Qwen/Qwen2.5-7B-Instruct|-160,-140,-120,-100,-80,0,80,100,120,140,160|-160,-140,-120,-100,-80,0,80,100,120,140,160"
-  "gemma2_9b|google/gemma-2-9b|google/gemma-2-9b-it|-500,-400,-300,-200,-100,0,100,200,300,400,500|-500,-400,-300,-200,-100,0,100,200,300,400,500"
-  "falcon3_7b|tiiuae/Falcon3-7B-Base|tiiuae/Falcon3-7B-Instruct|-500,-400,-300,-200,-100,0,100,200,300,400,500|-500,-400,-300,-200,-100,0,100,200,300,400,500"
+  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-3,-2,-1,0,1,2,3|-3,-2,-1,0,1,2,3"
+  "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-10,-7,-3,0,3,7,10|-10,-7,-3,0,3,7,10"
+  "olmo3_7b|allenai/Olmo-3-1025-7B|allenai/Olmo-3-7B-Instruct|-25,-15,-5,0,5,15,25|-25,-15,-5,0,5,15,25"
+  "qwen25_7b|Qwen/Qwen2.5-7B|Qwen/Qwen2.5-7B-Instruct|-70,-50,-25,0,25,50,70|-70,-50,-25,0,25,50,70"
+  "gemma2_9b|google/gemma-2-9b|google/gemma-2-9b-it|-300,-200,-100,0,100,200,300|-300,-200,-100,0,100,200,300"
+  "falcon3_7b|tiiuae/Falcon3-7B-Base|tiiuae/Falcon3-7B-Instruct|-200,-100,-50,0,50,100,200|-200,-100,-50,0,50,100,200"
 )
 
 # New Prompt Sets
@@ -161,6 +161,14 @@ run_viz_for_dir() {
     
     echo "[Viz] 15_text_sensitivity ($suffix)"
     "$PYTHON_BIN" scripts/15_text_sensitivity_visualize.py \
+        --metrics_glob "${results_dir}/*_text_metrics.csv" \
+        --score_glob "${results_dir}/*_personality_scores.csv" \
+        --out_dir "$out_plots" \
+        --tag "${tag}_${suffix}"
+
+    # 18: Scatter Plots (Alpha vs Score/Distance)
+    echo "[Viz] 18_visualize_scatter ($suffix)"
+    "$PYTHON_BIN" scripts/18_visualize_scatter.py \
         --metrics_glob "${results_dir}/*_text_metrics.csv" \
         --score_glob "${results_dir}/*_personality_scores.csv" \
         --out_dir "$out_plots" \
