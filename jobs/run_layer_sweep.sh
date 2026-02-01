@@ -4,7 +4,7 @@
 #PBS -o log/layer_sweep.o%j
 #PBS -e log/layer_sweep.e%j
 #PBS -l select=1:ncpus=8:ngpus=1:mem=64gb
-#PBS -l walltime=20:00:00
+#PBS -l walltime=120:00:00
 #PBS -j oe
 
 set -euo pipefail
@@ -17,51 +17,22 @@ mkdir -p log
 LOG_FILE="log/layer_sweep.${RUN_ID}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "=== STARTING LAYER SELECTION EXPERIMENT ==="
+echo "=== STARTING LAYER SWEEP EXPERIMENTS ==="
 echo "START TIME: $(date)"
-echo "Host: $(hostname)"
-echo "WORKDIR: $WORKDIR"
 
 # ==================== Project Setup ====================
 export PROJECT_DIR="$WORKDIR"
 export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
 export HF_HOME="$PROJECT_DIR/.hf_cache"
 export TRANSFORMERS_CACHE="$HF_HOME"
-export HF_DATASETS_CACHE="$HF_HOME/datasets"
-export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
-export OMP_NUM_THREADS=1
-export HF_HUB_ENABLE_HF_TRANSFER=0
-export PYTORCH_ALLOC_CONF=expandable_segments:True
-export TOKENIZERS_PARALLELISM=false
 
-# ==================== Tokens ====================
-set +x
-if [ -f "$PROJECT_DIR/.hf_token" ]; then
-  export HUGGINGFACE_HUB_TOKEN="$(head -n1 "$PROJECT_DIR/.hf_token" | tr -d '\r\n' | sed 's/^Bearer[[:space:]]\+//')"
-fi
-
-# ==================== Config Restore ====================
-CONFIG_FILE="exp/configs/big5_vectors.yaml"
-CONFIG_BAK="exp/configs/big5_vectors.yaml.bak"
-
-restore_config() {
-  set +e
-  if [ -f "$CONFIG_BAK" ]; then
-    cp "$CONFIG_BAK" "$CONFIG_FILE"
-    rm -f "$CONFIG_BAK"
-  fi
-}
-trap restore_config EXIT
-
-if [ ! -f "$CONFIG_BAK" ]; then
-  cp "$CONFIG_FILE" "$CONFIG_BAK"
-else
-  cp "$CONFIG_BAK" "$CONFIG_FILE"
-fi
-
-# ==================== venv ====================
+# Venv
 VENV="$PROJECT_DIR/persona_steering"
+export VIRTUAL_ENV="$VENV"
+export PATH="$VENV/bin:$PATH"
 export PYTHON_BIN="$VENV/bin/python"
+
+# Nvidia Libs
 export LD_LIBRARY_PATH="$($PYTHON_BIN - <<'PY'
 import site, glob, os
 paths=[]
@@ -76,21 +47,31 @@ PY
 ):${LD_LIBRARY_PATH:-}"
 
 # ==================== Experiment Params ====================
+# Layer Range Configuration
+LAYER_START=10
+LAYER_END=30
+LAYER_SUFFIX="_L${LAYER_START}-${LAYER_END}"
+
+echo "LAYER CONFIG: ${LAYER_START} to ${LAYER_END} (Suffix: ${LAYER_SUFFIX})"
+
 TRAITS=("openness" "conscientiousness" "extraversion" "agreeableness" "neuroticism")
 
 MODEL_SPECS=(
-  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-5,-4,-3,-2,-1,0,1,2,3,4,5|-5,-4,-3,-2,-1,0,1,2,3,4,5"
-  "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-20,-16,-12,-8,-4,0,4,8,12,16,20|-20,-16,-12,-8,-4,0,4,8,12,16,20"
-  "olmo3_7b|allenai/Olmo-3-1025-7B|allenai/Olmo-3-7B-Instruct|-50,-40,-30,-20,-10,0,10,20,30,40,50|-50,-40,-30,-20,-10,0,10,20,30,40,50"
-  "qwen25_7b|Qwen/Qwen2.5-7B|Qwen/Qwen2.5-7B-Instruct|-160,-140,-120,-100,-80,0,80,100,120,140,160|-160,-140,-120,-100,-80,0,80,100,120,140,160"
-  "gemma2_9b|google/gemma-2-9b|google/gemma-2-9b-it|-500,-400,-300,-200,-100,0,100,200,300,400,500|-500,-400,-300,-200,-100,0,100,200,300,400,500"
-  "falcon3_7b|tiiuae/Falcon3-7B-Base|tiiuae/Falcon3-7B-Instruct|-500,-400,-300,-200,-100,0,100,200,300,400,500|-500,-400,-300,-200,-100,0,100,200,300,400,500"
+  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-2,-1.33,-0.67,0,0.67,1.33,2|-2,-1.33,-0.67,0,0.67,1.33,2"
+  "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-7,-4.7,-2.3,0,2.3,4.7,7|-7,-4.7,-2.3,0,2.3,4.7,7"
+  "olmo3_7b|allenai/Olmo-3-1025-7B|allenai/Olmo-3-7B-Instruct|-15,-10,-5,0,5,10,15|-15,-10,-5,0,5,10,15"
+  "qwen25_7b|Qwen/Qwen2.5-7B|Qwen/Qwen2.5-7B-Instruct|-50,-33,-17,0,17,33,50|-50,-33,-17,0,17,33,50"
+  "gemma2_9b|google/gemma-2-9b|google/gemma-2-9b-it|-200,-133,-67,0,67,133,200|-200,-133,-67,0,67,133,200"
+  "falcon3_7b|tiiuae/Falcon3-7B-Base|tiiuae/Falcon3-7B-Instruct|-100,-67,-33,0,33,67,100|-100,-67,-33,0,33,67,100"
 )
 
-# ★★★ 設定: 介入層の範囲 ★★★
-LAYER_START=10
-LAYER_END=30
-SUFFIX="_L${LAYER_START}-${LAYER_END}"  # フォルダ名用サフィックス
+# New Prompt Sets
+# "Name | JSON Path"
+PROMPT_SETS=(
+  "mtbench|exp/01_probe_inputs/mtbench_50.json"
+  "synthetic|exp/01_probe_inputs/synthetic_50.json"
+  "ipip|exp/01_probe_inputs/ipip_50.json"
+)
 
 # ==================== Helpers ====================
 is_nonempty_file() { local f="$1"; [[ -f "$f" && -s "$f" ]]; }
@@ -98,19 +79,15 @@ is_nonempty_file() { local f="$1"; [[ -f "$f" && -s "$f" ]]; }
 prepare_axes_if_needed() {
   local model_id="$1"
   local ax_bank="$2"
-  local config_file="$3"
-  local norm_bank="${ax_bank%.npz}_rawnorms.npz"
-
-  sed -i "s|^model_name: .*|model_name: ${model_id}|g" "$config_file"
-  if is_nonempty_file "$ax_bank" && is_nonempty_file "$norm_bank"; then
-    echo "[SKIP] axes+rawnorms exists"
-  else
-    echo "[RUN ] 00_prepare_vectors.py"
-    "$PYTHON_BIN" scripts/00_prepare_vectors.py --config "$config_file" --bank_path "$ax_bank"
+  local config_file="exp/configs/big5_vectors.yaml" # Fixed config path
+  
+  if ! is_nonempty_file "$ax_bank"; then
+      echo "[WARN] Axis bank $ax_bank missing. You might need to run main sweep first or ensure 00_prepare_vectors runs."
+      # Just try running it
+      "$PYTHON_BIN" scripts/00_prepare_vectors.py --config "$config_file" --bank_path "$ax_bank"
   fi
 }
 
-# ★修正: 層指定に対応
 run_probe_if_needed() {
   local split="$1"
   local trait="$2"
@@ -118,35 +95,40 @@ run_probe_if_needed() {
   local axes_bank="$4"
   local out_jsonl="$5"
   local alpha_list="$6"
-  local l_start="$7"
-  local l_end="$8"
+  local prompt_file="$7"
+  local l_start="$8"
+  local l_end="$9"
 
   if is_nonempty_file "$out_jsonl"; then
     echo "[SKIP] probe exists: $out_jsonl"
     return 0
   fi
 
-  echo "[RUN ] 01_run_probe.py (Layer ${l_start}-${l_end})"
+  echo "[RUN ] 01_run_probe.py -> $out_jsonl"
   "$PYTHON_BIN" scripts/01_run_probe.py \
     --model       "$model_id" \
     --axes_bank   "$axes_bank" \
     --trait       "$trait" \
     --alpha_list="$alpha_list" \
     --out         "$out_jsonl" \
+    --prompt_file "$prompt_file" \
     --layer_start "$l_start" \
     --layer_end   "$l_end" \
-    --prompt_file "exp/01_probe_inputs/all_traits_unseen_100.json" \
-    --samples     100
+    --samples     50
 }
 
 concat_alltraits() {
-  local results_dir="$1"
-  local split="$2"
-  local out_all="$3"
+  local tag="$1"
+  local results_dir="$2"
+  local split="$3"
+  local out_all="$4"
+
   rm -f "$out_all"
   for trait in "${TRAITS[@]}"; do
     local f="${results_dir}/${tag}_${split}_${trait}_probe_results.jsonl"
-    if is_nonempty_file "$f"; then cat "$f" >> "$out_all"; fi
+    if is_nonempty_file "$f"; then
+      cat "$f" >> "$out_all"
+    fi
   done
 }
 
@@ -158,6 +140,7 @@ run_text_analysis() {
   local input_jsonl="${results_dir}/${tag}_${split}_alltraits.jsonl"
   if ! is_nonempty_file "$input_jsonl"; then return 0; fi
 
+  # 13: Text Metrics
   local metrics_csv="${results_dir}/${tag}_${split}_text_metrics.csv"
   if ! is_nonempty_file "$metrics_csv"; then
     echo "[RUN ] 13_text_metrics_vs_alpha.py"
@@ -167,161 +150,125 @@ run_text_analysis() {
       --mode all
   fi
 
+  # 14: Personality Score
   local score_csv="${results_dir}/${tag}_${split}_personality_scores.csv"
   if ! is_nonempty_file "$score_csv"; then
     echo "[RUN ] 14_calc_personality_score.py"
-    "$PYTHON_BIN" scripts/14_calc_personality_score.py "$input_jsonl" --output "$score_csv" --batch_size 32 --model "Minej/bert-base-personality"
+    "$PYTHON_BIN" scripts/14_calc_personality_score.py "$input_jsonl" \
+      --output "$score_csv" \
+      --batch_size 32 \
+      --model "Minej/bert-base-personality"
   fi
 }
 
-run_alpha_select_and_viz() {
-  local tag="$1"
-  local results_dir="$2"
-  local sel_rng_root="$3"
-  # mkdir -p "$sel_rng_root"
+run_viz_for_dir() {
+    local tag="$1"
+    local results_dir="$2"
+    local suffix="$3" # e.g. "mtbench"
+    
+    local out_plots="$results_dir/plots"
+    mkdir -p "$out_plots"
+    
+    echo "[Viz] 15_text_sensitivity ($suffix)"
+    "$PYTHON_BIN" scripts/15_text_sensitivity_visualize.py \
+        --metrics_glob "${results_dir}/*_text_metrics.csv" \
+        --score_glob "${results_dir}/*_personality_scores.csv" \
+        --out_dir "$out_plots" \
+        --tag "${tag}_${suffix}"
 
-  # for SPLIT in base instruct; do
-  #   for trait in "${TRAITS[@]}"; do
-  #     local in_jsonl="${results_dir}/${tag}_${SPLIT}_${trait}_probe_results.jsonl"
-  #     [ -s "$in_jsonl" ] || continue
-  #     "$PYTHON_BIN" scripts/06_alpha_eval_v13.py --in "$in_jsonl" --out_root "$sel_rng_root" --per_prompt --pass_rate_min 0.8
-  #   done
-  # done
-
-  # mkdir -p "$sel_rng_root/_summary"
-  # "$PYTHON_BIN" scripts/07_alpha_visualize.py --globs "$sel_rng_root/range/*_per_prompt.jsonl" \
-  #   --out_csv "$sel_rng_root/_summary/per_prompt_summary.csv" --out_dir "$sel_rng_root/_summary/per_prompt_figs"
-  echo "[SKIP] run_alpha_select_and_viz (archived)"
+    # 18: Scatter Plots (Alpha vs Score/Distance)
+    echo "[Viz] 18_visualize_scatter ($suffix)"
+    "$PYTHON_BIN" scripts/18_visualize_scatter.py \
+        --metrics_glob "${results_dir}/*_text_metrics.csv" \
+        --score_glob "${results_dir}/*_personality_scores.csv" \
+        --jsonl_glob "${results_dir}/*_probe_results.jsonl" \
+        --out_dir "$out_plots" \
+        --tag "${tag}_${suffix}"
+    
+    # Combined Metrics (Skip slopes calc if file missing)
+    local slope_csv="$results_dir/slopes/slopes_${tag}_${suffix}.csv"
+    mkdir -p "$(dirname "$slope_csv")"
+    local base_all="${results_dir}/${tag}_base_alltraits.jsonl"
+    local instr_all="${results_dir}/${tag}_instruct_alltraits.jsonl"
+    
+    if is_nonempty_file "$base_all" && is_nonempty_file "$instr_all"; then
+        if ! is_nonempty_file "$slope_csv"; then
+             "$PYTHON_BIN" scripts/02_probe_slopes_from_logs.py \
+              --base_json  "$base_all" \
+              --instr_json "$instr_all" \
+              --out_csv    "$slope_csv" \
+              --pooling asst \
+              --axis_mode pairwise
+        fi
+        
+        echo "[Viz] 16_combined_metrics ($suffix)"
+        "$PYTHON_BIN" scripts/16_visualize_combined_metrics.py \
+            --internal_csv "$slope_csv" \
+            --external_csv "$out_plots/${tag}_${suffix}_text_sensitivities.csv" \
+            --out_dir "$out_plots" \
+            --tag "${tag}_${suffix}"
+    fi
 }
 
-run_slopes_and_viz() {
-  local tag="$1"
-  local results_dir="$2"
-  local base_all="${results_dir}/${tag}_base_alltraits.jsonl"
-  local instr_all="${results_dir}/${tag}_instruct_alltraits.jsonl"
-  
-  if ! is_nonempty_file "$base_all" || ! is_nonempty_file "$instr_all"; then return 0; fi
-
-  local slopes_dir="${results_dir}/slopes"
-  local figs_dir="${slopes_dir}/figs"
-  mkdir -p "$slopes_dir" "$figs_dir"
-  local out_csv="${slopes_dir}/slopes_${tag}_asst_pairwise.csv"
-
-  if ! is_nonempty_file "$out_csv"; then
-    echo "[RUN ] 02_probe_slopes_from_logs.py"
-    "$PYTHON_BIN" scripts/02_probe_slopes_from_logs.py --base_json "$base_all" --instr_json "$instr_all" --out_csv "$out_csv" --pooling asst --axis_mode pairwise
-  fi
-  
-  # 03 visualize (layer specific)
-  "$PYTHON_BIN" scripts/03_slopes_visualize.py --input_dir "$out_csv" --out_dir "$figs_dir" --value_col slope_delta_score_vs_alpha01
+run_experiment_set() {
+    local set_name="$1"
+    local prompt_file="$2"
+    
+    echo ">>>>>>> START PROMPT SET: $set_name (Layers ${LAYER_START}-${LAYER_END}) <<<<<<<"
+    
+    for spec in "${MODEL_SPECS[@]}"; do
+        IFS='|' read -r TAG BASE_ID INSTR_ID ALPHAS_BASE ALPHAS_INSTR <<< "$spec"
+        
+        # Suffix added to results dir: e.g. results_mtbench_L10-30
+        local results_dir="exp/${TAG}/results_${set_name}${LAYER_SUFFIX}"
+        mkdir -p "$results_dir"
+        
+        echo "=== Model: $TAG | Set: $set_name | Layers: $LAYER_START-$LAYER_END ==="
+        
+        # Base
+        local ax_base="exp/${TAG}/axes_base_asst_pairwise.npz"
+        prepare_axes_if_needed "$BASE_ID" "$ax_base"
+        for trait in "${TRAITS[@]}"; do
+            run_probe_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
+                "${results_dir}/${TAG}_base_${trait}_probe_results.jsonl" "$ALPHAS_BASE" "$prompt_file" \
+                "$LAYER_START" "$LAYER_END"
+        done
+        concat_alltraits "$TAG" "$results_dir" "base" "${results_dir}/${TAG}_base_alltraits.jsonl"
+        run_text_analysis "$TAG" "$results_dir" "base"
+        
+        # Instruct
+        local ax_instr="exp/${TAG}/axes_instruct_asst_pairwise.npz"
+        prepare_axes_if_needed "$INSTR_ID" "$ax_instr"
+        for trait in "${TRAITS[@]}"; do
+             run_probe_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
+                "${results_dir}/${TAG}_instruct_${trait}_probe_results.jsonl" "$ALPHAS_INSTR" "$prompt_file" \
+                "$LAYER_START" "$LAYER_END"
+        done
+        concat_alltraits "$TAG" "$results_dir" "instruct" "${results_dir}/${TAG}_instruct_alltraits.jsonl"
+        run_text_analysis "$TAG" "$results_dir" "instruct"
+        
+        # Visualization
+        run_viz_for_dir "$TAG" "$results_dir" "$set_name"
+    done
 }
 
-# ==================== Main Loop ====================
-run_one_model_pair_layered() {
-  local tag="$1"
-  local base_id="$2"
-  local instr_id="$3"
-  local alphas_base="$4"
-  local alphas_instr="$5"
+# ==================== MAIN ====================
 
-  # ★★★ 修正: 出力先を _L10-30 に変更 ★★★
-  local results_dir="exp/${tag}/asst_pairwise_results${SUFFIX}"
-  mkdir -p "$results_dir"
-  
-  echo "==== ${tag} / Layers ${LAYER_START}-${LAYER_END} / Output: ${results_dir} ===="
-
-  # Base
-  local ax_base="exp/${tag}/axes_base_asst_pairwise.npz"
-  prepare_axes_if_needed "$base_id" "$ax_base" "$CONFIG_FILE"
-  for trait in "${TRAITS[@]}"; do
-    run_probe_if_needed "base" "$trait" "$base_id" "$ax_base" \
-      "${results_dir}/${tag}_base_${trait}_probe_results.jsonl" "$alphas_base" \
-      "$LAYER_START" "$LAYER_END"
-  done
-  concat_alltraits "$results_dir" "base" "${results_dir}/${tag}_base_alltraits.jsonl"
-  run_text_analysis "$tag" "$results_dir" "base"
-
-  # Instruct
-  local ax_instr="exp/${tag}/axes_instruct_asst_pairwise.npz"
-  prepare_axes_if_needed "$instr_id" "$ax_instr" "$CONFIG_FILE"
-  for trait in "${TRAITS[@]}"; do
-    run_probe_if_needed "instruct" "$trait" "$instr_id" "$ax_instr" \
-      "${results_dir}/${tag}_instruct_${trait}_probe_results.jsonl" "$alphas_instr" \
-      "$LAYER_START" "$LAYER_END"
-  done
-  concat_alltraits "$results_dir" "instruct" "${results_dir}/${tag}_instruct_alltraits.jsonl"
-  run_text_analysis "$tag" "$results_dir" "instruct"
-
-  # Slopes & Alpha Range
-  run_slopes_and_viz "$tag" "$results_dir"
-  local sel_rng_root="${results_dir}/selected_range"
-  run_alpha_select_and_viz "$tag" "$results_dir" "$sel_rng_root"
-
-  # 15: Text Sensitivity (Output to layered plot dir)
-  local plot_dir="${results_dir}/plots"
-  mkdir -p "$plot_dir"
-  
-  echo "[Viz] 15_text_sensitivity (Layered)"
-  "$PYTHON_BIN" scripts/15_text_sensitivity_visualize.py \
-    --metrics_glob "${results_dir}/*_text_metrics.csv" \
-    --score_glob "${results_dir}/*_personality_scores.csv" \
-    --out_dir "$plot_dir" \
-    --tag "${tag}${SUFFIX}"
-
-  # 16: Combined Metrics (Layered)
-  echo "[Viz] 16_combined_metrics (Layered)"
-  "$PYTHON_BIN" scripts/16_visualize_combined_metrics.py \
-    --internal_csv "${results_dir}/slopes/slopes_${tag}_asst_pairwise.csv" \
-    --external_csv "${plot_dir}/${tag}${SUFFIX}_text_sensitivities.csv" \
-    --out_dir "$plot_dir" \
-    --tag "${tag}${SUFFIX}"
-}
-
-for spec in "${MODEL_SPECS[@]}"; do
-  IFS='|' read -r TAG BASE_ID INSTR_ID ALPHAS_BASE ALPHAS_INSTR <<< "$spec"
-  run_one_model_pair_layered "$TAG" "$BASE_ID" "$INSTR_ID" "$ALPHAS_BASE" "$ALPHAS_INSTR"
+for pset in "${PROMPT_SETS[@]}"; do
+    IFS='|' read -r PNAME PFILE <<< "$pset"
+    run_experiment_set "$PNAME" "$PFILE"
 done
 
-echo "=== GLOBAL ANALYSIS FOR LAYERED EXPERIMENT ==="
+echo "=== GLOBAL ANALYSIS (THESIS PLOTS) FOR LAYERED EXPERIMENTS ==="
+for pset in "${PROMPT_SETS[@]}"; do
+    IFS='|' read -r PNAME PFILE <<< "$pset"
+    OUT_DIR="analysis_results/thesis_plots_${PNAME}${LAYER_SUFFIX}"
+    echo "[Thesis Viz] $PNAME (Saved to $OUT_DIR)"
+    
+    "$PYTHON_BIN" scripts/21_thesis_analysis_plots.py \
+        --score_glob "exp/*/results_${PNAME}${LAYER_SUFFIX}/*_personality_scores.csv" \
+        --metrics_glob "exp/*/results_${PNAME}${LAYER_SUFFIX}/*_text_metrics.csv" \
+        --out_dir "$OUT_DIR"
+done
 
-# ★★★ 修正: 読み込み先も出力先も ${SUFFIX} 付きのフォルダにする ★★★
-
-# 1) Range Summary
-# "$PYTHON_BIN" - <<'PY'
-# import glob, os
-# import pandas as pd
-# # SUFFIX にマッチするパスだけを探す
-# paths = sorted(glob.glob(f"exp/*/asst_pairwise_results_L10-30/selected_range/_summary/range_summary.csv"))
-# if paths:
-#     dfs = [pd.read_csv(p) for p in paths]
-#     out = pd.concat(dfs, ignore_index=True)
-#     os.makedirs(f"exp/_all/asst_pairwise_results_L10-30/selected_range/_summary", exist_ok=True)
-#     out.to_csv(f"exp/_all/asst_pairwise_results_L10-30/selected_range/_summary/range_summary.csv", index=False)
-#     print("Merged range summaries.")
-# else:
-#     print("No range summaries found.")
-# PY
-echo "[SKIP] Range summary (archived)"
-
-# 2) Cross Model Comparison (17)
-# SUFFIXフォルダ内のCSVを探して比較
-echo "[Viz] 17_cross_model_comparison (Layered)"
-OUT_ALL="exp/_all/comparison_plots${SUFFIX}"
-mkdir -p "$OUT_ALL"
-
-"$PYTHON_BIN" scripts/17_cross_model_comparison.py \
-  --root_dir "exp" \
-  --pattern "*/asst_pairwise_results${SUFFIX}/plots/*_combined_metrics.csv" \
-  --out_dir "$OUT_ALL"
-
-echo "=== SCATTER PLOT VISUALIZATION ==="
-"$PYTHON_BIN" scripts/18_visualize_scatter.py --root_dir "exp" --suffix "$SUFFIX"
-
-echo "___ Running Thesis Analysis Plots ___"
-"$PYTHON_BIN" scripts/21_thesis_analysis_plots.py \
-    --score_glob "exp/*/asst_pairwise_results${SUFFIX}/*_personality_scores.csv" \
-    --metrics_glob "exp/*/asst_pairwise_results${SUFFIX}/*_text_metrics.csv" \
-    --out_dir "exp/_all/analysis_results/thesis_comparison${SUFFIX}"
-
-
-echo "=== PIPELINE COMPLETED ===" 
+echo "=== DONE ==="
