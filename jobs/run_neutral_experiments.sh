@@ -50,12 +50,12 @@ PY
 TRAITS=("openness" "conscientiousness" "extraversion" "agreeableness" "neuroticism")
 
 MODEL_SPECS=(
-  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-3,-2,-1,0,1,2,3|-3,-2,-1,0,1,2,3"
-  "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-10,-7,-3,0,3,7,10|-10,-7,-3,0,3,7,10"
-  "olmo3_7b|allenai/Olmo-3-1025-7B|allenai/Olmo-3-7B-Instruct|-25,-15,-5,0,5,15,25|-25,-15,-5,0,5,15,25"
-  "qwen25_7b|Qwen/Qwen2.5-7B|Qwen/Qwen2.5-7B-Instruct|-70,-50,-25,0,25,50,70|-70,-50,-25,0,25,50,70"
-  "gemma2_9b|google/gemma-2-9b|google/gemma-2-9b-it|-300,-200,-100,0,100,200,300|-300,-200,-100,0,100,200,300"
-  "falcon3_7b|tiiuae/Falcon3-7B-Base|tiiuae/Falcon3-7B-Instruct|-200,-100,-50,0,50,100,200|-200,-100,-50,0,50,100,200"
+  "mistral_7b|mistralai/Mistral-7B-v0.3|mistralai/Mistral-7B-Instruct-v0.3|-2,-1.33,-0.67,0,0.67,1.33,2|-2,-1.33,-0.67,0,0.67,1.33,2"
+  "llama3_8b|meta-llama/Meta-Llama-3-8B|meta-llama/Meta-Llama-3-8B-Instruct|-7,-4.7,-2.3,0,2.3,4.7,7|-7,-4.7,-2.3,0,2.3,4.7,7"
+  "olmo3_7b|allenai/Olmo-3-1025-7B|allenai/Olmo-3-7B-Instruct|-15,-10,-5,0,5,10,15|-15,-10,-5,0,5,10,15"
+  "qwen25_7b|Qwen/Qwen2.5-7B|Qwen/Qwen2.5-7B-Instruct|-50,-33,-17,0,17,33,50|-50,-33,-17,0,17,33,50"
+  "gemma2_9b|google/gemma-2-9b|google/gemma-2-9b-it|-200,-133,-67,0,67,133,200|-200,-133,-67,0,67,133,200"
+  "falcon3_7b|tiiuae/Falcon3-7B-Base|tiiuae/Falcon3-7B-Instruct|-100,-67,-33,0,33,67,100|-100,-67,-33,0,33,67,100"
 )
 
 # New Prompt Sets
