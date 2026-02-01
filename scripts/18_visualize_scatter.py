@@ -163,14 +163,33 @@ def process_internal_sensitivity(metrics_files, out_dir):
     for f in metrics_files:
         try:
             df = pd.read_csv(f)
-            if 'alpha' not in df.columns:
+            
+            # --- Identify Alpha Column ---
+            alpha_col = None
+            if 'alpha' in df.columns:
+                alpha_col = 'alpha'
+            elif 'alpha_total' in df.columns:
+                alpha_col = 'alpha_total'
+            
+            if alpha_col is None:
+                print(f"[Skip] {os.path.basename(f)}: Missing alpha column.")
                 continue
             
-            # Decide what to plot. Usually Edit Distance and PPL.
+            # --- Decide what to plot ---
             cols_to_plot = []
-            if 'edit_distance' in df.columns:
+            
+            # Edit Distance variants
+            if 'normalized_distance' in df.columns:
+                cols_to_plot.append(('normalized_distance', 'Normalized Edit Distance'))
+            elif 'levenshtein_distance' in df.columns:
+                cols_to_plot.append(('levenshtein_distance', 'Levenshtein Distance'))
+            elif 'edit_distance' in df.columns:
                 cols_to_plot.append(('edit_distance', 'Edit Distance'))
-            if 'ppl' in df.columns:
+                
+            # Perplexity variants
+            if 'perplexity' in df.columns:
+                cols_to_plot.append(('perplexity', 'Perplexity'))
+            elif 'ppl' in df.columns:
                 cols_to_plot.append(('ppl', 'Perplexity'))
             
             basename = os.path.basename(f).replace("_text_metrics.csv", "")
@@ -178,7 +197,7 @@ def process_internal_sensitivity(metrics_files, out_dir):
             for col, label in cols_to_plot:
                 out_name = f"{basename}_{col}.png"
                 plot_scatter(
-                    df['alpha'], df[col],
+                    df[alpha_col], df[col],
                     f"{label} vs Alpha\n({basename})",
                     "Alpha", label,
                     os.path.join(plot_dir, out_name)
@@ -187,11 +206,63 @@ def process_internal_sensitivity(metrics_files, out_dir):
         except Exception as e:
             print(f"Error processing {f}: {e}")
 
+def process_internal_states_from_jsonl(jsonl_files, out_dir):
+    """
+    Process probe results JSONL to plot internal cosine similarity (s_avg) vs alpha.
+    """
+    print(f"[Internal] Processing {len(jsonl_files)} JSONL files for cosine similarity.")
+    
+    plot_dir = os.path.join(out_dir, "internal")
+    # os.makedirs(plot_dir, exist_ok=True) # Already created or shared
+
+    for f in jsonl_files:
+        try:
+            # We only need alpha and s_avg. 
+            # Reading entire file into pandas might be slow if huge, but typically manageable.
+            data = []
+            with open(f, 'r') as fh:
+                for line in fh:
+                    if not line.strip(): continue
+                    try:
+                        row = json.loads(line)
+                        val_alpha = row.get('alpha')
+                        if val_alpha is None:
+                            val_alpha = row.get('alpha_total')
+                        
+                        val_savg = row.get('s_avg')
+                        
+                        if val_alpha is not None and val_savg is not None:
+                            data.append({'alpha': val_alpha, 's_avg': val_savg})
+                    except Exception:
+                        pass
+            
+            if not data:
+                continue
+                
+            df = pd.DataFrame(data)
+            
+            basename = os.path.basename(f).replace(".jsonl", "")
+            # Filter name if it's too long or has redundant info? 
+            # e.g. mistral_7b_base_agreeableness_probe_results -> agreeableness
+            
+            # Simple plot
+            out_name = f"{basename}_cosine_sim.png"
+            plot_scatter(
+                df['alpha'], df['s_avg'],
+                f"Internal Cosine Similarity vs Alpha\n({basename})",
+                "Alpha", "Cosine Similarity (s_avg)",
+                os.path.join(plot_dir, out_name)
+            )
+
+        except Exception as e:
+            print(f"[Error] Processing JSONL {f}: {e}")
+
 def main():
     parser = argparse.ArgumentParser()
     # New Arguments style
     parser.add_argument("--metrics_glob", type=str, default=None, help="Glob pattern for text metrics CSVs")
     parser.add_argument("--score_glob", type=str, default=None, help="Glob pattern for personality scores CSVs")
+    parser.add_argument("--jsonl_glob", type=str, default=None, help="Glob pattern for probe results JSONL files (for internal similarity)")
     parser.add_argument("--out_dir", type=str, required=True, help="Output directory for plots")
     parser.add_argument("--tag", type=str, default="scatter", help="Tag for the run")
     
@@ -209,12 +280,13 @@ def main():
     metrics_files = []
     if args.metrics_glob:
         metrics_files = glob.glob(args.metrics_glob)
+        
+    jsonl_files = []
+    if args.jsonl_glob:
+        jsonl_files = glob.glob(args.jsonl_glob)
        
     # If using legacy mode (fallback)
-    if not score_files and not metrics_files and args.root_dir:
-        print("Using legacy directory search mode...")
-        # Redirect to old logic or just manual glob here? 
-        # Let's simple do manual glob based on old logic if needed, but for now Assume new usage.
+    if not score_files and not metrics_files and not jsonl_files and args.root_dir:
         pass
 
     if score_files:
@@ -222,6 +294,9 @@ def main():
     
     if metrics_files:
         process_internal_sensitivity(metrics_files, args.out_dir)
+
+    if jsonl_files:
+        process_internal_states_from_jsonl(jsonl_files, args.out_dir)
 
     print("Done.")
 

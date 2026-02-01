@@ -63,6 +63,7 @@ MODEL_SPECS=(
 PROMPT_SETS=(
   "mtbench|exp/01_probe_inputs/mtbench_50.json"
   "synthetic|exp/01_probe_inputs/synthetic_50.json"
+  "ipip|exp/01_probe_inputs/ipip_50.json"
 )
 
 # ==================== Helpers ====================
@@ -171,6 +172,7 @@ run_viz_for_dir() {
     "$PYTHON_BIN" scripts/18_visualize_scatter.py \
         --metrics_glob "${results_dir}/*_text_metrics.csv" \
         --score_glob "${results_dir}/*_personality_scores.csv" \
+        --jsonl_glob "${results_dir}/*_probe_results.jsonl" \
         --out_dir "$out_plots" \
         --tag "${tag}_${suffix}"
     
