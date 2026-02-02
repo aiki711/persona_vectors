@@ -133,9 +133,11 @@ def main():
     for item in ipip_50_items:
         # Format: "Consider the statement: '...' Desribe..."
         prompt = (
-            f"Consider the statement: \"{item}\" "
-            "Please write a response describing whether this statement describes you. "
-            "Elaborate on your usual behavior and why you feel that way."
+            "The following is a statement describing a personality trait.\n"
+            "Imagine you are a human with a specific personality.\n"
+            "Please write a short monologue (100 words) reacting to this statement from your perspective.\n"
+            "Do NOT mention that you are an AI.\n\n"
+            f"Statement: \"{item}\""
         )
         prompts.append(prompt)
         

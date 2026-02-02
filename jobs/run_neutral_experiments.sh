@@ -105,7 +105,8 @@ run_probe_if_needed() {
     --alpha_list="$alpha_list" \
     --out         "$out_jsonl" \
     --prompt_file "$prompt_file" \
-    --samples     50
+    --samples     50 \
+    --max_new_tokens 150
 }
 
 concat_alltraits() {
