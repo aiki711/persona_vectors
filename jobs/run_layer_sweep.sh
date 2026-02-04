@@ -52,7 +52,11 @@ LAYER_START=10
 LAYER_END=30
 LAYER_SUFFIX="_L${LAYER_START}-${LAYER_END}"
 
+# Dynamic Experiment Root: exp -> exp_L10-30
+EXP_OUTPUT_ROOT="exp${LAYER_SUFFIX}"
+
 echo "LAYER CONFIG: ${LAYER_START} to ${LAYER_END} (Suffix: ${LAYER_SUFFIX})"
+echo "OUTPUT ROOT: ${EXP_OUTPUT_ROOT}"
 
 TRAITS=("openness" "conscientiousness" "extraversion" "agreeableness" "neuroticism")
 
@@ -219,13 +223,15 @@ run_experiment_set() {
     for spec in "${MODEL_SPECS[@]}"; do
         IFS='|' read -r TAG BASE_ID INSTR_ID ALPHAS_BASE ALPHAS_INSTR <<< "$spec"
         
-        # Suffix added to results dir: e.g. results_mtbench_L10-30
-        local results_dir="exp/${TAG}/results_${set_name}${LAYER_SUFFIX}"
+        # Suffix removed from dir name inside the root, since root has suffix
+        # Old: exp/${TAG}/results_${set_name}${LAYER_SUFFIX}
+        # New: "${EXP_OUTPUT_ROOT}/${TAG}/results_${set_name}"
+        local results_dir="${EXP_OUTPUT_ROOT}/${TAG}/results_${set_name}"
         mkdir -p "$results_dir"
         
         echo "=== Model: $TAG | Set: $set_name | Layers: $LAYER_START-$LAYER_END ==="
         
-        # Base
+        # Base (Input Axes still in exp/)
         local ax_base="exp/${TAG}/axes_base_asst_pairwise.npz"
         prepare_axes_if_needed "$BASE_ID" "$ax_base"
         for trait in "${TRAITS[@]}"; do
@@ -265,9 +271,11 @@ for pset in "${PROMPT_SETS[@]}"; do
     OUT_DIR="analysis_results/thesis_plots_${PNAME}${LAYER_SUFFIX}"
     echo "[Thesis Viz] $PNAME (Saved to $OUT_DIR)"
     
+    # Update globs to use EXP_OUTPUT_ROOT
     "$PYTHON_BIN" scripts/21_thesis_analysis_plots.py \
-        --score_glob "exp/*/results_${PNAME}${LAYER_SUFFIX}/*_personality_scores.csv" \
-        --metrics_glob "exp/*/results_${PNAME}${LAYER_SUFFIX}/*_text_metrics.csv" \
+        --score_glob "${EXP_OUTPUT_ROOT}/*/results_${PNAME}/*_personality_scores.csv" \
+        --metrics_glob "${EXP_OUTPUT_ROOT}/*/results_${PNAME}/*_text_metrics.csv" \
+        --jsonl_glob "${EXP_OUTPUT_ROOT}/*/results_${PNAME}/*_probe_results.jsonl" \
         --out_dir "$OUT_DIR"
 done
 
