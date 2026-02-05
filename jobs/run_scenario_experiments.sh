@@ -9,6 +9,9 @@
 
 set -euo pipefail
 
+# Disable python output buffering for real-time logging
+export PYTHONUNBUFFERED=1
+
 WORKDIR="${PBS_O_WORKDIR:-$PWD}"
 RUN_ID="${PBS_JOBID:-bash_$(date +%Y%m%d_%H%M%S)}"
 
@@ -162,7 +165,7 @@ run_text_analysis() {
     "$PYTHON_BIN" scripts/14_calc_personality_score.py "$input_jsonl" \
       --output "$score_csv" \
       --batch_size 32 \
-      --model "Minej/bert-base-personality"
+      --model "KevSun/Personality_LM"
   fi
 }
 

@@ -66,6 +66,18 @@ def get_personality_scores(texts, model_name, batch_size=16):
         id2label = {i: f"dim_{i}" for i in range(model.config.num_labels)}
     
     print(f"Model labels: {list(id2label.values())}")
+    
+    # KevSun/Personality_LM 用の強制マッピング (モデルがLABEL_xしか返さないため)
+    if "KevSun/Personality_LM" in model_name:
+        print("Applying hardcoded label mapping for KevSun/Personality_LM...")
+        # Order assumed: Extraversion, Neuroticism, Agreeableness, Conscientiousness, Openness
+        id2label = {
+            0: "extraversion",
+            1: "neuroticism",
+            2: "agreeableness",
+            3: "conscientiousness",
+            4: "openness"
+        }
 
     all_scores = []
     
@@ -112,7 +124,7 @@ def main():
     
     parser.add_argument("input_file", type=str, help="Path to the input JSON/JSONL file containing generated texts.")
     parser.add_argument("--output", "-o", type=str, default="14_personality_scores.csv", help="Path to save the output CSV file.")
-    parser.add_argument("--model", "-m", type=str, default="Minej/bert-base-personality", help="Hugging Face model name to use.")
+    parser.add_argument("--model", "-m", type=str, default="KevSun/Personality_LM", help="Hugging Face model name to use.")
     parser.add_argument("--batch_size", "-bs", type=int, default=32, help="Batch size for inference (adjust based on VRAM).")
     
     args = parser.parse_args()
@@ -142,7 +154,10 @@ def main():
     
     # 分析しやすいように、trait, alpha, y, そしてスコア列を先頭に持ってくる並べ替え（任意）
     cols = list(result_df.columns)
+    cols = list(result_df.columns)
     priority_cols = ['trait', 'alpha_total', 'x', 'y'] + [c for c in cols if c.startswith('score_')]
+    # 実際に存在するカラムのみにフィルタリング
+    priority_cols = [c for c in priority_cols if c in result_df.columns]
     other_cols = [c for c in cols if c not in priority_cols]
     result_df = result_df[priority_cols + other_cols]
 

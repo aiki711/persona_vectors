@@ -248,9 +248,12 @@ def parse_floats_csv(s: str):
         return []
     return [float(x) for x in s.split(",") if x.strip()]
 
-def load_axes_bank(path_npz: str):
-    """00_prepare_vectors.py で作成した .npz ファイルを読み込む"""
+def load_axes_bank(path_npz: str, target_trait: str = None):
+    """00_prepare_vectors.py で作成した .npz ファイルを読み込む
+    target_trait が指定されている場合、その trait に関連するベクトルのみをロードする。
+    """
     try:
+        # np.load with mmap_mode='r' might be faster for partial reads, but here we just filter keys
         bank = np.load(path_npz)
     except FileNotFoundError:
         print(f"CRITICAL ERROR: Axes bank file not found: {path_npz}")
@@ -258,14 +261,26 @@ def load_axes_bank(path_npz: str):
         raise
         
     axes_by_layer = {}
-    for k in bank.files:              # 形式: f"{L}|{ax}"
+    
+    # Filter keys to reduce memory usage and load time
+    all_keys = bank.files
+    loaded_count = 0
+    
+    for k in all_keys:              # 形式: f"{L}|{ax}"
         try:
             Ls, ax = k.split("|")
+            
+            # Filter by trait if specified
+            if target_trait is not None and ax != target_trait:
+                continue
+                
             axes_by_layer[(int(Ls), ax)] = bank[k]
+            loaded_count += 1
         except Exception as e:
             print(f"Warning: Skipping invalid key in axes_bank: {k} ({e})")
             continue
-    print(f"Loaded {len(axes_by_layer)} vectors from {path_npz}")
+            
+    print(f"Loaded {loaded_count} vectors (filtered by trait={target_trait}) from {path_npz}")
     return axes_by_layer
 
 # ---- 最終トークンの隠れ状態を測定する関数 ----
@@ -465,7 +480,7 @@ def main():
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
-    axes_bank = load_axes_bank(args.axes_bank)
+    axes_bank = load_axes_bank(args.axes_bank, target_trait=args.trait)
     
     all_available_layers = sorted(list(set([
         L for (L, ax) in axes_bank.keys() if ax == args.trait and L > 0

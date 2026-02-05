@@ -226,7 +226,7 @@ run_text_analysis() {
     "$PYTHON_BIN" scripts/14_calc_personality_score.py "$input_jsonl" \
       --output "$score_csv" \
       --batch_size 32 \
-      --model "Minej/bert-base-personality"
+      --model "KevSun/Personality_LM"
   fi
 }
 

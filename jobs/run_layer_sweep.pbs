@@ -185,7 +185,7 @@ run_text_analysis() {
   local score_csv="${results_dir}/${tag}_${split}_personality_scores.csv"
   if ! is_nonempty_file "$score_csv"; then
     echo "[RUN ] 14_calc_personality_score.py"
-    "$PYTHON_BIN" scripts/14_calc_personality_score.py "$input_jsonl" --output "$score_csv" --batch_size 32 --model "Minej/bert-base-personality"
+    "$PYTHON_BIN" scripts/14_calc_personality_score.py "$input_jsonl" --output "$score_csv" --batch_size 32 --model "KevSun/Personality_LM"
   fi
 }
 

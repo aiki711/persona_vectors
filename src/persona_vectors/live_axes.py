@@ -198,6 +198,34 @@ def _format_prompt(tokenizer, prompt: str) -> str:
     return f"### Instruction:\n{prompt}\n\n### Response:\n"
 
 # --- Any-size loader (fp16/bf16, 8bit/4bit) ---
+import time
+import random
+
+def _retry_hf_op(func, max_retries=10, base_delay=5, op_name="operation"):
+    """
+    HuggingFace Hub への接続エラー (502, 504, Timeout等) に対するリトライロジック
+    """
+    for i in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            msg = str(e).lower()
+            # リトライ対象のエラーキーワード
+            retry_conf = ["502", "503", "504", "server error", "gateway time-out", "read timed out", "connection error", "unavailable"]
+            is_network_error = any(k in msg for k in retry_conf)
+            
+            if i < max_retries - 1 and is_network_error:
+                # 指数バックオフ + Jitter
+                delay = base_delay * (1.5 ** i) + random.uniform(0, 1)
+                print(f"[Warn] {op_name} failed with network error: {e}")
+                print(f"       Retrying {i+1}/{max_retries} in {delay:.1f}s...")
+                time.sleep(delay)
+            else:
+                # 最終施行またはリトライ対象外エラー
+                if is_network_error:
+                    print(f"[Error] {op_name} failed after {max_retries} retries.")
+                raise e
+
 def load_model_and_tokenizer(
     name: str,
     quant: Optional[str] = "auto",      # "auto" | "8bit" | "4bit" | None
@@ -229,8 +257,19 @@ def load_model_and_tokenizer(
         # 念のため旧キーが混在していたら消す
         kwargs.pop("use_auth_token", None)
         
-    model = AutoModelForCausalLM.from_pretrained(name, **kwargs)
-    tok = AutoTokenizer.from_pretrained(name, token=token) if token else AutoTokenizer.from_pretrained(name)
+    # リトライ付きでロード
+    print(f"Loading model: {name} (with retry logic)...")
+    def _load_model():
+        return AutoModelForCausalLM.from_pretrained(name, **kwargs)
+    
+    model = _retry_hf_op(_load_model, op_name=f"Load Model {name}")
+
+    print(f"Loading tokenizer: {name} (with retry logic)...")
+    def _load_tokenizer():
+        return AutoTokenizer.from_pretrained(name, token=token) if token else AutoTokenizer.from_pretrained(name)
+        
+    tok = _retry_hf_op(_load_tokenizer, op_name=f"Load Tokenizer {name}")
+    
     tok = _ensure_pad_token(tok, model)
     if tok.pad_token is None:
         if tok.eos_token is not None:
