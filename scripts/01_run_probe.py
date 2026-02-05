@@ -102,11 +102,17 @@ Do NOT output bullet points, numbered lists, source code, or URLs.
 User: {question}
 Assistant:"""
 
-def build_prompt(question: str) -> str:
+FLEXIBLE_TEMPLATE = """You are a helpful assistant.
+Please answer the following request naturally.
+
+User: {question}
+Assistant:"""
+
+def build_prompt(question: str, template: str = PROMPT_TEMPLATE) -> str:
     """
     01_run_probe 内で完結するプロンプト整形関数。
     """
-    return PROMPT_TEMPLATE.format(question=question)
+    return template.format(question=question)
 
 def get_unseen_prompts(trait: str, cnt: int, vector_seed: int = 2025, vector_count: int = 1000) -> List[str]:
     """
@@ -434,6 +440,7 @@ def main():
     ap.add_argument("--use_dataset", action="store_true", help="hardcoded prompt ではなくデータセットから未使用プロンプトをサンプリングする")
     ap.add_argument("--vector_seed", type=int, default=2025, help="00_prepare_vectors.py で使ったシード (未使用データ特定のため)")
     ap.add_argument("--prompt_file", type=str, default=None, help="JSON file containing list of prompts to use (overrides --use_dataset)")
+    ap.add_argument("--template_type", choices=["standard", "flexible"], default="standard", help="プロンプトテンプレートの種類")
     args = ap.parse_args()
 
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
@@ -545,13 +552,19 @@ def main():
         except ValueError:
              idx_zero = 0
 
+        # Template selection
+        if args.template_type == "flexible":
+            selected_template = FLEXIBLE_TEMPLATE
+        else:
+            selected_template = PROMPT_TEMPLATE
+
         for i, x in enumerate(prompts):
             if (i + 1) % 25 == 0 or (i + 1) == len(prompts):
                 print(f"  Probe sample {i+1}/{len(prompts)}...")
 
             # 1. Prepare Batch Input (Prompt repeated for each alpha)
             # 全てのalphaについて同じプロンプトを使用
-            batch_prompts = [build_prompt(x) for _ in alphas]
+            batch_prompts = [build_prompt(x, template=selected_template) for _ in alphas]
             
             # Tokenize batch
             inputs = tok(batch_prompts, return_tensors="pt", padding=True).to(device)
