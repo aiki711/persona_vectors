@@ -70,11 +70,10 @@ MODEL_SPECS=(
 )
 
 # New Prompt Sets
-# "Name | JSON Path"
+# "Name | JSON Path | Template"
 PROMPT_SETS=(
-  "mtbench|exp/01_probe_inputs/mtbench_50.json"
-  "synthetic|exp/01_probe_inputs/synthetic_50.json"
-  "ipip|exp/01_probe_inputs/ipip_50.json"
+  "writing|probe_inputs/writing_prompts_30.json|flexible"
+  "advice|probe_inputs/opinion_advice_30.json|flexible"
 )
 
 # ==================== Helpers ====================
@@ -102,6 +101,7 @@ run_probe_if_needed() {
   local prompt_file="$7"
   local l_start="$8"
   local l_end="$9"
+  local template_type="${10:-standard}"
 
   if is_nonempty_file "$out_jsonl"; then
     echo "[SKIP] probe exists: $out_jsonl"
@@ -118,7 +118,8 @@ run_probe_if_needed() {
     --prompt_file "$prompt_file" \
     --layer_start "$l_start" \
     --layer_end   "$l_end" \
-    --samples     50
+    --samples     50 \
+    --template_type "$template_type"
 }
 
 run_internal_analysis_if_needed() {
@@ -245,8 +246,9 @@ run_viz_for_dir() {
 run_experiment_set() {
     local set_name="$1"
     local prompt_file="$2"
+    local template_type="$3"
     
-    echo ">>>>>>> START PROMPT SET: $set_name (Layers ${LAYER_START}-${LAYER_END}) <<<<<<<"
+    echo ">>>>>>> START PROMPT SET: $set_name (Layers ${LAYER_START}-${LAYER_END}) [Template: $template_type] <<<<<<<"
     
     for spec in "${MODEL_SPECS[@]}"; do
         IFS='|' read -r TAG BASE_ID INSTR_ID ALPHAS_BASE ALPHAS_INSTR <<< "$spec"
@@ -265,7 +267,7 @@ run_experiment_set() {
         for trait in "${TRAITS[@]}"; do
             run_probe_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
                 "${results_dir}/${TAG}_base_${trait}_probe_results.jsonl" "$ALPHAS_BASE" "$prompt_file" \
-                "$LAYER_START" "$LAYER_END"
+                "$LAYER_START" "$LAYER_END" "$template_type"
             
             run_internal_analysis_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
                 "${results_dir}/${TAG}_base_${trait}_internal_states.csv" "$ALPHAS_BASE" "$prompt_file" \
@@ -280,7 +282,7 @@ run_experiment_set() {
         for trait in "${TRAITS[@]}"; do
              run_probe_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
                 "${results_dir}/${TAG}_instruct_${trait}_probe_results.jsonl" "$ALPHAS_INSTR" "$prompt_file" \
-                "$LAYER_START" "$LAYER_END"
+                "$LAYER_START" "$LAYER_END" "$template_type"
              
              run_internal_analysis_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
                 "${results_dir}/${TAG}_instruct_${trait}_internal_states.csv" "$ALPHAS_INSTR" "$prompt_file" \
@@ -297,8 +299,8 @@ run_experiment_set() {
 # ==================== MAIN ====================
 
 for pset in "${PROMPT_SETS[@]}"; do
-    IFS='|' read -r PNAME PFILE <<< "$pset"
-    run_experiment_set "$PNAME" "$PFILE"
+    IFS='|' read -r PNAME PFILE PTEMPLATE <<< "$pset"
+    run_experiment_set "$PNAME" "$PFILE" "${PTEMPLATE:-standard}"
 done
 
 echo "=== GLOBAL ANALYSIS (THESIS PLOTS) FOR LAYERED EXPERIMENTS ==="

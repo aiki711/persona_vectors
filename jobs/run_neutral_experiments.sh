@@ -59,11 +59,10 @@ MODEL_SPECS=(
 )
 
 # New Prompt Sets
-# "Name | JSON Path"
+# "Name | JSON Path | Template"
 PROMPT_SETS=(
-  "mtbench|exp/01_probe_inputs/mtbench_50.json"
-  "synthetic|exp/01_probe_inputs/synthetic_50.json"
-  "ipip|exp/01_probe_inputs/ipip_50.json"
+  "writing|probe_inputs/writing_prompts_30.json|flexible"
+  "advice|probe_inputs/opinion_advice_30.json|flexible"
 )
 
 # ==================== Helpers ====================
@@ -91,6 +90,7 @@ run_probe_if_needed() {
   local out_jsonl="$5"
   local alpha_list="$6"
   local prompt_file="$7"
+  local template_type="${8:-standard}"
 
   if is_nonempty_file "$out_jsonl"; then
     echo "[SKIP] probe exists: $out_jsonl"
@@ -106,7 +106,8 @@ run_probe_if_needed() {
     --out         "$out_jsonl" \
     --prompt_file "$prompt_file" \
     --samples     50 \
-    --max_new_tokens 150
+    --max_new_tokens 150 \
+    --template_type "$template_type"
 }
 
 concat_alltraits() {
@@ -208,8 +209,9 @@ run_viz_for_dir() {
 run_experiment_set() {
     local set_name="$1"
     local prompt_file="$2"
+    local template_type="$3"
     
-    echo ">>>>>>> START PROMPT SET: $set_name <<<<<<<"
+    echo ">>>>>>> START PROMPT SET: $set_name [Template: $template_type] <<<<<<<"
     
     for spec in "${MODEL_SPECS[@]}"; do
         IFS='|' read -r TAG BASE_ID INSTR_ID ALPHAS_BASE ALPHAS_INSTR <<< "$spec"
@@ -224,7 +226,7 @@ run_experiment_set() {
         prepare_axes_if_needed "$BASE_ID" "$ax_base"
         for trait in "${TRAITS[@]}"; do
             run_probe_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
-                "${results_dir}/${TAG}_base_${trait}_probe_results.jsonl" "$ALPHAS_BASE" "$prompt_file"
+                "${results_dir}/${TAG}_base_${trait}_probe_results.jsonl" "$ALPHAS_BASE" "$prompt_file" "$template_type"
         done
         concat_alltraits "$TAG" "$results_dir" "base" "${results_dir}/${TAG}_base_alltraits.jsonl"
         run_text_analysis "$TAG" "$results_dir" "base"
@@ -234,7 +236,7 @@ run_experiment_set() {
         prepare_axes_if_needed "$INSTR_ID" "$ax_instr"
         for trait in "${TRAITS[@]}"; do
              run_probe_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
-                "${results_dir}/${TAG}_instruct_${trait}_probe_results.jsonl" "$ALPHAS_INSTR" "$prompt_file"
+                "${results_dir}/${TAG}_instruct_${trait}_probe_results.jsonl" "$ALPHAS_INSTR" "$prompt_file" "$template_type"
         done
         concat_alltraits "$TAG" "$results_dir" "instruct" "${results_dir}/${TAG}_instruct_alltraits.jsonl"
         run_text_analysis "$TAG" "$results_dir" "instruct"
@@ -247,8 +249,8 @@ run_experiment_set() {
 # ==================== MAIN ====================
 
 for pset in "${PROMPT_SETS[@]}"; do
-    IFS='|' read -r PNAME PFILE <<< "$pset"
-    run_experiment_set "$PNAME" "$PFILE"
+    IFS='|' read -r PNAME PFILE PTEMPLATE <<< "$pset"
+    run_experiment_set "$PNAME" "$PFILE" "${PTEMPLATE:-standard}"
 done
 
 echo "=== GLOBAL ANALYSIS (THESIS PLOTS) FOR NEUTRAL PROMPTS ==="
