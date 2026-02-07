@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 import os, re
-from typing import Dict, List, Tuple, Iterable, Optional
+from typing import Dict, List, Tuple, Iterable, Optional, Any
 from pathlib import Path
 import torch
 import numpy as np
@@ -543,6 +543,100 @@ class ResidualSteerer:
         if self.handle is not None:
             self.handle.remove()
             self.handle = None
+
+@dataclass
+class AnalysisSteerer:
+    """
+    【内部状態分析用フック】
+    ユーザーの要望に基づき、以下の4点を観測・介入します。
+      - h_B_out: (Baseモデルの出力 -> これは別走で取得)
+      - h_S_in_pre:  Steeredモデルの入力（介入前）
+      - h_S_in_post: Steeredモデルの入力（介入後） = h_S_in_pre + alpha * v
+      - h_S_out:     Steeredモデルの出力（演算後）
+
+    実装詳細:
+      - register_forward_pre_hook: 入力(inp)をキャッチし、ベクトルを加算して返す (h_S_in_pre -> h_S_in_post)
+      - register_forward_hook:     出力(out)をキャッチして記録する (h_S_out)
+    """
+    model: torch.nn.Module
+    layer: int
+    v_mix: np.ndarray
+    alpha: float
+    capture_store: Optional[Dict[str, Any]] = None
+    callback: Optional[Any] = None # Callable[[str, torch.Tensor], None]
+    answer_only: bool = True
+
+    def __post_init__(self):
+        self.pre_handle = None
+        self.post_handle = None
+
+    def __enter__(self):
+        v = torch.tensor(self.v_mix, dtype=torch.float32)
+
+        # --- Pre-hook (Input Intervention) ---
+        def pre_hook(mod, inp):
+            # inp はタプル (hidden_states, attention_mask, ...)
+            hs = inp[0]
+            
+            # --- Capture Pre ---
+            if self.answer_only and hs.size(1) != 1:
+                pass
+            
+            # 記録 or コールバック
+            # hs は (B, T, H)
+            if self.callback:
+                self.callback('in_pre', hs)
+            if self.capture_store is not None:
+                self.capture_store['in_pre'] = hs.detach().cpu()
+
+            # --- Intervention ---
+            # float32化
+            orig_dtype = hs.dtype
+            hs_f32 = hs.to(torch.float32)
+            add = v.to(device=hs.device).view(1, 1, -1)
+            
+            # Apply steering
+            if self.answer_only and hs.size(1) != 1:
+                 steered_hs_f32 = hs_f32
+            else:
+                 steered_hs_f32 = hs_f32 + self.alpha * add
+
+            # Check finite
+            if not torch.isfinite(steered_hs_f32).all():
+                steered_hs_f32 = hs_f32 # revert
+
+            # --- Capture Post ---
+            if self.callback:
+                self.callback('in_post', steered_hs_f32)
+            if self.capture_store is not None:
+                self.capture_store['in_post'] = steered_hs_f32.detach().cpu()
+            
+            # Return new input
+            new_input = (steered_hs_f32.to(orig_dtype), *inp[1:])
+            return new_input
+
+        # --- Post-hook (Output Capture) ---
+        def post_hook(mod, inp, out):
+            hs = out[0] if isinstance(out, tuple) else out
+            
+            if self.callback:
+                self.callback('out', hs)
+            if self.capture_store is not None:
+                self.capture_store['out'] = hs.detach().cpu()
+
+        # Register
+        stack, _, _ = get_layer_stack(self.model)
+        target_mod = stack[self.layer]
+        
+        self.pre_handle = target_mod.register_forward_pre_hook(pre_hook)
+        self.post_handle = target_mod.register_forward_hook(post_hook)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.pre_handle:
+            self.pre_handle.remove()
+        if self.post_handle:
+            self.post_handle.remove()
             
 class StopOnSeq(StoppingCriteria):
     def __init__(self, tokenizer, stop_texts):

@@ -121,6 +121,34 @@ run_probe_if_needed() {
     --samples     50
 }
 
+run_internal_analysis_if_needed() {
+  local split="$1"
+  local trait="$2"
+  local model_id="$3"
+  local axes_bank="$4"
+  local out_csv="$5"
+  local alpha_list="$6"
+  local prompt_file="$7"
+  local l_start="$8"
+  local l_end="$9"
+
+  if is_nonempty_file "$out_csv"; then
+    echo "[SKIP] internal analysis exists: $out_csv"
+    return 0
+  fi
+
+  echo "[RUN ] 25_analyze_internal_states.py -> $out_csv"
+  "$PYTHON_BIN" scripts/25_analyze_internal_states.py \
+    --model_id    "$model_id" \
+    --vector_path "$axes_bank" \
+    --trait       "$trait" \
+    --alpha       "$alpha_list" \
+    --prompt_file "$prompt_file" \
+    --out_file    "$out_csv" \
+    --steer_layers "${l_start}-${l_end}" \
+    --limit       50
+}
+
 concat_alltraits() {
   local tag="$1"
   local results_dir="$2"
@@ -238,6 +266,10 @@ run_experiment_set() {
             run_probe_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
                 "${results_dir}/${TAG}_base_${trait}_probe_results.jsonl" "$ALPHAS_BASE" "$prompt_file" \
                 "$LAYER_START" "$LAYER_END"
+            
+            run_internal_analysis_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
+                "${results_dir}/${TAG}_base_${trait}_internal_states.csv" "$ALPHAS_BASE" "$prompt_file" \
+                "$LAYER_START" "$LAYER_END"
         done
         concat_alltraits "$TAG" "$results_dir" "base" "${results_dir}/${TAG}_base_alltraits.jsonl"
         run_text_analysis "$TAG" "$results_dir" "base"
@@ -248,6 +280,10 @@ run_experiment_set() {
         for trait in "${TRAITS[@]}"; do
              run_probe_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
                 "${results_dir}/${TAG}_instruct_${trait}_probe_results.jsonl" "$ALPHAS_INSTR" "$prompt_file" \
+                "$LAYER_START" "$LAYER_END"
+             
+             run_internal_analysis_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
+                "${results_dir}/${TAG}_instruct_${trait}_internal_states.csv" "$ALPHAS_INSTR" "$prompt_file" \
                 "$LAYER_START" "$LAYER_END"
         done
         concat_alltraits "$TAG" "$results_dir" "instruct" "${results_dir}/${TAG}_instruct_alltraits.jsonl"
