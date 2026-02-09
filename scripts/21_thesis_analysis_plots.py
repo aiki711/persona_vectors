@@ -99,6 +99,10 @@ def load_data(metrics_glob, score_glob):
 
     print("Merging data...")
     df_merged = pd.merge(df_scores, df_metrics, on=merge_keys, how='inner')
+    
+    # Drop duplicate columns if any (e.g. from overlapping csv content)
+    df_merged = df_merged.loc[:, ~df_merged.columns.duplicated()]
+    
     print(f"Merged Data Shape: {df_merged.shape}")
     
     return df_merged
@@ -174,10 +178,7 @@ def plot_breaking_point(df, output_dir):
     groups = df.groupby(['model_name', 'split', 'trait'])
     
     for (model, split, trait), group in groups:
-        agg_data = group.groupby('alpha_total').agg({
-            f'score_{trait}': 'mean',
-            'perplexity': 'mean'
-        }).reset_index()
+        agg_data = group.groupby('alpha_total')[[f'score_{trait}', 'perplexity']].mean().reset_index()
         
         if agg_data.empty:
             continue
@@ -221,10 +222,7 @@ def plot_breaking_point_internal(df, output_dir):
         if 'internal_score' not in group.columns or group['internal_score'].isnull().all():
             continue
             
-        agg_data = group.groupby('alpha_total').agg({
-            'internal_score': 'mean',
-            'perplexity': 'mean'
-        }).reset_index()
+        agg_data = group.groupby('alpha_total')[['internal_score', 'perplexity']].mean().reset_index()
         
         if agg_data.empty:
             continue
@@ -341,10 +339,7 @@ def plot_efficiency(df, output_dir):
         
         score_col = f'score_{trait}'
         
-        agg = group.groupby(['model_name', 'split', 'alpha_total']).agg({
-            'normalized_distance': 'mean',
-            score_col: 'mean'
-        }).reset_index()
+        agg = group.groupby(['model_name', 'split', 'alpha_total'])[['normalized_distance', score_col]].mean().reset_index()
         
         configs = agg[['model_name', 'split']].drop_duplicates()
         

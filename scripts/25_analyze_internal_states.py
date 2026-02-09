@@ -88,13 +88,24 @@ def analyze_internal_states(args):
     else:
         steer_target_layers = [int(x) for x in args.steer_layers.split(",")]
     
+    # Filter valid layers
+    valid_layers = [L for L in steer_target_layers if 0 <= L < num_layers]
+    if len(valid_layers) < len(steer_target_layers):
+        print(f"Warning: Requested layers {steer_target_layers} contain out-of-range indices for model with {num_layers} layers.")
+        print(f"Filtered to: {valid_layers}")
+    steer_target_layers = valid_layers
+    
+    if not steer_target_layers:
+        print("Error: No valid layers to steer after filtering.")
+        return
+
     print(f"Steering layers: {steer_target_layers}")
     
     # --- Processing Loop (Per Prompt) ---
     alphas = [float(x) for x in args.alpha.split(",")]
     print(f"Alphas: {alphas}")
 
-    for pid, prompt in enumerate(tqdm(prompts, desc="Prompts")):
+    for pid, prompt in enumerate(tqdm(prompts, desc="Prompts", mininterval=30.0)):
         # Tokenize
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         seq_len = inputs["input_ids"].shape[1]

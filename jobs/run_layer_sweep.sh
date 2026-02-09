@@ -143,7 +143,7 @@ run_internal_analysis_if_needed() {
     --model_id    "$model_id" \
     --vector_path "$axes_bank" \
     --trait       "$trait" \
-    --alpha       "$alpha_list" \
+    --alpha="$alpha_list" \
     --prompt_file "$prompt_file" \
     --out_file    "$out_csv" \
     --steer_layers "${l_start}-${l_end}" \
@@ -261,6 +261,9 @@ run_experiment_set() {
         
         echo "=== Model: $TAG | Set: $set_name | Layers: $LAYER_START-$LAYER_END ==="
         
+        local internal_out_dir="analysis_results/internal_states/${TAG}/${set_name}"
+        mkdir -p "$internal_out_dir"
+
         # Base (Input Axes still in exp/)
         local ax_base="exp/${TAG}/axes_base_asst_pairwise.npz"
         prepare_axes_if_needed "$BASE_ID" "$ax_base"
@@ -270,7 +273,7 @@ run_experiment_set() {
                 "$LAYER_START" "$LAYER_END" "$template_type"
             
             run_internal_analysis_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
-                "${results_dir}/${TAG}_base_${trait}_internal_states.csv" "$ALPHAS_BASE" "$prompt_file" \
+                "${internal_out_dir}/${TAG}_base_${trait}_internal_states.csv" "$ALPHAS_BASE" "$prompt_file" \
                 "$LAYER_START" "$LAYER_END"
         done
         concat_alltraits "$TAG" "$results_dir" "base" "${results_dir}/${TAG}_base_alltraits.jsonl"
@@ -285,7 +288,7 @@ run_experiment_set() {
                 "$LAYER_START" "$LAYER_END" "$template_type"
              
              run_internal_analysis_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
-                "${results_dir}/${TAG}_instruct_${trait}_internal_states.csv" "$ALPHAS_INSTR" "$prompt_file" \
+                "${internal_out_dir}/${TAG}_instruct_${trait}_internal_states.csv" "$ALPHAS_INSTR" "$prompt_file" \
                 "$LAYER_START" "$LAYER_END"
         done
         concat_alltraits "$TAG" "$results_dir" "instruct" "${results_dir}/${TAG}_instruct_alltraits.jsonl"
