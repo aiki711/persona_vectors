@@ -123,10 +123,9 @@ def load_internal_probe_data(jsonl_glob):
             path_parts = f.split(os.sep)
             
             model_name = "unknown"
-            if 'exp' in path_parts:
-                idx = path_parts.index('exp')
-                if idx + 1 < len(path_parts):
-                    model_name = path_parts[idx+1]
+            # Robust model name extraction matching load_data
+            # Path structure: exp_*/{model_name}/results_*/{filename}
+            model_name = os.path.basename(os.path.dirname(os.path.dirname(f)))
             
             # Infer split
             split = "unknown"
