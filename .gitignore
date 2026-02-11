@@ -4,6 +4,9 @@ log
 
 # Directories
 exp/
+exp_L10-30/
+exp_pca/
+exp_pca_L10-30/
 persona_steering/
 _backup_before_clone/
 analysis_results/

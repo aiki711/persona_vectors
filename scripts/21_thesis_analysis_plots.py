@@ -61,6 +61,16 @@ def load_data(metrics_glob, score_glob):
             model_name = os.path.basename(os.path.dirname(os.path.dirname(f)))
             df['model_name'] = model_name
 
+            # RENAME columns immediately to avoid collision after concat
+            label_mapping = {
+                'score_LABEL_0': 'score_extraversion',
+                'score_LABEL_1': 'score_neuroticism',
+                'score_LABEL_2': 'score_agreeableness',
+                'score_LABEL_3': 'score_conscientiousness',
+                'score_LABEL_4': 'score_openness'
+            }
+            df.rename(columns=label_mapping, inplace=True)
+
             df_scores_list.append(df)
         except Exception as e:
             print(f"Error reading {f}: {e}")
@@ -70,16 +80,6 @@ def load_data(metrics_glob, score_glob):
         return pd.DataFrame()
 
     df_scores = pd.concat(df_scores_list, ignore_index=True)
-    
-    # Rename score columns
-    label_mapping = {
-        'score_LABEL_0': 'score_extraversion',
-        'score_LABEL_1': 'score_neuroticism',
-        'score_LABEL_2': 'score_agreeableness',
-        'score_LABEL_3': 'score_conscientiousness',
-        'score_LABEL_4': 'score_openness'
-    }
-    df_scores.rename(columns=label_mapping, inplace=True)
 
     # 3. Merge
     df_metrics['alpha_total'] = df_metrics['alpha_total'].astype(float)

@@ -1,8 +1,8 @@
 #!/bin/bash
-#PBS -N layer_sweep
+#PBS -N layer_sweep_pca
 #PBS -q GPU-1
-#PBS -o log/layer_sweep.o%j
-#PBS -e log/layer_sweep.e%j
+#PBS -o log/layer_sweep_pca.o%j
+#PBS -e log/layer_sweep_pca.e%j
 #PBS -l select=1:ncpus=8:ngpus=1:mem=64gb
 #PBS -l walltime=120:00:00
 #PBS -j oe
@@ -14,10 +14,10 @@ RUN_ID="${PBS_JOBID:-bash_$(date +%Y%m%d_%H%M%S)}"
 
 cd "$WORKDIR"
 mkdir -p log
-LOG_FILE="log/layer_sweep.${RUN_ID}.log"
+LOG_FILE="log/layer_sweep_pca.${RUN_ID}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "=== STARTING LAYER SWEEP EXPERIMENTS ==="
+echo "=== STARTING LAYER SWEEP EXPERIMENTS (PCA) ==="
 echo "START TIME: $(date)"
 
 # ==================== Project Setup ====================
@@ -52,8 +52,8 @@ LAYER_START=10
 LAYER_END=30
 LAYER_SUFFIX="_L${LAYER_START}-${LAYER_END}"
 
-# Dynamic Experiment Root: exp -> exp_L10-30
-EXP_OUTPUT_ROOT="exp${LAYER_SUFFIX}"
+# Dynamic Experiment Root: exp -> exp_pca
+EXP_OUTPUT_ROOT="exp_pca${LAYER_SUFFIX}"
 
 echo "LAYER CONFIG: ${LAYER_START} to ${LAYER_END} (Suffix: ${LAYER_SUFFIX})"
 echo "OUTPUT ROOT: ${EXP_OUTPUT_ROOT}"
@@ -73,7 +73,7 @@ MODEL_SPECS=(
 # "Name | JSON Path | Template"
 PROMPT_SETS=(
   "writing|probe_inputs/writing_prompts_30.json|flexible"
-  "advice|probe_inputs/opinion_advice_30.json|flexible"
+#  "advice|probe_inputs/opinion_advice_30.json|flexible"
 )
 
 # ==================== Helpers ====================
@@ -85,9 +85,9 @@ prepare_axes_if_needed() {
   local config_file="exp/configs/big5_vectors.yaml" # Fixed config path
   
   if ! is_nonempty_file "$ax_bank"; then
-      echo "[WARN] Axis bank $ax_bank missing. You might need to run main sweep first or ensure 00_prepare_vectors runs."
+      echo "[WARN] Axis bank $ax_bank missing. You might need to run main sweep first or ensure 00_prepare_vectors_pca runs."
       # Just try running it
-      "$PYTHON_BIN" scripts/archive/v1_mean_aggregation/00_prepare_vectors.py --config "$config_file" --bank_path "$ax_bank"
+      "$PYTHON_BIN" scripts/00_prepare_vectors_pca.py --config "$config_file" --bank_path "$ax_bank" --model_name "$model_id"
   fi
 }
 
@@ -254,18 +254,20 @@ run_experiment_set() {
         IFS='|' read -r TAG BASE_ID INSTR_ID ALPHAS_BASE ALPHAS_INSTR <<< "$spec"
         
         # Suffix removed from dir name inside the root, since root has suffix
-        # Old: exp/${TAG}/results_${set_name}${LAYER_SUFFIX}
         # New: "${EXP_OUTPUT_ROOT}/${TAG}/results_${set_name}"
         local results_dir="${EXP_OUTPUT_ROOT}/${TAG}/results_${set_name}"
         mkdir -p "$results_dir"
         
         echo "=== Model: $TAG | Set: $set_name | Layers: $LAYER_START-$LAYER_END ==="
         
-        local internal_out_dir="analysis_results/internal_states/${TAG}/${set_name}"
+        local internal_out_dir="analysis_results/internal_states_pca/${TAG}/${set_name}"
         mkdir -p "$internal_out_dir"
 
         # Base (Input Axes still in exp/)
-        local ax_base="exp/${TAG}/axes_base_asst_pairwise.npz"
+        # PCA axes names might differ or same? 
+        # prepare_axes_if_needed uses the path provided.
+        # Let's say we name them axes_base_pca_asst_pairwise.npz to distinguish
+        local ax_base="${EXP_OUTPUT_ROOT}/${TAG}/axes_base_pca_asst.npz"
         prepare_axes_if_needed "$BASE_ID" "$ax_base"
         for trait in "${TRAITS[@]}"; do
             run_probe_if_needed "base" "$trait" "$BASE_ID" "$ax_base" \
@@ -280,7 +282,7 @@ run_experiment_set() {
         run_text_analysis "$TAG" "$results_dir" "base"
         
         # Instruct
-        local ax_instr="exp/${TAG}/axes_instruct_asst_pairwise.npz"
+        local ax_instr="${EXP_OUTPUT_ROOT}/${TAG}/axes_instruct_pca_asst.npz"
         prepare_axes_if_needed "$INSTR_ID" "$ax_instr"
         for trait in "${TRAITS[@]}"; do
              run_probe_if_needed "instruct" "$trait" "$INSTR_ID" "$ax_instr" \
@@ -309,7 +311,7 @@ done
 echo "=== GLOBAL ANALYSIS (THESIS PLOTS) FOR LAYERED EXPERIMENTS ==="
 for pset in "${PROMPT_SETS[@]}"; do
     IFS='|' read -r PNAME PFILE <<< "$pset"
-    OUT_DIR="analysis_results/thesis_plots_${PNAME}${LAYER_SUFFIX}"
+    OUT_DIR="analysis_results/thesis_plots_pca_${PNAME}${LAYER_SUFFIX}"
     echo "[Thesis Viz] $PNAME (Saved to $OUT_DIR)"
     
     # Update globs to use EXP_OUTPUT_ROOT
