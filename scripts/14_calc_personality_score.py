@@ -79,6 +79,7 @@ def get_personality_scores(texts, model_name, batch_size=16):
             4: "openness"
         }
 
+
     all_scores = []
     
     # バッチ処理

@@ -1,41 +1,39 @@
 
 import pandas as pd
-import glob
+import sys
+import os
 
-# Files to check
-files = [
-    'exp_L10-30/mistral_7b/results_advice/mistral_7b_base_personality_scores.csv',
-    'exp_L10-30/falcon3_7b/results_advice/falcon3_7b_base_personality_scores.csv'
-]
+def check_scores():
+    csv_path = "exp_personality_L10-30/mistral_7b/scores/personality_scores_llm_openness.csv"
+    
+    if not os.path.exists(csv_path):
+        print(f"File not found: {csv_path}")
+        return
 
-for f in files:
-    print(f"\n--- Checking {f} ---")
     try:
-        # load full file but only needed cols to be fast? 
-        # Actually file size is small enough (~1000 rows). 
-        # The previous script might have hung on something else or just was silent.
-        df = pd.read_csv(f)
-        
-        # Rename if needed
-        if 'score_LABEL_0' in df.columns:
-             df.rename(columns={'score_LABEL_0': 'score_extraversion', 
-                                'score_LABEL_1': 'score_neuroticism', 
-                                'score_LABEL_2': 'score_agreeableness', 
-                                'score_LABEL_3': 'score_conscientiousness', 
-                                'score_LABEL_4': 'score_openness'}, inplace=True)
-
-        traits = df['trait'].unique()
-        print(f"Traits: {traits}")
-        
-        # Check one trait
-        target_trait = traits[0] 
-        print(f"Analyzing trait: {target_trait}")
-        
-        subset = df[df['trait'] == target_trait]
-        target_score_col = f"score_{target_trait}"
-        
-        print(f"Mean {target_score_col} by alpha:")
-        print(subset.groupby('alpha_total')[target_score_col].mean())
-        
+        df = pd.read_csv(csv_path)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error reading CSV: {e}")
+        return
+
+    print("\n=== Score Overview ===")
+    print(f"Total samples: {len(df)}")
+    print(f"Columns: {df.columns.tolist()}")
+    
+    # Check for expected columns
+    if 'alpha_total' in df.columns and 'score_llm' in df.columns:
+        print("\n=== Score Stats by Alpha ===")
+        # Group by alpha and calculate mean/std/count
+        stats = df.groupby('alpha_total')['score_llm'].agg(['count', 'mean', 'std', 'min', 'max'])
+        print(stats)
+        
+        # Check correlation
+        correlation = df['alpha_total'].corr(df['score_llm'])
+        print(f"\nCorrelation (Alpha vs Score): {correlation:.4f}")
+    else:
+        print("\nUsing columns from CSV:")
+        print(df.columns.tolist())
+        print(df.head())
+
+if __name__ == "__main__":
+    check_scores()

@@ -72,8 +72,8 @@ MODEL_SPECS=(
 # New Prompt Sets
 # "Name | JSON Path | Template"
 PROMPT_SETS=(
-  "writing|probe_inputs/writing_prompts_30.json|flexible"
-#  "advice|probe_inputs/opinion_advice_30.json|flexible"
+#  "writing|probe_inputs/writing_prompts_30.json|flexible"
+  "advice|probe_inputs/opinion_advice_30.json|flexible"
 )
 
 # ==================== Helpers ====================
@@ -186,11 +186,12 @@ run_text_analysis() {
   # 14: Personality Score
   local score_csv="${results_dir}/${tag}_${split}_personality_scores.csv"
   if ! is_nonempty_file "$score_csv"; then
-    echo "[RUN ] 14_calc_personality_score.py"
+    echo "[RUN ] 14_calc_personality_score.py (KevSun)"
     "$PYTHON_BIN" scripts/14_calc_personality_score.py "$input_jsonl" \
       --output "$score_csv" \
       --batch_size 32 \
       --model "KevSun/Personality_LM"
+
   fi
 }
 
@@ -315,11 +316,13 @@ for pset in "${PROMPT_SETS[@]}"; do
     echo "[Thesis Viz] $PNAME (Saved to $OUT_DIR)"
     
     # Update globs to use EXP_OUTPUT_ROOT
+    # Plotting primarily for KevSun for now, but data will be there for Minej too
     "$PYTHON_BIN" scripts/21_thesis_analysis_plots.py \
         --score_glob "${EXP_OUTPUT_ROOT}/*/results_${PNAME}/*_personality_scores.csv" \
         --metrics_glob "${EXP_OUTPUT_ROOT}/*/results_${PNAME}/*_text_metrics.csv" \
         --jsonl_glob "${EXP_OUTPUT_ROOT}/*/results_${PNAME}/*_probe_results.jsonl" \
         --out_dir "$OUT_DIR"
+
 done
 
 echo "=== DONE ==="
