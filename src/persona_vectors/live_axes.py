@@ -545,6 +545,80 @@ class ResidualSteerer:
             self.handle = None
 
 @dataclass
+class AngularSteerer:
+    """
+    Angular Steering (特定方向への回転) を行うフック。
+    以下の4ステップで処理を行う:
+    1. 2次元平面の定義 (基底ベクトル a の作成 - 現在の状態の正規化)
+    2. ターゲット方向の直交化 (基底ベクトル b の作成 - グラム・シュミット)
+    3. 回転後のベクトルの合成 (theta ラジアンの回転)
+    4. ノルム (強さ) の復元
+    """
+    model: torch.nn.Module
+    layer: int
+    v_mix: np.ndarray  # ターゲット方向 (正規化済みを想定)
+    theta: float       # 回転角 (ラジアン)
+    answer_only: bool = False
+
+    def __post_init__(self):
+        self.handle = None
+
+    def __enter__(self):
+        # ターゲット方向をテンソル化
+        v_target = torch.tensor(self.v_mix, dtype=torch.float32)
+
+        def hook(mod, inp, out):
+            hs = out[0] if isinstance(out, tuple) else out
+            if not torch.isfinite(hs).all():
+                return out
+
+            # 回答生成中のみ適用
+            if self.answer_only and hs.size(1) != 1:
+                return out
+
+            orig_dtype = hs.dtype
+            hs_f32 = hs.to(torch.float32)
+            device = hs.device
+            target = v_target.to(device).view(1, 1, -1)
+
+            # --- ステップ1: 基底ベクトル a (現在のベクトルを正規化) ---
+            norm_hs = hs_f32.norm(dim=-1, keepdim=True)
+            a = hs_f32 / (norm_hs + 1e-12)
+
+            # --- ステップ2: 基底ベクトル b (ターゲット方向の直交化) ---
+            # b_raw = target - <target, a> * a
+            dot = (target * a).sum(dim=-1, keepdim=True)
+            b_raw = target - dot * a
+            b = b_raw / (b_raw.norm(dim=-1, keepdim=True) + 1e-12)
+
+            # --- ステップ3: 回転後のベクトルの合成 ---
+            # r = cos(theta) * a + sin(theta) * b
+            cos_t = math.cos(self.theta)
+            sin_t = math.sin(self.theta)
+            r = cos_t * a + sin_t * b
+
+            # --- ステップ4: ノルムの復元 ---
+            steered_hs_f32 = r * norm_hs
+
+            if not torch.isfinite(steered_hs_f32).all():
+                return out
+
+            steered_hs = steered_hs_f32.to(orig_dtype)
+            if isinstance(out, tuple):
+                return (steered_hs, *out[1:])
+            return steered_hs
+
+        stack, _, _ = get_layer_stack(self.model)
+        target_mod = stack[self.layer]
+        self.handle = target_mod.register_forward_hook(hook)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.handle is not None:
+            self.handle.remove()
+            self.handle = None
+
+@dataclass
 class AnalysisSteerer:
     """
     【内部状態分析用フック】
@@ -657,9 +731,11 @@ def generate_with_steer(
     prompt: str,
     axes_by_layer: Dict[Tuple[int, str], np.ndarray],
     layer: int,
-    alpha: float,
-    e: Dict[str, float],
+    alpha: float = 0.0,
+    e: Dict[str, float] = None,
     *,
+    theta: float = 0.0, # 追加: Angular Steering 用
+    mode: str = "residual", # "residual" or "angular"
     mix_top_k: int = 1,
     mix_temp: float = 1.0,
     max_new_tokens: int = 256,
@@ -703,7 +779,14 @@ def generate_with_steer(
 
     # ★ 回答以降のみ加算（CAA流）
     # 方向は e（v_mix 側）に持たせているので alpha は強さのみ
-    with ResidualSteerer(model, layer, v_mix, alpha_val, answer_only=True):
+    if mode == "angular":
+        steerer_cls = AngularSteerer
+        steerer_kwargs = {"theta": theta}
+    else:
+        steerer_cls = ResidualSteerer
+        steerer_kwargs = {"alpha": alpha_val}
+
+    with steerer_cls(model, layer, v_mix, **steerer_kwargs, answer_only=True):
         out_ids = model.generate(**inputs, **gen)
 
 
