@@ -724,13 +724,15 @@ class StopOnSeq(StoppingCriteria):
 
 
 # ★★★ ここから修正 ★★★
+from contextlib import ExitStack
+
 @torch.no_grad()
 def generate_with_steer(
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
     prompt: str,
     axes_by_layer: Dict[Tuple[int, str], np.ndarray],
-    layer: int,
+    layer: int | List[int],  # 整数またはリストを受け取れるように変更
     alpha: float = 0.0,
     e: Dict[str, float] = None,
     *,
@@ -754,9 +756,12 @@ def generate_with_steer(
     model.eval()
     tokenizer = _ensure_pad_token(tokenizer, model)
 
-    # v_mix を作る（対象LLM空間）
-    v_mix = make_vmix_live(axes_by_layer, layer, e, top_k=mix_top_k, temp=mix_temp)
+    # layer をリストに正規化
+    layers = [layer] if isinstance(layer, int) else layer
 
+    # 各層の steerer を準備
+    steerer_cls = AngularSteerer if mode == "angular" else ResidualSteerer
+    
     # 生成
     prompt_text = _format_prompt(tokenizer, prompt)
     inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
@@ -771,24 +776,22 @@ def generate_with_steer(
         "repetition_penalty":  repetition_penalty,
         "no_repeat_ngram_size": no_repeat_ngram_size,
         "do_sample": do_sample,
-        #"top_k":          gen_top_k,             # 指定があれば使う
     })
     
-    # ★ 修正: 呼び出し元からの追加引数 (logits_processorなど) をマージ
     gen.update(kwargs)
 
-    # ★ 回答以降のみ加算（CAA流）
-    # 方向は e（v_mix 側）に持たせているので alpha は強さのみ
-    if mode == "angular":
-        steerer_cls = AngularSteerer
-        steerer_kwargs = {"theta": theta}
-    else:
-        steerer_cls = ResidualSteerer
-        steerer_kwargs = {"alpha": alpha_val}
-
-    with steerer_cls(model, layer, v_mix, **steerer_kwargs, answer_only=True):
+    # 複数層に同時に介入
+    with ExitStack() as stack:
+        for L in layers:
+            v_mix = make_vmix_live(axes_by_layer, L, e, top_k=mix_top_k, temp=mix_temp)
+            if mode == "angular":
+                steerer_kwargs = {"theta": theta}
+            else:
+                steerer_kwargs = {"alpha": alpha_val}
+            
+            stack.enter_context(steerer_cls(model, L, v_mix, **steerer_kwargs, answer_only=True))
+        
         out_ids = model.generate(**inputs, **gen)
-
 
     # 2) 新規生成ぶんだけを取り出して表示
     prompt_len = inputs["input_ids"].shape[1]
