@@ -10,13 +10,16 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from contextlib import ExitStack
 from dataclasses import dataclass, field
+import torch.nn.functional as F
 
 from persona_vectors.live_axes import (
     AXES,
     get_layer_stack,
     _infer_main_device,
     load_model_and_tokenizer,
+    make_vmix_live,
 )
+from transformers import StoppingCriteria
 from datasets import load_dataset
 from collections import defaultdict
 
@@ -430,6 +433,28 @@ def style_from_text_all_layers(
         
     return ret
 
+@torch.no_grad()
+def compute_perplexity(model, tokenizer, texts: List[str]) -> List[float]:
+    """Compute perplexity for a list of texts using the model itself."""
+    if not texts: return []
+    dev = _infer_main_device(model)
+    ppls = []
+    
+    # We use a small batch for PPL to avoid OOM
+    for text in texts:
+        if not text or not text.strip():
+            ppls.append(0.0)
+            continue
+        enc = tokenizer(text, return_tensors="pt").to(dev)
+        input_ids = enc.input_ids
+        target_ids = input_ids.clone()
+        
+        outputs = model(input_ids, labels=target_ids)
+        loss = outputs.loss
+        ppl = math.exp(loss.item()) if loss.item() < 20 else 1e9
+        ppls.append(ppl)
+    return ppls
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -455,12 +480,35 @@ def main():
     ap.add_argument("--use_dataset", action="store_true", help="hardcoded prompt ではなくデータセットから未使用プロンプトをサンプリングする")
     ap.add_argument("--vector_seed", type=int, default=2025, help="00_prepare_vectors.py で使ったシード (未使用データ特定のため)")
     ap.add_argument("--prompt_file", type=str, default=None, help="JSON file containing list of prompts to use (overrides --use_dataset)")
+    ap.add_argument("--dynamic_layer_json", type=str, default=None, help="Path to sensitivity scan JSON for dynamic layer selection")
     ap.add_argument("--template_type", choices=["standard", "flexible"], default="standard", help="プロンプトテンプレートの種類")
+    ap.add_argument("--traits", type=str, default=None, help="Comma-separated traits for multi-axis (e.g. 'extraversion,agreeableness')")
+    ap.add_argument("--alphas", type=str, default=None, help="Comma-separated alphas for multi-axis (e.g. '2.0,-1.0')")
+    ap.add_argument("--alpha_scale", action="store_true", help="Enable KL-based alpha scaling")
+    ap.add_argument("--layer_strategy", choices=["golden", "top5", "all"], default="golden", help="Layer selection strategy")
+    ap.add_argument("--calc_ppl", action="store_true", help="Calculate Perplexity (PPL) for naturalness evaluation")
     args = ap.parse_args()
 
     random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)
 
-    layers_arg = [int(x) for x in args.layers.split(",") if x.strip()] if args.layers else None
+    # Dynamic Layer Selection
+    if args.dynamic_layer_json:
+        if args.layers:
+            print("Warning: --layers is ignored because --dynamic_layer_json is provided.")
+        
+        with open(args.dynamic_layer_json, "r") as f:
+            data = json.load(f)
+        
+        # Format check: {"golden_layers": {"extraversion": 15, ...}}
+        golden = data.get("golden_layers", {})
+        if args.trait in golden:
+            best_layer = golden[args.trait]
+            print(f"Dynamic Layer Selection: Using Layer {best_layer} for {args.trait} (from {args.dynamic_layer_json})")
+            layers_arg = [best_layer]
+        else:
+            raise ValueError(f"Trait '{args.trait}' not found in dynamic layer JSON: {args.dynamic_layer_json}")
+    else:
+        layers_arg = [int(x) for x in args.layers.split(",") if x.strip()] if args.layers else None
     alphas = parse_floats_csv(args.alpha_list)
     if 0.0 not in alphas:
         alphas = sorted(alphas + [0.0])
@@ -501,15 +549,14 @@ def main():
         if args.layer_start <= L_idx < target_end:
             layers_to_process.append(L)
 
-    print(f"Layer filter applied: Index [{args.layer_start}, {target_end}). Processing {len(layers_to_process)} layers: {layers_to_process}")
-        
-    if not layers_to_process:
+    if not layers_to_process and not args.dynamic_layer_json:
         raise ValueError(f"No valid layers found for trait '{args.trait}' in axes_bank. Check --layers or 00_prepare_vectors.py.")
         
+    # Temporary placeholders, will be finalized after dynamic strategy selection
+    V_axes = None
+    layer2i = None
     num_steered_layers = len(layers_to_process)
-    V_axes, layer2i = _prepare_axes_tensor(
-        axes_bank, layers_to_process, args.trait, device=device
-    )
+    
     out_path = args.out.replace("<trait>", args.trait)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
@@ -557,15 +604,100 @@ def main():
 
         # Batch Steering Setup
         alphas_tensor = torch.tensor(alphas, dtype=torch.float32, device=device)
+        
+        # In multi-layer strategies like 'top5', if we 'distribute', alpha per layer becomes very small (e.g. 5.0 / 5 = 1.0)
+        # However, steering effect is often nonlinear or needs certain magnitude.
+        # User can specify --alpha_mode distribute or keep. Default is keep.
         if args.alpha_mode == "distribute":
             alphas_per_layer = alphas_tensor / num_steered_layers
         else:
             alphas_per_layer = alphas_tensor
             
+        # Multi-trait / Alpha-scale Setup
+        trait_list = [args.trait]
+        if args.traits:
+            trait_list = [t.strip() for t in args.traits.split(",") if t.strip()]
+        
+        kl_map = None
+        layer_map = None
+
         try:
              idx_zero = alphas.index(0.0)
         except ValueError:
              idx_zero = 0
+
+        if args.dynamic_layer_json:
+            with open(args.dynamic_layer_json, "r") as f:
+                sens_data = json.load(f)
+            
+            details = sens_data.get("details", {})
+            layer_map = {}
+            for tr in trait_list:
+                if tr in details:
+                    tr_details = details[tr]
+                    # Sort by KL descending
+                    sorted_layers = sorted(tr_details, key=lambda x: x.get("kl", 0.0), reverse=True)
+                    
+                    if args.layer_strategy == "golden":
+                        layer_map[tr] = sorted_layers[0]["layer"]
+                    elif args.layer_strategy == "top5":
+                        # Filter by layer range before taking top 5
+                        valid_sorted = [
+                            x for x in sorted_layers 
+                            if args.layer_start <= x["layer"] < target_end
+                        ]
+                        layer_map[tr] = [x["layer"] for x in valid_sorted[:5]]
+                    elif args.layer_strategy == "all":
+                        layer_map[tr] = [
+                            x["layer"] for x in sorted_layers 
+                            if args.layer_start <= x["layer"] < target_end
+                        ]
+                else:
+                    golden = sens_data.get("golden_layers", {})
+                    if tr in golden:
+                         # Still respect range for golden if possible or fallback
+                        gl = golden[tr]
+                        if args.layer_start <= gl < target_end:
+                            layer_map[tr] = gl
+                        else:
+                             # Search for best in range
+                             tr_details = details.get(tr, [])
+                             valid_in_range = [x for x in tr_details if args.layer_start <= x["layer"] < target_end]
+                             if valid_in_range:
+                                 best = max(valid_in_range, key=lambda x: x.get("kl", 0.0))
+                                 layer_map[tr] = best["layer"]
+                             else:
+                                 layer_map[tr] = gl # extreme fallback
+            
+            if args.alpha_scale:
+                kl_map = {}
+                for tr, items in details.items():
+                    kl_map[tr] = {it["layer"]: it["kl"] for it in items}
+        
+        # Determine layers_to_process based on strategy
+        if layer_map:
+            all_ls = []
+            for v in layer_map.values():
+                if isinstance(v, list): all_ls.extend(v)
+                else: all_ls.append(v)
+            layers_to_process = sorted(list(set(all_ls)))
+            print(f"Strategy '{args.layer_strategy}' active. Intervening on layers: {layers_to_process}")
+        
+        # FINAL check for steering layers
+        if not layers_to_process:
+             raise ValueError("No layers to process. Check sensitivity JSON or --layers.")
+             
+        num_steered_layers = len(layers_to_process)
+        # Prepare scoring/steering tensors for the actual active layers
+        V_axes, layer2i = _prepare_axes_tensor(
+            axes_bank, layers_to_process, args.trait, device=device
+        )
+        
+        # Load all needed vectors
+        axes_bank_multi = {}
+        for tr in trait_list:
+            bank = load_axes_bank(args.axes_bank, target_trait=tr)
+            axes_bank_multi.update(bank)
 
         # Template selection
         if args.template_type == "flexible":
@@ -587,18 +719,57 @@ def main():
             
             # 2. Steered Generation
             try:
+                # Prepare base weights for mixing
+                e_base = {args.trait: 1.0}
+                if args.traits and args.alphas:
+                    traits_raw = [t.strip() for t in args.traits.split(",")]
+                    alphas_raw = [float(a.strip()) for a in args.alphas.split(",")]
+                    e_base = dict(zip(traits_raw, alphas_raw))
+
                 with ExitStack() as stack:
                     for L_state in layers_to_process:
                         L_stack = L_state - 1
                         
-                        v_key = (L_state, args.trait)
-                        if v_key not in axes_bank:
-                            continue
-                        vec = axes_bank[v_key]
+                        # Multi-trait support in batched loop:
+                        # Currently 01_run_probe assumes 1 trait across all batch elements.
+                        # If multi-trait is specified, we mix them using make_vmix_live.
+                        
+                        # Filter traits in e_base that actually belong to this layer L_state
+                        e_layer = {}
+                        for tr, val in e_base.items():
+                            target_val = layer_map.get(tr, args.layers) if layer_map else args.layers
+                            if isinstance(target_val, list):
+                                if L_state in target_val:
+                                    e_layer[tr] = val
+                            else:
+                                if target_val == L_state:
+                                    e_layer[tr] = val
+                        
+                        if not e_layer: continue # No axis active in this layer
+                        
+                        # v_mix might depend on trait mixing
+                        v_mix_unscaled = make_vmix_live(axes_bank_multi, L_state, e_layer)
+                        
+                        # Scaling
+                        alphas_final_batch = alphas_per_layer.clone()
+                        if args.alpha_scale and kl_map:
+                             # Use the 'main' trait for scaling
+                             # If multi-trait, we should probably scale each component or the mix.
+                             # Simple heuristic: scale by the KL of the current layer L
+                             main_tr = args.trait
+                             if main_tr in kl_map and L_state in kl_map[main_tr]:
+                                 kl_val = kl_map[main_tr][L_state]
+                                 scale = 1.0 / math.log(kl_val + 1.1)
+                                 alphas_final_batch = alphas_final_batch * scale
+                        
+                        # Support for per-layer alpha mode (Golden vs Top-K)
+                        # If Top-K, should we distribute alpha_total across those K layers?
+                        # Existing code has alphas_per_layer = alphas_tensor / num_steered_layers
+                        # This works if num_steered_layers is the count of layers in Top-K.
                         
                         stack.enter_context(
                             ResidualSteerer(
-                                mdl, L_stack, vec, alphas_per_layer, 
+                                mdl, L_stack, v_mix_unscaled, alphas_final_batch, 
                                 answer_only=(not args.include_prefill)
                             )
                         )
@@ -619,6 +790,11 @@ def main():
                 gen_id = out_ids[j, prompt_len:]
                 y = tok.decode(gen_id, skip_special_tokens=True).strip()
                 generated_texts.append(y)
+            
+            # 3.5 PPL Calculation
+            ppls = []
+            if args.calc_ppl:
+                ppls = compute_perplexity(mdl, tok, generated_texts)
 
             # 4. Scoring (Batched)
             scores_list = style_from_text_all_layers(
@@ -652,6 +828,12 @@ def main():
                     "ds_avg": s_avg - s0_avg,
                     "s_by_layer": s_dict,
                 }
+                if args.calc_ppl:
+                    rec["ppl"] = ppls[j]
+                
+                # Add layer strategy info
+                rec["layer_strategy"] = args.layer_strategy
+                
                 fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
             
             fout.flush()

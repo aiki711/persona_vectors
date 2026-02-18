@@ -17,6 +17,13 @@ TRAIT_DEFINITIONS = {
     "openness": "Openness reflects an individual's intellectual curiosity and creative imagination. High scorers are inventive and curious; low scorers are consistent and cautious."
 }
 
+# Try to import helper from package, or define fallback
+try:
+    from persona_vectors.live_axes import _resolve_hf_token
+except ImportError:
+    def _resolve_hf_token():
+        return os.environ.get("HUGGINGFACE_HUB_TOKEN")
+
 def load_data(file_path):
     data = []
     try:
@@ -158,7 +165,8 @@ def main():
     # Load Model
     print(f"Loading Judge Model: {args.model}...")
     try:
-        tokenizer = AutoTokenizer.from_pretrained(args.model)
+        token = _resolve_hf_token()
+        tokenizer = AutoTokenizer.from_pretrained(args.model, token=token)
         
         # Set padding token (Llama-3 doesn't have one by default)
         if tokenizer.pad_token is None:
@@ -168,7 +176,8 @@ def main():
         model = AutoModelForCausalLM.from_pretrained(
             args.model, 
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto"
+            device_map="auto",
+            token=token
         )
         model.eval()
     except Exception as e:

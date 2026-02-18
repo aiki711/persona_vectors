@@ -470,12 +470,54 @@ def make_vmix_live(
     H = len(next(iter(axes_by_layer.values())))
     if len(items) == 0:
         return np.zeros((H,), dtype=np.float32)
-    v = np.zeros((H,), dtype=np.float32)
-    for (ax, mag, sign), wi in zip(items, w):
-        v_ax = axes_by_layer[(layer, ax)]
-        v += wi * v_ax
 
-    v = v / (np.linalg.norm(v) + 1e-12)
+    # --- Orthogonalization (Gram-Schmidt) ---
+    # We want to preserve the direction of the strongest axis, 
+    # and make subsequent axes orthogonal to previous ones.
+    # items are already sorted by magnitude (strongest first).
+    
+    ortho_bases = []
+    v_final = np.zeros((H,), dtype=np.float32)
+
+    for (ax, mag, sign), wi in zip(items, w):
+        key = (layer, ax)
+        if key not in axes_by_layer:
+            continue
+            
+        v_raw = axes_by_layer[key]
+        
+        # Gram-Schmidt
+        v_new = v_raw.copy()
+        for u in ortho_bases:
+            # proj = <v, u> * u
+            # u is unit vector
+            proj = np.dot(v_new, u) * u
+            v_new = v_new - proj
+            
+        # Normalize new basis
+        norm_v = np.linalg.norm(v_new)
+        if norm_v < 1e-6:
+            # Linear dependency (redundant axis), skip or keep small?
+            # If it vanishes, it means it's fully explained by previous axes.
+            continue
+            
+        u_new = v_new / norm_v
+        ortho_bases.append(u_new)
+        
+        # Add to final vector
+        # We add the *orthogonal* component weighted by importance?
+        # Or do we want to decompose the *original* desire into this basis?
+        # The user wants "Independent Control".
+        # If we just add orthogonalized vectors, we ensure they don't overlap.
+        # But we need to make sure we don't lose the "meaning" of the axis.
+        # "Orthogonal Subspace Projection" usually means projecting the *gradient* 
+        # but here we are constructing a static steering vector.
+        # The prompt says: "transform so they are orthogonal... preventing cancellation".
+        # So we add the orthogonalized version.
+        
+        v_final += wi * sign * u_new # Use the orthogonal direction
+
+    v = v_final / (np.linalg.norm(v_final) + 1e-12)
     return v
 
 @dataclass
@@ -732,12 +774,12 @@ def generate_with_steer(
     tokenizer: PreTrainedTokenizerBase,
     prompt: str,
     axes_by_layer: Dict[Tuple[int, str], np.ndarray],
-    layer: int | List[int],  # 整数またはリストを受け取れるように変更
+    layer: int | List[int],
     alpha: float = 0.0,
     e: Dict[str, float] = None,
     *,
-    theta: float = 0.0, # 追加: Angular Steering 用
-    mode: str = "residual", # "residual" or "angular"
+    theta: float = 0.0,
+    mode: str = "residual",
     mix_top_k: int = 1,
     mix_temp: float = 1.0,
     max_new_tokens: int = 256,
@@ -745,19 +787,30 @@ def generate_with_steer(
     top_p: float = 0.9,
     repetition_penalty: float = 1.15,
     no_repeat_ngram_size: int = 3,
+    kl_map: Dict[str, Dict[int, float]] = None, # 軸ごとのレイヤー感度マップ
     **kwargs,
 ) -> str:
     # ---- 安全化：e は全軸キーを持たせ、alpha は強さ(絶対値)に統一 ----
     if e is None:
         e = {}
-    alpha_val = float(alpha)
+    alpha_target = float(alpha)
+    
     # モデル/トークナイザ準備
     device = _infer_main_device(model)
     model.eval()
     tokenizer = _ensure_pad_token(tokenizer, model)
 
-    # layer をリストに正規化
-    layers = [layer] if isinstance(layer, int) else layer
+    # layer 正規化
+    layer_map: Dict[str, int | List[int]] = kwargs.get("layer_map", None)
+    
+    if layer_map:
+        all_ls = []
+        for v in layer_map.values():
+            if isinstance(v, list): all_ls.extend(v)
+            else: all_ls.append(v)
+        active_layers = sorted(list(set(all_ls)))
+    else:
+        active_layers = sorted([layer] if isinstance(layer, int) else list(layer))
 
     # 各層の steerer を準備
     steerer_cls = AngularSteerer if mode == "angular" else ResidualSteerer
@@ -767,11 +820,10 @@ def generate_with_steer(
     inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
     inputs = {k: v.to(device) for k, v in inputs.items()}
 
-    # ---- 生成引数：greedy/samplingを自動で切り分け ----
     do_sample = (temperature is not None) and (float(temperature) > 0)
     gen = build_gen_kwargs(tokenizer, {
         "max_new_tokens": max_new_tokens,
-        "temperature":    temperature,           # 0 or None なら greedy になる
+        "temperature":    temperature,
         "top_p":          top_p,
         "repetition_penalty":  repetition_penalty,
         "no_repeat_ngram_size": no_repeat_ngram_size,
@@ -782,12 +834,44 @@ def generate_with_steer(
 
     # 複数層に同時に介入
     with ExitStack() as stack:
-        for L in layers:
-            v_mix = make_vmix_live(axes_by_layer, L, e, top_k=mix_top_k, temp=mix_temp)
+        for L in active_layers:
+            # Layer L で有効な軸を抽出
+            e_subset = {}
+            for ax, val in e.items():
+                target_L = layer_map.get(ax, layer) if layer_map else layer
+                # target_L が list の場合も考慮
+                if isinstance(target_L, list):
+                    if L in target_L:
+                        e_subset[ax] = val
+                else:
+                    if target_L == L:
+                        e_subset[ax] = val
+            
+            if not e_subset:
+                continue
+
+            # Alpha Scaling based on KL
+            # 複数軸ある場合は、代表的な(最強の)軸、または平均でスケーリング？
+            # ここでは各レイヤーでの「介入の強さ」を1つの alpha_eff で決める。
+            # 代表として最強軸の KL を使う
+            alpha_eff = alpha_target
+            if kl_map:
+                main_ax = max(e_subset.items(), key=lambda x: abs(x[1]))[0]
+                if main_ax in kl_map and L in kl_map[main_ax]:
+                    kl_val = kl_map[main_ax][L]
+                    # alpha_eff = alpha / log(KL + 1)
+                    # KL=0 のとき無限大にならないよう保護
+                    scale = 1.0 / math.log(kl_val + 1.1)
+                    alpha_eff = alpha_target * scale
+                    # print(f"[Layer {L}] Scaling alpha {alpha_target:.2f} -> {alpha_eff:.2f} (KL={kl_val:.2f})")
+
+            v_mix = make_vmix_live(axes_by_layer, L, e_subset, top_k=mix_top_k, temp=mix_temp)
+            
             if mode == "angular":
+                # Angular の場合は角度自体をスケーリングするか検討が必要だが、一旦そのまま
                 steerer_kwargs = {"theta": theta}
             else:
-                steerer_kwargs = {"alpha": alpha_val}
+                steerer_kwargs = {"alpha": alpha_eff}
             
             stack.enter_context(steerer_cls(model, L, v_mix, **steerer_kwargs, answer_only=True))
         
