@@ -30,7 +30,7 @@ for TRAIT in "${TRAITS[@]}"; do
     
     # 3. Run Adaptive Steering Text Generation
     echo ">> [3/5] Generating Text (Base, Constant, Adaptive)..."
-    python scripts/32_run_adaptive_steering.py --config config/mistral_7b.yaml --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --prompts exp_adaptive_steering/results/test_prompts.jsonl --out_dir exp_adaptive_steering/results --axis $TRAIT --layer $LAYER --tau $TAU --max_alpha $MAX_ALPHA --constant_alpha $CONST_ALPHA
+    python scripts/32_run_adaptive_steering.py --config config/mistral_7b.yaml --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --prompts exp_adaptive_steering/results/test_prompts_10.jsonl --out_dir exp_adaptive_steering/results --axis $TRAIT --layer $LAYER --tau $TAU --max_alpha $MAX_ALPHA --constant_alpha $CONST_ALPHA
     
     # 4. Evaluate with LLM Judge
     echo ">> [4/5] Evaluating with LLM Judge..."

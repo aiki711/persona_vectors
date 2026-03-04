@@ -151,12 +151,16 @@ def main():
     ap.add_argument("--prompts", required=True, help="Input prompts JSONL (e.g. from util_extract_prompts)")
     ap.add_argument("--out_dir", required=True, help="Output directory for results")
     ap.add_argument("--axis", type=str, default="extraversion")
-    ap.add_argument("--layer", type=int, default=15)
+    ap.add_argument("--layer", type=str, default="15", help="Comma-separated layers (e.g. '10,15,20')")
+    ap.add_argument("--direction", type=str, choices=["high", "low"], default="high", help="Direction to steer towards")
     ap.add_argument("--tau", type=float, default=2.0, help="Target margin for adaptive steering")
     ap.add_argument("--max_alpha", type=float, default=5.0, help="Max intervention scale")
     ap.add_argument("--constant_alpha", type=float, default=5.0, help="Alpha for constant steering comparison")
     
     args = ap.parse_args()
+    
+    layers = [int(l.strip()) for l in args.layer.split(",")]
+    direction_mult = 1.0 if args.direction == "high" else -1.0
 
     with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -168,14 +172,28 @@ def main():
     
     print("=== 32_run_adaptive_steering.py ===")
     print(f"  Model       : {model_name}")
-    print(f"  Axis/Layer  : {args.axis} / L{args.layer}")
+    print(f"  Axis/Layers : {args.axis} / {layers}")
+    print(f"  Direction   : {args.direction.upper()}")
     print(f"  Adaptive Tau: {args.tau}, Max Alpha: {args.max_alpha}")
     print(f"  Constant Alp: {args.constant_alpha}")
 
-    # 1. Load Boundary
+    # 1. Load Boundaries for all specified layers
     b_data = np.load(args.boundary_bank)
-    w = b_data[f"{args.layer}|{args.axis}|w"].astype(np.float32)
-    b = float(b_data[f"{args.layer}|{args.axis}|b"][0])
+    layer_w = {}
+    layer_b = {}
+    for l in layers:
+        w_key = f"{l}|{args.axis}|w"
+        b_key = f"{l}|{args.axis}|b"
+        if w_key not in b_data:
+            print(f"Error: Boundary for layer {l} / axis {args.axis} not found!")
+            return
+        # Multiply w by direction_mult so that intervention is correctly oriented
+        layer_w[l] = b_data[w_key].astype(np.float32) * direction_mult
+        layer_b[l] = float(b_data[b_key][0]) * direction_mult # Also flip the bias so d(h) logic remains the same relative to the new target
+        
+    # Example stats for the first layer in the list
+    first_l = layers[0]
+    print(f"  Boundary (L{first_l}) -> ||w||: {np.linalg.norm(layer_w[first_l]):.4f}, b: {layer_b[first_l]:.4f}")
     
     # 2. Load Prompts
     prompts = []
@@ -206,12 +224,19 @@ def main():
         base_ppl = calc_sequence_ppl(model, base_ids)
         
         # --- 2. Constant Steering ---
-        with ResidualSteerer(model, args.layer, w, args.constant_alpha, answer_only=True):
+        # We need to nest context managers for multiple layers.
+        # Instead of deep nesting, we can collect them in a list and enter them.
+        import contextlib
+        with contextlib.ExitStack() as stack:
+            for l in layers:
+                stack.enter_context(ResidualSteerer(model, l, layer_w[l], args.constant_alpha, answer_only=True))
             const_text, const_ids = generate_text(model, tokenizer, p_text)
             const_ppl = calc_sequence_ppl(model, const_ids)
             
         # --- 3. Adaptive Steering ---
-        with AdaptiveSteerer(model, args.layer, w, b, tau=args.tau, max_alpha=args.max_alpha, answer_only=True):
+        with contextlib.ExitStack() as stack:
+            for l in layers:
+                stack.enter_context(AdaptiveSteerer(model, l, layer_w[l], layer_b[l], tau=args.tau, max_alpha=args.max_alpha, answer_only=True))
             adapt_text, adapt_ids = generate_text(model, tokenizer, p_text)
             adapt_ppl = calc_sequence_ppl(model, adapt_ids)
             
@@ -228,7 +253,9 @@ def main():
         })
 
     # Save Results
-    out_file = out_dir / f"adaptive_{args.axis}_L{args.layer}.jsonl"
+    # Output file name includes direction and layers
+    layers_str = "_".join(map(str, layers))
+    out_file = out_dir / f"adaptive_{args.axis}_{args.direction}_L{layers_str}.jsonl"
     with open(out_file, "w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
