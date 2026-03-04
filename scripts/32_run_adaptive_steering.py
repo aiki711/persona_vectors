@@ -198,12 +198,26 @@ def main():
     # 2. Load Prompts
     prompts = []
     with open(args.prompts, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        for item in data[:50]: # Test on 50 prompts
+        for line in f:
+            line = line.strip()
+            if not line or line in ("[", "]"):
+                continue
+            # Remove trailing comma if present (from array sampling)
+            if line.endswith(","):
+                line = line[:-1]
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                # Fallback if it's not valid JSON, just use the raw string
+                item = line.strip('"')
+                
             if isinstance(item, dict) and "input" in item:
                 prompts.append((item.get("orig_idx", ""), item["input"]))
             elif isinstance(item, str):
                 prompts.append(("", item))
+        
+        # Limit to 50 prompts if more exist
+        prompts = prompts[:50]
 
     # 3. Load Model
     print("Loading model...")
