@@ -137,10 +137,7 @@ def main():
     layer_indices = list(range(N_layers))
     device = _infer_main_device(model)
     
-    if _is_bnb_quantized(model):
-        model.eval()
-    else:
-        model.to(device).eval()
+    model.eval()
 
     print("\n[Step 2] Loading Big5Chat pairs...")
     PAIRS = extract_big5_pairs_from_hf(per_axis=per_axis)

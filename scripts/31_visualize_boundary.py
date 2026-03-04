@@ -146,10 +146,7 @@ def main():
 
     device = _infer_main_device(model)
     
-    if _is_bnb_quantized(model):
-        model.eval()
-    else:
-        model.to(device).eval()
+    model.eval()
 
     print("\n[Step 2] Loading Big5Chat pairs...")
     PAIRS = extract_big5_pairs_from_hf(per_axis=per_axis)
@@ -202,8 +199,8 @@ def main():
         highs.append(h_out.cpu())
         lows.append(l_out.cpu())
 
-    H_all = torch.cat(highs, dim=0).numpy() # (N, H)
-    L_all = torch.cat(lows, dim=0).numpy()  # (N, H)
+    H_all = torch.cat(highs, dim=0).float().numpy() # (N, H)
+    L_all = torch.cat(lows, dim=0).float().numpy()  # (N, H)
     
     # 3. Projection and Plotting
     # X-axis will be the distance relative to the boundary: d(x) = w·x + b

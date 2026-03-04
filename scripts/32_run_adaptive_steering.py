@@ -191,10 +191,7 @@ def main():
     print("Loading model...")
     model, tokenizer = load_model_and_tokenizer(model_name, quant=cfg.get("quant", "auto"))
     device = _infer_main_device(model)
-    if _is_bnb_quantized(model):
-        model.eval()
-    else:
-        model.to(device).eval()
+    model.eval()
 
     # We will borrow ResidualSteerer for constant steering comparison
     from persona_vectors.live_axes import ResidualSteerer
