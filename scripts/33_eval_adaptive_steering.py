@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# 33_eval_adaptive_steering.py
+#
+# Evaluates the personality scores of base, constant, and adaptive text outputs
+# using an LLM-as-a-judge (Meta-Llama-3-8B-Instruct).
+
+import argparse
+import json
+import pandas as pd
+import torch
+import re
+from tqdm import tqdm
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import sys
+
+from persona_vectors.live_axes import _resolve_hf_token
+
+TRAIT_DEFINITIONS = {
+    "extraversion": "Extraversion reflects an individual's sociability, assertiveness, and enthusiasm. High scorers are outgoing and energetic; low scorers are solitary and reserved.",
+    "neuroticism": "Neuroticism reflects emotional instability and tendency to experience negative emotions. High scorers are anxious and moody; low scorers are calm and confident.",
+    "agreeableness": "Agreeableness reflects an individual's tendency to be compassionate and cooperative. High scorers are trusting and helpful; low scorers are competitive and critical.",
+    "conscientiousness": "Conscientiousness reflects an individual's level of self-discipline and organization. High scorers are efficient and organized; low scorers are extravagant and careless.",
+    "openness": "Openness reflects an individual's intellectual curiosity and creative imagination. High scorers are inventive and curious; low scorers are consistent and cautious."
+}
+
+def get_judge_score(model, tokenizer, text, trait, device):
+    trait_lower = trait.lower()
+    definition = TRAIT_DEFINITIONS.get(trait_lower, "No definition available.")
+    
+    system_msg = f"""You are an expert psychologist evaluating personality traits from text.
+
+Trait: **{trait.capitalize()}**
+Definition: {definition}
+
+Evaluate the level of {trait.capitalize()} expressed in the text content.
+Focus on the attitudes, opinions, behaviors, and emotional tone expressed, NOT on the persona or role being played.
+
+Respond ONLY with a single integer from 1 to 5.
+
+Scale:
+1: Very Low {trait.capitalize()} (strong opposite traits)
+2: Low {trait.capitalize()}
+3: Neutral / Mixed
+4: High {trait.capitalize()}
+5: Very High {trait.capitalize()} (strong trait expression)"""
+    
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": f"Text: \"{text}\"\n\nScore:"}
+    ]
+    
+    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs, 
+            max_new_tokens=5, 
+            temperature=0.1,
+            do_sample=False,
+            pad_token_id=tokenizer.eos_token_id
+        )
+        
+    generated_text = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
+    
+    match = re.search(r'\b([1-5])\b', generated_text)
+    if match:
+        return int(match.group(1))
+    return 3 # default neutral
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True, help="Path to adaptive JSONL file")
+    parser.add_argument("--output", required=True, help="Path to output CSV file")
+    parser.add_argument("--axis", required=True, help="The personality axis (e.g., extraversion)")
+    parser.add_argument("--model", type=str, default="meta-llama/Meta-Llama-3-8B-Instruct")
+    args = parser.parse_args()
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+    
+    print(f"Loading Judge Model: {args.model}...")
+    token = _resolve_hf_token()
+    tokenizer = AutoTokenizer.from_pretrained(args.model, token=token)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model, 
+        torch_dtype=torch.float16,
+        device_map="auto",
+        token=token
+    )
+    model.eval()
+
+    data = []
+    with open(args.input, 'r', encoding='utf-8') as f:
+        for line in f:
+            data.append(json.loads(line))
+
+    print(f"Evaluating {len(data)} items for trait {args.axis}...")
+    
+    results = []
+    for row in tqdm(data):
+        base_score = get_judge_score(model, tokenizer, row['base_text'], args.axis, device)
+        const_score = get_judge_score(model, tokenizer, row['const_text'], args.axis, device)
+        adapt_score = get_judge_score(model, tokenizer, row['adapt_text'], args.axis, device)
+        
+        row['base_score'] = base_score
+        row['const_score'] = const_score
+        row['adapt_score'] = adapt_score
+        results.append(row)
+
+    df = pd.DataFrame(results)
+    df.to_csv(args.output, index=False)
+    
+    print("\n--- Averages ---")
+    print(f"Base    - PPL: {df['base_ppl'].mean():.2f}, Score: {df['base_score'].mean():.2f}")
+    print(f"Const   - PPL: {df['const_ppl'].mean():.2f}, Score: {df['const_score'].mean():.2f}")
+    print(f"Adapt   - PPL: {df['adapt_ppl'].mean():.2f}, Score: {df['adapt_score'].mean():.2f}")
+    
+    print(f"\nSaved to {args.output}")
+
+if __name__ == "__main__":
+    main()
