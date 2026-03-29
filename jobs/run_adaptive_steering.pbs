@@ -1,0 +1,115 @@
+#!/bin/bash
+#PBS -N adaptive_steering
+#PBS -q GPU-1
+#PBS -o log/adaptive_steering.o%j
+#PBS -e log/adaptive_steering.e%j
+#PBS -l select=1:ncpus=8:ngpus=1:mem=64gb
+#PBS -l walltime=20:00:00
+#PBS -j oe
+
+set -euo pipefail
+
+WORKDIR="${PBS_O_WORKDIR:-$PWD}"
+RUN_ID="${PBS_JOBID:-bash_$(date +%Y%m%d_%H%M%S)}"
+
+cd "$WORKDIR"
+mkdir -p log
+LOG_FILE="log/adaptive_steering.${RUN_ID}.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "=== STARTING ADAPTIVE STEERING EXPERIMENT ==="
+echo "START TIME: $(date)"
+echo "Host: $(hostname)"
+echo "WORKDIR: $WORKDIR"
+
+# ==================== Project Setup ====================
+export PROJECT_DIR="$WORKDIR"
+export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
+export HF_HOME="$PROJECT_DIR/.hf_cache"
+export TRANSFORMERS_CACHE="$HF_HOME"
+export HF_DATASETS_CACHE="$HF_HOME/datasets"
+export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
+export OMP_NUM_THREADS=1
+export HF_HUB_ENABLE_HF_TRANSFER=0
+export PYTORCH_ALLOC_CONF=expandable_segments:True
+export TOKENIZERS_PARALLELISM=false
+
+# ==================== Tokens ====================
+set +x
+if [ -f "$PROJECT_DIR/.hf_token" ]; then
+  export HUGGINGFACE_HUB_TOKEN="$(head -n1 "$PROJECT_DIR/.hf_token" | tr -d '\r\n' | sed 's/^Bearer[[:space:]]\+//')"
+fi
+
+# ==================== venv ====================
+VENV="$PROJECT_DIR/persona_steering"
+if [ -x "$VENV/bin/python" ]; then
+  # UV environment exists
+  export PYTHON_BIN="$VENV/bin/python"
+else
+  CONDA_PYTHON="/home/s2550009/anaconda3/envs/persona_vectors/bin/python"
+  if [ -x "$CONDA_PYTHON" ]; then
+    echo "[WARN] venv not found at $VENV. Using conda env: $CONDA_PYTHON"
+    export PYTHON_BIN="$CONDA_PYTHON"
+  else
+    # Fallback to system python
+    echo "[WARN] venv not found at $VENV. Falling back to system python."
+    if ! command -v python >/dev/null 2>&1; then
+       echo "[ERROR] python not found in PATH."
+       exit 1
+    fi
+    export PYTHON_BIN="$(command -v python)"
+    echo "Using PYTHON_BIN=$PYTHON_BIN"
+  fi
+fi
+
+# ==================== Experiment Params ====================
+LAYER=15
+TAU=2.0
+MAX_ALPHA=5.0
+CONST_ALPHA=5.0
+JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+TRAITS=("extraversion" "neuroticism" "agreeableness" "conscientiousness" "openness")
+CONFIG="config/mistral_7b.yaml"
+
+# ==================== 1. Prepare Prompts ====================
+PROMPT_OUT="exp_adaptive_steering/results/test_prompts_10.jsonl"
+if [ ! -f "$PROMPT_OUT" ]; then
+    echo ">> [0/5] Extracting Prompts..."
+    mkdir -p exp_adaptive_steering/results
+    "$PYTHON_BIN" scripts/util_extract_prompts.py --trait all --count 10 --out "$PROMPT_OUT"
+fi
+
+# ==================== 2. Main Pipeline ====================
+for TRAIT in "${TRAITS[@]}"; do
+    echo "=================================================="
+    echo "Processing Trait: ${TRAIT^^}"
+    echo "=================================================="
+
+    # 1. Train Boundary
+    echo ">> [1/5] Training Boundary..."
+    "$PYTHON_BIN" scripts/30_train_boundary.py --config "$CONFIG" --out_dir exp_adaptive_steering/vectors --axis $TRAIT
+    
+    # 2. Visualize Boundary
+    echo ">> [2/5] Visualizing Boundary..."
+    "$PYTHON_BIN" scripts/31_visualize_boundary.py --config "$CONFIG" --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --out_dir exp_adaptive_steering/figures --axis $TRAIT --layer $LAYER
+    
+    # 3. Run Adaptive Steering Text Generation
+    echo ">> [3/5] Generating Text (Base, Constant, Adaptive)..."
+    "$PYTHON_BIN" scripts/32_run_adaptive_steering.py --config "$CONFIG" --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --prompts "$PROMPT_OUT" --out_dir exp_adaptive_steering/results --axis $TRAIT --layer $LAYER --tau $TAU --max_alpha $MAX_ALPHA --constant_alpha $CONST_ALPHA
+    
+    # 4. Evaluate with LLM Judge
+    echo ">> [4/5] Evaluating with LLM Judge..."
+    "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py --input exp_adaptive_steering/results/adaptive_${TRAIT}_high_L${LAYER}.jsonl --output exp_adaptive_steering/results/scores_adaptive_${TRAIT}_high_L${LAYER}.csv --axis $TRAIT --model $JUDGE_MODEL
+    
+    # 5. Plot Trade-off
+    echo ">> [5/5] Plotting Trade-off..."
+    "$PYTHON_BIN" scripts/34_plot_adaptive_tradeoff.py --input exp_adaptive_steering/results/scores_adaptive_${TRAIT}_high_L${LAYER}.csv --output exp_adaptive_steering/figures/tradeoff_${TRAIT}_high_L${LAYER}.png --axis $TRAIT
+    
+    echo "Finished processing ${TRAIT^^}."
+    echo ""
+done
+
+echo "=================================================="
+echo "All traits processed successfully! Experiment complete."
+echo "END TIME: $(date)"
+echo "=================================================="
