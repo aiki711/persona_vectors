@@ -1,0 +1,119 @@
+#!/bin/bash
+#PBS -N granular_sweep
+#PBS -q GPU-1
+#PBS -o log/granular_sweep.o%j
+#PBS -e log/granular_sweep.e%j
+#PBS -l select=1:ncpus=8:ngpus=1:mem=64gb
+#PBS -l walltime=24:00:00
+#PBS -j oe
+
+set -euo pipefail
+
+WORKDIR="${PBS_O_WORKDIR:-$PWD}"
+RUN_ID="${PBS_JOBID:-bash_$(date +%Y%m%d_%H%M%S)}"
+
+cd "$WORKDIR"
+mkdir -p log
+LOG_FILE="log/granular_sweep.${RUN_ID}.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "=== STARTING GRANULAR ADAPTIVE SWEEP (SVM vs Mean-Diff) ==="
+echo "START TIME: $(date)"
+
+# ==================== Project Setup ====================
+export PROJECT_DIR="$WORKDIR"
+export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
+export HF_HOME="$PROJECT_DIR/.hf_cache"
+export TRANSFORMERS_CACHE="$HF_HOME"
+export OMP_NUM_THREADS=1
+export TOKENIZERS_PARALLELISM=false
+
+# ==================== Tokens ====================
+if [ -f "$PROJECT_DIR/.hf_token" ]; then
+  export HUGGINGFACE_HUB_TOKEN="$(head -n1 "$PROJECT_DIR/.hf_token" | tr -d '\r\n' | sed 's/^Bearer[[:space:]]\+//')"
+fi
+
+# ==================== venv ====================
+VENV="$PROJECT_DIR/persona_steering"
+if [ -x "$VENV/bin/python" ]; then
+  export PYTHON_BIN="$VENV/bin/python"
+else
+  CONDA_PYTHON="/home/s2550009/anaconda3/envs/persona_vectors/bin/python"
+  if [ -x "$CONDA_PYTHON" ]; then
+    export PYTHON_BIN="$CONDA_PYTHON"
+  else
+    echo "[ERROR] Python bin not found."
+    exit 1
+  fi
+fi
+
+# ==================== Experiment Params ====================
+LAYER=15
+TRAITS=("extraversion" "neuroticism" "agreeableness" "conscientiousness" "openness")
+CONFIG="config/mistral_7b.yaml"
+PROMPT_IN="exp_adaptive_steering/results/test_prompts_10.jsonl"
+JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+
+# 1. Prepare Mean-Diff Vectors if not exists
+MD_BANK="exp_adaptive_steering/vectors/mean_diff_vectors.npz"
+if [ ! -f "$MD_BANK" ]; then
+    echo ">> Preparing Mean-Diff Vectors..."
+    "$PYTHON_BIN" scripts/30b_train_mean_diff.py --config "$CONFIG" --out_dir exp_adaptive_steering/vectors
+fi
+
+# 2. Sweep Tau
+TAUS=("1.0" "1.5" "2.0" "2.5" "3.0" "3.5" "4.0" "4.5" "5.0")
+MAX_ALPHA=15.0  # Fixed high max_alpha to allow adaptive scaling
+METHODS=("svm" "mean_diff")
+
+for METHOD in "${METHODS[@]}"; do
+    if [ "$METHOD" == "svm" ]; then
+        BANK="exp_adaptive_steering/vectors/boundary_vectors.npz"
+    else
+        BANK="$MD_BANK"
+    fi
+
+    for TAU in "${TAUS[@]}"; do
+        echo "##################################################"
+        echo "  METHOD: $METHOD | TAU: $TAU"
+        echo "##################################################"
+
+        for TRAIT in "${TRAITS[@]}"; do
+            TAG="${METHOD}_T${TAU}"
+            OUT_JSONL="exp_adaptive_steering/results/adaptive_${TRAIT}_${TAG}_L${LAYER}.jsonl"
+            OUT_CSV="exp_adaptive_steering/results/scores_adaptive_${TRAIT}_${TAG}_L${LAYER}.csv"
+            
+            # Skip if already exists (resume capability)
+            if [ -f "$OUT_CSV" ]; then
+                echo "Skipping $TRAIT $TAG (already evaluated)"
+                continue
+            fi
+
+            echo "Processing Trait: $TRAIT ($TAG)"
+            
+            # 1. Run Steering
+            "$PYTHON_BIN" scripts/32_run_adaptive_steering.py \
+                --config "$CONFIG" \
+                --boundary_bank "$BANK" \
+                --prompts "$PROMPT_IN" \
+                --out_dir exp_adaptive_steering/results \
+                --axis "$TRAIT" \
+                --layer "$LAYER" \
+                --tau "$TAU" \
+                --max_alpha "$MAX_ALPHA" \
+                --tag "$TAG"
+                
+            # 2. Evaluate
+            "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+                --input "$OUT_JSONL" \
+                --output "$OUT_CSV" \
+                --axis "$TRAIT" \
+                --model "$JUDGE_MODEL"
+                
+            echo "Finished $TRAIT $TAG"
+        done
+    done
+done
+
+echo "=== GRANULAR SWEEP COMPLETED ==="
+echo "END TIME: $(date)"

@@ -156,6 +156,7 @@ def main():
     ap.add_argument("--tau", type=float, default=2.0, help="Target margin for adaptive steering")
     ap.add_argument("--max_alpha", type=float, default=5.0, help="Max intervention scale")
     ap.add_argument("--constant_alpha", type=float, default=5.0, help="Alpha for constant steering comparison")
+    ap.add_argument("--tag", type=str, default=None, help="Custom tag for output filename")
     
     args = ap.parse_args()
     
@@ -269,7 +270,8 @@ def main():
     # Save Results
     # Output file name includes direction and layers
     layers_str = "_".join(map(str, layers))
-    out_file = out_dir / f"adaptive_{args.axis}_{args.direction}_L{layers_str}.jsonl"
+    tag_str = f"_{args.tag}" if args.tag else ""
+    out_file = out_dir / f"adaptive_{args.axis}_{args.direction}_L{layers_str}{tag_str}.jsonl"
     with open(out_file, "w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")

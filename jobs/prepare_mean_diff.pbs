@@ -1,0 +1,23 @@
+#!/bin/bash
+#PBS -N prep_mean_diff
+#PBS -q GPU-1
+#PBS -o log/prep_mean_diff.o%j
+#PBS -e log/prep_mean_diff.e%j
+#PBS -l select=1:ncpus=8:ngpus=1:mem=64gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+
+set -euo pipefail
+WORKDIR="${PBS_O_WORKDIR:-$PWD}"
+cd "$WORKDIR"
+mkdir -p log
+
+export PROJECT_DIR="$WORKDIR"
+export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
+export HF_HOME="$PROJECT_DIR/.hf_cache"
+export TRANSFORMERS_CACHE="$HF_HOME"
+CONDA_PYTHON="/home/s2550009/anaconda3/envs/persona_vectors/bin/python"
+export PYTHON_BIN="$CONDA_PYTHON"
+
+echo ">> Preparing Mean-Diff Vectors for all traits..."
+"$PYTHON_BIN" scripts/30b_train_mean_diff.py --config config/mistral_7b.yaml --out_dir exp_adaptive_steering/vectors
