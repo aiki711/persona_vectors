@@ -22,14 +22,20 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Pattern: scores_adaptive_{trait}_{method}_T{tau}_L15.csv
-    files = glob.glob(str(input_dir / "scores_adaptive_*_L15.csv"))
+    files = glob.glob(str(input_dir / "scores_adaptive_*.csv"))
     
     data = []
     for f in files:
         fname = Path(f).name
-        # Match pattern like scores_adaptive_extraversion_svm_T3.0_L15.csv
-        match = re.search(r"scores_adaptive_(.+?)_(svm|mean_diff)_T([\d\.]+)_L15\.csv", fname)
+        # Match pattern like scores_adaptive_neuroticism_high_L15_svm_T1.0.csv
+        # Pattern components:
+        # 1. scores_adaptive_
+        # 2. {trait}
+        # 3. _high_L15_
+        # 4. {method} (svm or mean_diff)
+        # 5. _T{tau}
+        # 6. .csv
+        match = re.search(r"scores_adaptive_(.+?)_high_L15_(svm|mean_diff)_T([\d\.]+)\.csv", fname)
         if not match:
             continue
         
@@ -56,6 +62,9 @@ def main():
 
     df_all = pd.DataFrame(data)
     
+    # Consistent color mapping
+    COLOR_MAP = {"svm": "tab:blue", "mean_diff": "tab:red"}
+    
     # 1. Plot overall trade-off (All traits averaged)
     plt.figure(figsize=(10, 7))
     sns.set_style("whitegrid")
@@ -66,34 +75,41 @@ def main():
         "ppl": "mean"
     }).reset_index()
     
-    for method in df_avg["method"].unique():
+    for method in sorted(df_avg["method"].unique()):
         subset = df_avg[df_avg["method"] == method].sort_values("tau")
-        plt.plot(subset["score"], subset["ppl"], marker="o", label=f"Method: {method.upper()}")
+        color = COLOR_MAP.get(method, None)
+        plt.plot(subset["score"], subset["ppl"], marker="o", label=f"METHOD: {method.upper()}", color=color)
         for i, row in subset.iterrows():
-            plt.annotate(f"T={row['tau']}", (row["score"], row["ppl"]), textcoords="offset points", xytext=(0,10), ha='center')
+            plt.annotate(f"T={row['tau']}", (row["score"], row["ppl"]), textcoords="offset points", xytext=(0,10), ha='center', fontsize=8)
 
     plt.xlabel("Personality Score (1-5)")
     plt.ylabel("Perplexity (Lower is better)")
-    plt.title("Granular Sweep: Personality vs Coherence Trade-off")
+    plt.title("Granular Sweep: Personality vs Coherence Trade-off (Average)")
     plt.legend()
     
     out_path = out_dir / "granular_sweep_comparison_all.png"
     plt.savefig(out_path, dpi=300)
     print(f"Saved comparison plot to {out_path}")
+    
+    # Save a summary CSV for reading the numbers
+    summary_csv = out_dir / "granular_sweep_summary.csv"
+    df_avg.to_csv(summary_csv, index=False)
+    print(f"Saved summary CSV to {summary_csv}")
 
     # 2. Per-trait plots
-    for trait in df_all["trait"].unique():
+    for trait in sorted(df_all["trait"].unique()):
         plt.figure(figsize=(10, 6))
         subset_trait = df_all[df_all["trait"] == trait]
-        for method in subset_trait["method"].unique():
+        for method in sorted(subset_trait["method"].unique()):
             subset = subset_trait[subset_trait["method"] == method].sort_values("tau")
+            color = COLOR_MAP.get(method, None)
             plt.errorbar(subset["score"], subset["ppl"], xerr=subset["score_sem"], yerr=subset["ppl_sem"], 
-                         marker="o", label=f"{method.upper()}")
+                         marker="o", label=f"METHOD: {method.upper()}", color=color)
             for i, row in subset.iterrows():
                 plt.annotate(f"{row['tau']:.1f}", (row["score"], row["ppl"]), textcoords="offset points", xytext=(0,5), fontsize=8)
 
-        plt.xlabel("Score")
-        plt.ylabel("PPL")
+        plt.xlabel("Personality Score (1-5)")
+        plt.ylabel("Perplexity (Lower is better)")
         plt.title(f"Trade-off Sweep: {trait.capitalize()}")
         plt.legend()
         plt.savefig(out_dir / f"granular_sweep_{trait}.png")

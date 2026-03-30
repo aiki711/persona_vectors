@@ -62,8 +62,10 @@ for METHOD in "${METHODS[@]}"; do
 
     for TAU in "${TAUS[@]}"; do
         TAG="${METHOD}_T${TAU}"
-        OUT_JSONL="exp_adaptive_steering/results/adaptive_${TRAIT}_${TAG}_L${LAYER}.jsonl"
-        OUT_CSV="exp_adaptive_steering/results/scores_adaptive_${TRAIT}_${TAG}_L${LAYER}.csv"
+        # Match filenames from 32_run_adaptive_steering.py: adaptive_{axis}_{direction}_L{layers_str}{tag_str}.jsonl
+        # where direction=high and layers_str=15
+        OUT_JSONL="exp_adaptive_steering/results/adaptive_${TRAIT}_high_L${LAYER}_${TAG}.jsonl"
+        OUT_CSV="exp_adaptive_steering/results/scores_adaptive_${TRAIT}_high_L${LAYER}_${TAG}.csv"
         
         if [ -f "$OUT_CSV" ]; then
             echo "Skipping ${TAG} (already done)"
