@@ -231,16 +231,16 @@ def main():
     # 4. Create Plot
     plt.figure(figsize=(10, 8))
     
-    # Plot points
-    plt.scatter(dist_H, y_H, c='blue', alpha=0.6, label='High (Target)', edgecolors='w', s=50)
-    plt.scatter(dist_L, y_L, c='red', alpha=0.6, label='Low (Anti-Target)', edgecolors='w', s=50)
+    # Plot points (Swapped colors: High=red, Low=blue)
+    plt.scatter(dist_H, y_H, c='red', alpha=0.6, label='High (Target)', edgecolors='w', s=50)
+    plt.scatter(dist_L, y_L, c='blue', alpha=0.6, label='Low (Anti-Target)', edgecolors='w', s=50)
     
     # Plot Decision Boundary (x=0)
     plt.axvline(x=0, color='black', linestyle='--', linewidth=2, label='Decision Boundary ($w \\cdot h + b = 0$)')
     
-    # Plot Margins (Optional: e.g. target margin tau = 1.0)
-    tau = 2.0
-    plt.axvline(x=tau, color='green', linestyle=':', linewidth=2, label=f'Target Margin ($\\tau={tau}$)')
+    # Plot Margins (Removed as per request)
+    # tau = 2.0
+    # plt.axvline(x=tau, color='green', linestyle=':', linewidth=2, label=f'Target Margin ($\\tau={tau}$)')
     
     # Formatting
     plt.title(f'Activation Distribution and SVM Boundary\nAxis: {axis.capitalize()} | Layer: {layer}', fontsize=14)
@@ -249,11 +249,11 @@ def main():
     plt.legend(loc='best', fontsize=11)
     plt.grid(True, alpha=0.3)
     
-    # Add annotations for steering concept
-    plt.annotate('', xy=(tau + 0.5, 0), xytext=(0, 0),
-            arrowprops=dict(facecolor='green', shrink=0.05, width=2, headwidth=8),
-            horizontalalignment='center', verticalalignment='top')
-    plt.text(tau/2, 1, 'Adaptive Steering\nPush until threshold', color='green', fontsize=10, ha='center', va='bottom', bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+    # Add annotations for steering concept (Removed as per request)
+    # plt.annotate('', xy=(tau + 0.5, 0), xytext=(0, 0),
+    #         arrowprops=dict(facecolor='green', shrink=0.05, width=2, headwidth=8),
+    #         horizontalalignment='center', verticalalignment='top')
+    # plt.text(tau/2, 1, 'Adaptive Steering\nPush until threshold', color='green', fontsize=10, ha='center', va='bottom', bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
 
     plt.tight_layout()
     

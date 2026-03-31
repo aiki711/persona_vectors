@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -N plot_boundary_clean
+#PBS -q GPU-1
+#PBS -o log/plot_boundary_clean.o%j
+#PBS -e log/plot_boundary_clean.e%j
+#PBS -l select=1:ncpus=4:ngpus=1:mem=32gb
+#PBS -l walltime=01:00:00
+#PBS -j oe
+
+set -euo pipefail
+
+WORKDIR="${PBS_O_WORKDIR:-$PWD}"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR"
+CONDA_PYTHON="/home/s2550009/anaconda3/envs/persona_vectors/bin/python"
+
+TRAITS=("extraversion" "neuroticism" "agreeableness" "conscientiousness" "openness")
+
+echo "=== STARTING CLEAN BOUNDARY PLOT GENERATION ==="
+for trait in "${TRAITS[@]}"; do
+    echo "Processing $trait..."
+    "$CONDA_PYTHON" scripts/31_visualize_boundary.py \
+        --config config/mistral_7b.yaml \
+        --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz \
+        --out_dir exp_adaptive_steering/figures/ \
+        --axis "$trait" \
+        --layer 15
+done
+echo "=== CLEAN BOUNDARY PLOT GENERATION COMPLETED ==="
