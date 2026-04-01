@@ -55,7 +55,7 @@ PROMPT_IN="exp_adaptive_steering/results/test_prompts_10.jsonl"
 JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 
 # Sweep Matrix (Tau and Alpha are the same)
-PARAMS=(1 2 3)
+PARAMS=(0.1 0.2 0.5 1.0)
 
 # ==================== Loop ====================
 for VAL in "${PARAMS[@]}"; do
@@ -80,13 +80,9 @@ for VAL in "${PARAMS[@]}"; do
         --tag "$TAG"
         
     # The script saves to investigation_{axis}_{direction}_T{tau}_A{alpha}{tag}.jsonl
-    # Note: direction defaults to "high"
-    # Actual filename: investigation_extraversion_high_T4.0_A4.0_FullLayer_Val4.jsonl
-    
-    EXPECTED_JSONL="exp_adaptive_steering/results/investigation_${TRAIT}_high_T${VAL}.0_A${VAL}.0_${TAG}.jsonl"
-    if [ -f "$EXPECTED_JSONL" ]; then
-        mv "$EXPECTED_JSONL" "$OUT_JSONL"
-    fi
+    # We use a wildcard to be robust to float formatting (e.g., 4.0 vs 4)
+    # The output is expected to be unique for this TAG.
+    mv exp_adaptive_steering/results/investigation_${TRAIT}_high_T*_${TAG}.jsonl "$OUT_JSONL"
 
     # 2. Evaluate with Llama-3 Judge
     "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
