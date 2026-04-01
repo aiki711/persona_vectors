@@ -55,7 +55,7 @@ PROMPT_IN="exp_adaptive_steering/results/test_prompts_10.jsonl"
 JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 
 # Sweep Matrix (Tau and Alpha are the same)
-PARAMS=(4 5 6)
+PARAMS=(1 2 3)
 
 # ==================== Loop ====================
 for VAL in "${PARAMS[@]}"; do
