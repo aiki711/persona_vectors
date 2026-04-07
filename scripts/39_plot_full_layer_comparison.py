@@ -23,12 +23,16 @@ def main():
     args = ap.parse_args()
 
     input_dir = Path(args.input_dir)
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Check if we should use subdirectories or flat
+    trait_dir = input_dir / args.axis
+    if trait_dir.is_dir():
+        search_path = trait_dir / f"scores_{args.axis}_Val*.csv"
+    else:
+        search_path = input_dir / f"scores_{args.axis}_Val*.csv"
 
-    files = glob.glob(str(input_dir / f"scores_{args.axis}_Val*.csv"))
+    files = glob.glob(str(search_path))
     if not files:
-        print(f"No files found in {input_dir}")
+        print(f"No files found at {search_path}")
         return
 
     data = []
@@ -70,9 +74,12 @@ def main():
         except Exception as e:
             print(f"Error reading {f}: {e}")
 
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     df_plot = pd.DataFrame(data)
-    # Filter to val <= 0.1 as requested by user
-    df_plot = df_plot[df_plot["val"] <= 0.1].sort_values(["mode", "val"])
+    # Filter to val <= 0.15 as requested by user
+    df_plot = df_plot[df_plot["val"] <= 0.15].sort_values(["mode", "val"])
 
     # --- Plotting ---
     plt.figure(figsize=(10, 7))
