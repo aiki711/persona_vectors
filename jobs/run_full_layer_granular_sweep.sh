@@ -34,7 +34,7 @@ PYTHON_BIN="python"
 # ==================== Params ====================
 TRAITS=("extraversion" "neuroticism" "openness" "conscientiousness" "agreeableness")
 CONFIG="config/mistral_7b.yaml"
-PROMPT_IN="exp_adaptive_steering/results/test_prompts_archive/test_prompts_10.jsonl"
+PROMPT_IN="exp_adaptive_steering/test_prompts_10.jsonl"
 JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 BASE_OUT_DIR="exp_adaptive_steering/results/full_layer_granular"
 
@@ -59,7 +59,7 @@ for TRAIT in "${TRAITS[@]}"; do
         # Raw generation
         "$PYTHON_BIN" scripts/32b_run_full_layer_steering.py \
             --config "$CONFIG" \
-            --vector_bank exp_adaptive_steering/vectors/boundary_vectors.npz \
+            --vector_bank exp_adaptive_steering/vectors/mean_diff_vectors.npz \
             --prompts "$PROMPT_IN" \
             --out_dir "$OUT_DIR" \
             --axis "$TRAIT" \
