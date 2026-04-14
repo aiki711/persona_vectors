@@ -42,7 +42,7 @@ PYTHON_BIN="python"
 # ==================== Params ====================
 TRAITS=("extraversion" "neuroticism" "openness" "conscientiousness" "agreeableness")
 LAYERS=(0 3 6 9 12 15 18 21 24 27 30)
-PARAMS=(0.03 0.06 0.09 0.12 0.15)
+PARAMS=(0.1 0.2 0.3 0.4 0.5)
 
 CONFIG="config/mistral_7b.yaml"
 VECTOR_BANK="exp_adaptive_steering/vectors/mean_diff_vectors.npz"
