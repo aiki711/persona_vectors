@@ -1,0 +1,53 @@
+#!/bin/bash
+#SBATCH --job-name=prep_mean_diff
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --gres=gpu:1
+#SBATCH --time=04:00:00
+#SBATCH --output=log/prep_mean_diff.%j.out
+#SBATCH --error=log/prep_mean_diff.%j.err
+
+# jobs/prepare_mean_diff.pbs
+# 
+# 30b_train_mean_diff.py を実行して全5特性のベクトルを作成するジョブ。
+# 作成されたベクトルは exp_adaptive_steering/vectors/mean_diff_vectors.npz に保存される。
+
+set -euo pipefail
+
+# Workdir 設定
+WORKDIR="${SLURM_SUBMIT_DIR:-$PWD}"
+cd "$WORKDIR"
+
+# ログ用ディレクトリ作成
+mkdir -p log exp_steering_layer_sweep/vectors
+
+echo "=== STARTING VECTOR PREPARATION ==="
+echo "START TIME: $(date)"
+echo "JOB ID: ${SLURM_JOB_ID}"
+
+# ==================== Project Setup ====================
+export PROJECT_DIR="$WORKDIR"
+export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
+export HF_HOME="$PROJECT_DIR/.hf_cache"
+export TRANSFORMERS_CACHE="$HF_HOME"
+export OMP_NUM_THREADS=1
+export TOKENIZERS_PARALLELISM=false
+
+# ==================== venv ====================
+# Using the newly created conda environment
+PYTHON_BIN="$PROJECT_DIR/persona_steering/bin/python"
+
+# ==================== Params ====================
+CONFIG="config/mistral_7b.yaml"
+OUT_DIR="exp_steering_layer_sweep/vectors"
+
+# ==================== Main ====================
+echo ">> Running scripts/30b_train_mean_diff.py..."
+"$PYTHON_BIN" scripts/30b_train_mean_diff.py --config "$CONFIG" --out_dir "$OUT_DIR"
+
+echo "=== VECTOR PREPARATION COMPLETED ==="
+echo "END TIME: $(date)"
+echo "Results: $OUT_DIR"

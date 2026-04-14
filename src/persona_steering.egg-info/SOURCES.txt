@@ -1,0 +1,8 @@
+pyproject.toml
+src/persona_steering.egg-info/PKG-INFO
+src/persona_steering.egg-info/SOURCES.txt
+src/persona_steering.egg-info/dependency_links.txt
+src/persona_steering.egg-info/requires.txt
+src/persona_steering.egg-info/top_level.txt
+src/persona_vectors/__init__.py
+src/persona_vectors/live_axes.py
