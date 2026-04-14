@@ -49,7 +49,7 @@ PYTHON_BIN="$PROJECT_DIR/persona_steering/bin/python"
 # ==================== Params ====================
 TRAITS=("extraversion" "neuroticism" "openness" "conscientiousness" "agreeableness")
 LAYERS=(0 3 6 9 12 15 18 21 24 27 30)
-PARAMS=(0.1 0.2 0.3 0.4 0.5)
+PARAMS=(10 20 30 40 50)
 
 CONFIG="config/mistral_7b.yaml"
 VECTOR_BANK="exp_steering_layer_sweep/vectors/mean_diff_vectors.npz"

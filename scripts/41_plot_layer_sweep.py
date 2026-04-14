@@ -29,7 +29,7 @@ from pathlib import Path
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 LAYERS = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-VALS   = [0.03, 0.06, 0.09, 0.12, 0.15]
+VALS   = [10, 20, 30, 40, 50]
 
 
 def load_summary(input_dir: Path, axis: str) -> pd.DataFrame:
