@@ -26,10 +26,11 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import seaborn as sns
 from pathlib import Path
+from matplotlib.patches import Rectangle
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 LAYERS = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-VALS   = [5, 10, 15, 20, 25]
+VALS   = [0.5, 1, 2, 4, 5, 6, 8, 10, 15, 20, 25, 30, 35, 40]
 
 
 def load_summary(input_dir: Path, axis: str) -> pd.DataFrame:
@@ -53,6 +54,19 @@ def load_summary(input_dir: Path, axis: str) -> pd.DataFrame:
                 "adapt_ppl":   df["adapt_ppl"].mean(),
             })
     return pd.DataFrame(records)
+
+
+def highlight_safe_cells(ax, p_ppl, threshold=25.0):
+    """PPLが閾値以下のセルを枠線で囲む"""
+    if p_ppl is None or p_ppl.empty:
+        return
+    for i in range(len(p_ppl.index)):
+        for j in range(len(p_ppl.columns)):
+            val = p_ppl.iloc[i, j]
+            if not np.isnan(val) and val <= threshold:
+                # Rectangle coordinates: (x, y), width, height
+                rect = Rectangle((j, i), 1, 1, fill=False, edgecolor='black', lw=2, clip_on=False)
+                ax.add_patch(rect)
 
 
 def make_heatmap(pivot: pd.DataFrame, title: str, out_path: Path,
@@ -124,46 +138,53 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path):
     def pivot(col):
         return df.pivot(index="val", columns="layer", values=col)
 
-    # ---- 1. スコアヒートマップ (Constant & Adaptive 並べて) ----
-    fig, axes = plt.subplots(2, 1, figsize=(13, 7))
-    for ax_obj, col, label in [
-        (axes[0], "const_score", "Constant Steering — Score"),
-        (axes[1], "adapt_score", "Adaptive Steering — Score"),
-    ]:
-        p = pivot(col)
-        sns.heatmap(p, annot=True, fmt=".2f", cmap="YlGn",
-                    vmin=1, vmax=5,
+    p_c_score = pivot("const_score")
+    p_a_score = pivot("adapt_score")
+    p_c_ppl   = pivot("const_ppl")
+    p_a_ppl   = pivot("adapt_ppl")
+
+    # ---- 統合ヒートマップ (2x2) ----
+    fig, axes = plt.subplots(2, 2, figsize=(18, 10))
+    
+    # レイアウト:
+    # [0,0]: Const Score  [0,1]: Adapt Score
+    # [1,0]: Const PPL    [1,1]: Adapt PPL
+    configs = [
+        (axes[0, 0], p_c_score, p_c_ppl, "Constant — Score", "YlGn", 1, 5, ".2f"),
+        (axes[0, 1], p_a_score, p_a_ppl, "Adaptive — Score", "YlGn", 1, 5, ".2f"),
+        (axes[1, 0], p_c_ppl,   p_c_ppl, "Constant — PPL",   "RdYlGn_r", 1, 100, ".1f"),
+        (axes[1, 1], p_a_ppl,   p_a_ppl, "Adaptive — PPL",   "RdYlGn_r", 1, 100, ".1f"),
+    ]
+
+    for ax_obj, p_data, p_ppl_ref, title, cmap, vmin, vmax, fmt in configs:
+        sns.heatmap(p_data, annot=True, fmt=fmt, cmap=cmap,
+                    vmin=vmin, vmax=vmax,
                     linewidths=0.4, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        ax_obj.set_title(f"{label} [{axis.capitalize()}]", fontsize=12, fontweight="bold")
+        
+        # PPL <= 25 のセルを囲む
+        highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
+        
+        ax_obj.set_title(f"{title} [{axis.capitalize()}] (Border: PPL<=25)", fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer")
         ax_obj.set_ylabel("Val")
-    plt.tight_layout()
-    score_path = out_dir / f"heatmap_{axis}_score.png"
-    plt.savefig(score_path, dpi=200)
-    plt.close()
-    print(f"  Saved: {score_path}")
 
-    # ---- 2. PPLヒートマップ ----
-    fig, axes = plt.subplots(2, 1, figsize=(13, 7))
-    for ax_obj, col, label in [
-        (axes[0], "const_ppl", "Constant Steering — PPL"),
-        (axes[1], "adapt_ppl", "Adaptive Steering — PPL"),
-    ]:
-        p = pivot(col)
-        sns.heatmap(p, annot=True, fmt=".1f", cmap="YlOrRd",
-                    linewidths=0.4, linecolor="gray",
-                    ax=ax_obj, annot_kws={"size": 8})
-        ax_obj.set_title(f"{label} [{axis.capitalize()}]", fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("Layer")
-        ax_obj.set_ylabel("Val")
+    plt.suptitle(f"Layer-Sweep Results: {axis.capitalize()}", fontsize=16, fontweight="bold", y=1.02)
     plt.tight_layout()
-    ppl_path = out_dir / f"heatmap_{axis}_ppl.png"
-    plt.savefig(ppl_path, dpi=200)
+    
+    out_path = out_dir / f"heatmap_{axis}_unified.png"
+    plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: {ppl_path}")
+    print(f"  Saved unified heatmap: {out_path}")
 
-    # ---- 3. スコア-PPL トレードオフ ----
+    # 古い個別ファイルを削除
+    for old_file in [f"heatmap_{axis}_score.png", f"heatmap_{axis}_ppl.png"]:
+        p_old = out_dir / old_file
+        if p_old.exists():
+            p_old.unlink()
+            print(f"  Removed obsolete file: {p_old}")
+
+    # ---- 3. スコア-PPL トレードオフ (これは有用なので残す) ----
     tradeoff_path = out_dir / f"tradeoff_{axis}.png"
     make_tradeoff_plot(df, axis, tradeoff_path)
 
@@ -179,20 +200,32 @@ def make_summary_heatmaps(all_df: pd.DataFrame, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     fig, axes = plt.subplots(2, 2, figsize=(18, 10))
+    # レイアウト統一:
+    # [0,0]: Const Score  [0,1]: Adapt Score
+    # [1,0]: Const PPL    [1,1]: Adapt PPL
     configs = [
-        ("const_score", "Constant — Score (All traits avg)", "YlGn", 1, 5),
-        ("adapt_score", "Adaptive — Score (All traits avg)",  "YlGn", 1, 5),
-        ("const_ppl",   "Constant — PPL (All traits avg)",    "YlOrRd", None, None),
-        ("adapt_ppl",   "Adaptive — PPL (All traits avg)",    "YlOrRd", None, None),
+        ("const_score", "Constant — Score (All traits avg)", "YlGn", 1, 5, axes[0, 0]),
+        ("adapt_score", "Adaptive — Score (All traits avg)",  "YlGn", 1, 5, axes[0, 1]),
+        ("const_ppl",   "Constant — PPL (All traits avg)",    "RdYlGn_r", 1, 100, axes[1, 0]),
+        ("adapt_ppl",   "Adaptive — PPL (All traits avg)",    "RdYlGn_r", 1, 100, axes[1, 1]),
     ]
-    for ax_obj, (col, title, cmap, vmin, vmax) in zip(axes.flatten(), configs):
+    for col, title, cmap, vmin, vmax, ax_obj in configs:
         p = avg.pivot(index="val", columns="layer", values=col)
         fmt = ".2f" if "score" in col else ".1f"
+        
+        # PPLデータを持ってきて強調表示に使う
+        ppl_col = col.replace("score", "ppl")
+        p_ppl = avg.pivot(index="val", columns="layer", values=ppl_col) if "score" in col else p
+
         sns.heatmap(p, annot=True, fmt=fmt, cmap=cmap,
                     vmin=vmin, vmax=vmax,
                     linewidths=0.4, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        ax_obj.set_title(title, fontsize=12, fontweight="bold")
+        
+        # PPL <= 25 のセルを囲む
+        highlight_safe_cells(ax_obj, p_ppl, threshold=25.0)
+        
+        ax_obj.set_title(title + " (Border: PPL<=25)", fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer")
         ax_obj.set_ylabel("Val")
 

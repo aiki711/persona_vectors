@@ -1,0 +1,131 @@
+#!/bin/bash
+#SBATCH --job-name=steering_sweep_5-25
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --output=log/steering_layer_sweep_1-25.%j.out
+#SBATCH --error=log/steering_layer_sweep_1-25.%j.err
+
+# jobs/run_steering_layer_sweep_5-25.pbs
+# 
+# Layer-Sweep 実験 (alpha 1-25 range expansion):
+#   全5特性 x 11レイヤー x 4 alpha (2, 4, 6, 8)
+
+set -euo pipefail
+
+# Workdir 設定
+WORKDIR="${SLURM_SUBMIT_DIR:-$PWD}"
+cd "$WORKDIR"
+
+# ログ用ディレクトリ作成
+mkdir -p log exp_steering_layer_sweep_1-25/results exp_steering_layer_sweep_1-25/figures exp_steering_layer_sweep_1-25/summary_stats
+
+echo "=== STARTING STEERING LAYER-SWEEP EXPERIMENT (5-25) ==="
+echo "START TIME: $(date)"
+echo "JOB ID: ${SLURM_JOB_ID}"
+
+# ==================== Project Setup ====================
+export PROJECT_DIR="$WORKDIR"
+export PYTHONPATH="$PROJECT_DIR/src:$PROJECT_DIR:$PROJECT_DIR/scripts:${PYTHONPATH:-}"
+export HF_HOME="$PROJECT_DIR/.hf_cache"
+export TRANSFORMERS_CACHE="$HF_HOME"
+export OMP_NUM_THREADS=1
+export TOKENIZERS_PARALLELISM=false
+
+# ==================== Tokens ====================
+if [ -f "$PROJECT_DIR/.hf_token" ]; then
+  export HUGGINGFACE_HUB_TOKEN="$(head -n1 "$PROJECT_DIR/.hf_token" | tr -d '\r\n' | sed 's/^Bearer[[:space:]]\+//')"
+fi
+
+# ==================== venv ====================
+PYTHON_BIN="$PROJECT_DIR/persona_steering/bin/python"
+
+# ==================== Params ====================
+TRAITS=("extraversion" "neuroticism" "openness" "conscientiousness" "agreeableness")
+LAYERS=(0 3 6 9 12 15 18 21 24 27 30)
+PARAMS=(2 4 6 8)
+
+CONFIG="config/mistral_7b.yaml"
+VECTOR_BANK="exp_steering_layer_sweep_1-25/vectors/mean_diff_vectors.npz"
+PROMPT_IN="exp_steering_layer_sweep_1-25/test_prompts_10.jsonl"
+JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+BASE_OUT_DIR="exp_steering_layer_sweep_1-25/results"
+FIGURES_DIR="exp_steering_layer_sweep_1-25/figures"
+
+TOTAL=$((${#TRAITS[@]} * ${#LAYERS[@]} * ${#PARAMS[@]}))
+COUNT=0
+
+echo "  Traits  : ${TRAITS[*]}"
+echo "  Layers  : ${LAYERS[*]}"
+echo "  Vals    : ${PARAMS[*]}"
+echo "  Total   : $TOTAL conditions"
+echo ""
+
+# ==================== Main Loop ====================
+for TRAIT in "${TRAITS[@]}"; do
+    echo "=========================================="
+    echo "  TRAIT: $TRAIT"
+    echo "=========================================="
+
+    OUT_DIR="${BASE_OUT_DIR}/${TRAIT}"
+    mkdir -p "$OUT_DIR"
+
+    for LAYER in "${LAYERS[@]}"; do
+        echo "------------------------------------------"
+        echo "  LAYER: $LAYER"
+        echo "------------------------------------------"
+
+        for VAL in "${PARAMS[@]}"; do
+            COUNT=$((COUNT + 1))
+            echo "### [$COUNT/$TOTAL] TRAIT=$TRAIT LAYER=$LAYER VAL=$VAL ###"
+
+            JSONL_OUT="${OUT_DIR}/layer_${LAYER}_Val${VAL}.jsonl"
+            CSV_OUT="${OUT_DIR}/scores_layer_${LAYER}_Val${VAL}.csv"
+
+            # Step1: 生成
+            if [ ! -f "$JSONL_OUT" ]; then
+                "$PYTHON_BIN" scripts/40_run_layer_sweep.py \
+                    --config "$CONFIG" \
+                    --vector_bank "$VECTOR_BANK" \
+                    --prompts "$PROMPT_IN" \
+                    --out_dir "$OUT_DIR" \
+                    --axis "$TRAIT" \
+                    --target_layer "$LAYER" \
+                    --tau "$VAL" \
+                    --alpha "$VAL" \
+                    --mode both
+            else
+                echo "  [SKIP] Generation already done: $JSONL_OUT"
+            fi
+
+            # Step2: Llama-3 ジャッジによる評価
+            if [ ! -f "$CSV_OUT" ]; then
+                "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+                    --input "$JSONL_OUT" \
+                    --output "$CSV_OUT" \
+                    --axis "$TRAIT" \
+                    --model "$JUDGE_MODEL"
+            else
+                 echo "  [SKIP] Evaluation already done: $CSV_OUT"
+            fi
+
+            echo "  Done: TRAIT=$TRAIT LAYER=$LAYER VAL=$VAL"
+            echo ""
+        done
+    done
+done
+
+# ==================== Plotting ====================
+echo "=== GENERATING FIGURES ==="
+"$PYTHON_BIN" scripts/41_plot_layer_sweep.py \
+    --input_dir "$BASE_OUT_DIR" \
+    --out_dir "$FIGURES_DIR"
+
+echo "=== STEERING LAYER-SWEEP EXPERIMENT COMPLETED ==="
+echo "END TIME: $(date)"
+echo "Results: $BASE_OUT_DIR"
+echo "Figures: $FIGURES_DIR"
