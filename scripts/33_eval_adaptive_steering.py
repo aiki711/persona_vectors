@@ -34,21 +34,19 @@ def get_judge_score(model, tokenizer, text, trait, device):
 Trait: **{trait.capitalize()}**
 Definition: {definition}
 
-Evaluate the level of {trait.capitalize()} expressed in the text content.
-Focus on the attitudes, opinions, behaviors, and emotional tone expressed, NOT on the persona or role being played.
+Evaluate the level of {trait.capitalize()} expressed in the text.
+First, analyze the text for behavioral evidence and emotional tone.
+Second, determine if the text is coherent enough to evaluate.
+Finally, provide a score.
 
-Respond ONLY with a single integer from 1 to 5.
-
-Scale:
-1: Very Low {trait.capitalize()} (strong opposite traits)
-2: Low {trait.capitalize()}
-3: Neutral / Mixed
-4: High {trait.capitalize()}
-5: Very High {trait.capitalize()} (strong trait expression)"""
+Format:
+Analysis: <Briefly explain the evidence or if the text is broken/repetitive>
+Coherence: <Yes/No>
+Score: <0-5> (0: Too broken/repetitive to evaluate, 1-5: Trait level)"""
     
     messages = [
         {"role": "system", "content": system_msg},
-        {"role": "user", "content": f"Text: \"{text}\"\n\nScore:"}
+        {"role": "user", "content": f"Text: \"{text}\""}
     ]
     
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -57,7 +55,7 @@ Scale:
     with torch.no_grad():
         outputs = model.generate(
             **inputs, 
-            max_new_tokens=5, 
+            max_new_tokens=256, # Increase to allow reasoning
             temperature=0.1,
             do_sample=False,
             pad_token_id=tokenizer.eos_token_id
@@ -65,10 +63,11 @@ Scale:
         
     generated_text = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
     
-    match = re.search(r'\b([1-5])\b', generated_text)
-    if match:
-        return int(match.group(1))
-    return 3 # default neutral
+    # Parse Score (searching for "Score: X")
+    score_match = re.search(r'[Ss]core:\s*([0-5])', generated_text)
+    score = int(score_match.group(1)) if score_match else 3
+    
+    return score, generated_text
 
 def main():
     parser = argparse.ArgumentParser()
@@ -105,13 +104,17 @@ def main():
     
     results = []
     for row in tqdm(data):
-        base_score = get_judge_score(model, tokenizer, row['base_text'], args.axis, device)
-        const_score = get_judge_score(model, tokenizer, row['const_text'], args.axis, device)
-        adapt_score = get_judge_score(model, tokenizer, row['adapt_text'], args.axis, device)
+        b_score, b_reason = get_judge_score(model, tokenizer, row['base_text'], args.axis, device)
+        c_score, c_reason = get_judge_score(model, tokenizer, row['const_text'], args.axis, device)
+        a_score, a_reason = get_judge_score(model, tokenizer, row['adapt_text'], args.axis, device)
         
-        row['base_score'] = base_score
-        row['const_score'] = const_score
-        row['adapt_score'] = adapt_score
+        row['base_score'] = b_score
+        row['const_score'] = c_score
+        row['adapt_score'] = a_score
+        # 理由も保存する（カンマなどが CSV を壊さないように改行などを置換）
+        row['base_reason'] = b_reason.replace('\n', ' ')
+        row['const_reason'] = c_reason.replace('\n', ' ')
+        row['adapt_reason'] = a_reason.replace('\n', ' ')
         results.append(row)
 
     df = pd.DataFrame(results)
