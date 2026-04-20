@@ -55,7 +55,9 @@ def main():
 
     for jsonl_path in tqdm(jsonl_files, desc=f"Processing {args.trait or 'all'}"):
         trait = jsonl_path.parent.name
-        csv_path = jsonl_path.with_suffix(".csv")
+        # 最初から正しい名前 (scores_layer_...) で出力するように変更
+        csv_name = jsonl_path.name.replace("layer_", "scores_layer_").replace(".jsonl", ".csv")
+        csv_path = jsonl_path.parent / csv_name
         
         # 1. 整合性チェック: 生成ファイルが完全か確認
         line_count = get_line_count(jsonl_path)
