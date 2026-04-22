@@ -19,7 +19,9 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from persona_vectors.live_axes import _resolve_hf_token
 
 TRAIT_DEFINITIONS = {
+    "extraversion": "Extraversion reflects personality traits such as being outgoing, talkative, high on energy, and assertiveness.",
     "neuroticism": "Neuroticism reflects emotional instability and tendency to experience negative emotions. High scorers are anxious and moody; low scorers are calm and confident.",
+    "openness": "Openness to experience involves a willingness to try new things and a fascination for new ideas. High scorers are creative and imaginative.",
     "agreeableness": "Agreeableness reflects an individual's tendency to be compassionate and cooperative. High scorers are trusting and helpful; low scorers are competitive and critical.",
     "conscientiousness": "Conscientiousness reflects an individual's level of self-discipline and organization. High scorers are efficient and organized; low scorers are extravagant and careless."
 }

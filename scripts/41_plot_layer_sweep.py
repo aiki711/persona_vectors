@@ -239,8 +239,8 @@ def make_summary_heatmaps(all_df: pd.DataFrame, out_dir: Path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input_dir", default="exp_steering_layer_sweep/results")
-    ap.add_argument("--out_dir",   default="exp_steering_layer_sweep/figures")
+    ap.add_argument("--input_dir", default="exp_steering_layer_sweep_1-40/results")
+    ap.add_argument("--out_dir",   default="exp_steering_layer_sweep_1-40/figures")
     ap.add_argument("--axis",      default=None, help="特定特性のみ。省略で全特性。")
     args = ap.parse_args()
 
