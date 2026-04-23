@@ -1,0 +1,26 @@
+#!/bin/bash
+#SBATCH --job-name=ic_adaptive_pilot
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=01:00:00
+#SBATCH --output=log/ic_adaptive_pilot.out
+#SBATCH --error=log/ic_adaptive_pilot.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+# Run pilot: Extraversion, Layer 24, Tau 25, IC_Scale 1.5
+"$PYTHON_BIN" scripts/50_run_ic_adaptive_steering.py \
+    --config config/mistral_7b.yaml \
+    --vector_bank exp_steering_layer_sweep_1-40/vectors/mean_diff_vectors.npz \
+    --prompts exp_adaptive_steering/test_prompts_10.jsonl \
+    --out_dir exp_steering_ic_adaptive/results \
+    --axis extraversion \
+    --target_layer 24 \
+    --tau 25.0 \
+    --ic_scale 1.5
