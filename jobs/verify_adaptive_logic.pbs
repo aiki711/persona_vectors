@@ -1,0 +1,17 @@
+#!/bin/bash
+#SBATCH --job-name=verify_adaptive
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=00:10:00
+#SBATCH --output=log/verify_adaptive.out
+#SBATCH --error=log/verify_adaptive.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+"$PYTHON_BIN" scratch/verify_alpha_variance.py
