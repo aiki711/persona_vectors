@@ -168,10 +168,20 @@ def main():
     
     # Load Prompts
     prompts = []
-    with open(args.prompts, "r") as f:
+    with open(args.prompts, "r", encoding="utf-8") as f:
         for line in f:
-            item = json.loads(line)
-            prompts.append((item.get("orig_idx", ""), item["input"]))
+            line = line.strip()
+            if not line or line in ("[", "]"): continue
+            if line.endswith(","): line = line[:-1]
+            try:
+                item = json.loads(line)
+            except:
+                item = line.strip('"')
+            
+            if isinstance(item, dict) and "input" in item:
+                prompts.append((item.get("orig_idx", ""), item["input"]))
+            elif isinstance(item, str):
+                prompts.append(("", item))
     prompts = prompts[:10]
 
     results = []
