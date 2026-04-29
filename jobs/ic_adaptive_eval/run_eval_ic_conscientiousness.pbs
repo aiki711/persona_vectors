@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH --job-name=eval_ic_conscientiousness
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=04:00:00
+#SBATCH --output=log/eval_ic_conscientiousness.out
+#SBATCH --error=log/eval_ic_conscientiousness.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+echo "Evaluating IC-Adaptive pairwise for conscientiousness..."
+"$PYTHON_BIN" scripts/53_eval_ic_pairwise_all.py --trait conscientiousness

@@ -1,0 +1,32 @@
+#!/bin/bash
+#PBS -q GPU-1
+#PBS -N visualize_alpha_check
+#PBS -l nodes=1:ppn=1:gpus=1
+#PBS -l walltime=00:30:00
+#PBS -o log/visualize_alpha_check.out
+#PBS -e log/visualize_alpha_check.err
+
+cd $PBS_O_WORKDIR
+
+# 仮想環境の有効化
+source persona_steering/bin/activate
+
+# 可視化スクリプトの実行
+# 代表的なプロンプトで、Layer 18 (エリート層) の挙動を確認
+python scripts/49_visualize_token_alpha.py \
+    --config configs/mistral_7b.yaml \
+    --vector_bank exp/exp_adaptive_steering/vectors/boundary_vectors.npz \
+    --axis extraversion \
+    --layer 18 \
+    --tau 10.0 \
+    --max_alpha 15.0 \
+    --prompt "Tell me about your most exciting travel experience. What made it so special?"
+
+python scripts/49_visualize_token_alpha.py \
+    --config configs/mistral_7b.yaml \
+    --vector_bank exp/exp_adaptive_steering/vectors/boundary_vectors.npz \
+    --axis extraversion \
+    --layer 18 \
+    --tau 10.0 \
+    --max_alpha 15.0 \
+    --prompt "What is your favorite book or movie? Please explain why you like it in detail."

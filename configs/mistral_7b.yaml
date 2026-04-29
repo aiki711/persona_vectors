@@ -1,0 +1,2 @@
+model_name: 'mistralai/Mistral-7B-v0.1'
+quant: '4bit'
