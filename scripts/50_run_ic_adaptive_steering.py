@@ -114,10 +114,10 @@ def generate_with_ic_steering(model, tokenizer, prompt, steerer, max_new_tokens=
             # 2. Update IC factor for the NEXT token using the logits just produced
             steerer.update_ic(logits)
             
-            # 3. Greedy Sample next token (do_sample=False)
-            next_token_logits = logits[:, -1, :]
+            # 3. Sample next token
+            next_token_logits = logits[:, -1, :] / 0.7 # Temp 0.7
             probs = F.softmax(next_token_logits, dim=-1)
-            next_token = torch.argmax(probs, dim=-1).unsqueeze(-1)
+            next_token = torch.multinomial(probs, num_samples=1)
             
             gen_ids = torch.cat([gen_ids, next_token], dim=-1)
             

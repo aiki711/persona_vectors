@@ -31,6 +31,7 @@ from matplotlib.patches import Rectangle
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 LAYERS = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
 VALS   = [0.5, 1, 2, 4, 5, 6, 8, 10, 15, 20, 25, 30, 35, 40]
+DLS_INPUT_DIR = Path("exp_steering_dyn_layer/results")  # DLS results directory
 
 
 def load_summary(input_dir: Path, axis: str) -> pd.DataFrame:
@@ -53,6 +54,23 @@ def load_summary(input_dir: Path, axis: str) -> pd.DataFrame:
                 "const_ppl":   df["const_ppl"].mean(),
                 "adapt_ppl":   df["adapt_ppl"].mean(),
             })
+    return pd.DataFrame(records)
+
+
+def load_dls_summary(axis: str) -> pd.DataFrame:
+    """DLS結果CSVを読み込んでval単位の集計DataFrameを返す"""
+    records = []
+    trait_dir = DLS_INPUT_DIR / axis
+    for val in VALS:
+        csv_path = trait_dir / f"scores_dyn_Val{val}.csv"
+        if not csv_path.exists():
+            continue
+        df = pd.read_csv(csv_path)
+        records.append({
+            "val":       val,
+            "dyn_score": df["dyn_score"].mean(),
+            "dyn_ppl":   df["dyn_ppl"].mean(),
+        })
     return pd.DataFrame(records)
 
 
@@ -86,8 +104,9 @@ def make_heatmap(pivot: pd.DataFrame, title: str, out_path: Path,
     print(f"  Saved: {out_path}")
 
 
-def make_tradeoff_plot(df: pd.DataFrame, axis: str, out_path: Path):
-    """Layer を色、Val を大きさにしてスコア vs PPL をプロット"""
+def make_tradeoff_plot(df: pd.DataFrame, axis: str, out_path: Path,
+                       dls_df: pd.DataFrame | None = None):
+    """Layer を色、Val を大きさにしてスコア vs PPL をプロット。DLS は★でオーバーレイ"""
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     layer_vals = sorted(df["layer"].unique())
     cmap = plt.get_cmap("tab20", len(layer_vals))
@@ -113,6 +132,16 @@ def make_tradeoff_plot(df: pd.DataFrame, axis: str, out_path: Path):
         ax.scatter([base_score], [base_ppl], color="black", marker="*", s=200,
                    zorder=5, label="Baseline")
 
+        # DLS のオーバーレイ
+        if dls_df is not None and not dls_df.empty:
+            ax.scatter(dls_df["dyn_score"], dls_df["dyn_ppl"],
+                       color="red", marker="*", s=180, zorder=6, label="DLS",
+                       edgecolors="darkred", linewidths=0.5)
+            for _, row in dls_df.iterrows():
+                ax.annotate(f"{row['val']:g}", (row["dyn_score"], row["dyn_ppl"]),
+                            textcoords="offset points", xytext=(4, 4),
+                            fontsize=7, color="red", alpha=0.85)
+
         ax.set_title(f"{mode} Steering — {axis.capitalize()}", fontsize=13, fontweight="bold")
         ax.set_xlabel(f"Personality Score ({axis.capitalize()})", fontsize=11)
         ax.set_ylabel("Perplexity (log scale)", fontsize=11)
@@ -134,6 +163,9 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path):
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Load DLS results (may be empty if not yet computed)
+    dls_df = load_dls_summary(axis)
+
     # Pivot tables (index=val, columns=layer)
     def pivot(col):
         return df.pivot(index="val", columns="layer", values=col)
@@ -143,17 +175,29 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path):
     p_c_ppl   = pivot("const_ppl")
     p_a_ppl   = pivot("adapt_ppl")
 
+    # Append DLS column to score/ppl pivots if available
+    def append_dls_col(pivot_df, score_col, dls_df):
+        """DLS の val 単位の集計を 'DLS' 列として付加する"""
+        if dls_df.empty or score_col not in dls_df.columns:
+            return pivot_df
+        dls_series = dls_df.set_index("val")[score_col]
+        dls_series.name = "DLS"
+        result = pivot_df.copy()
+        result["DLS"] = dls_series
+        return result
+
+    p_c_score_dls = append_dls_col(p_c_score, "dyn_score", dls_df)
+    p_a_score_dls = append_dls_col(p_a_score, "dyn_score", dls_df)
+    p_c_ppl_dls   = append_dls_col(p_c_ppl,   "dyn_ppl",   dls_df)
+    p_a_ppl_dls   = append_dls_col(p_a_ppl,   "dyn_ppl",   dls_df)
+
     # ---- 統合ヒートマップ (2x2) ----
-    fig, axes = plt.subplots(2, 2, figsize=(18, 10))
-    
-    # レイアウト:
-    # [0,0]: Const Score  [0,1]: Adapt Score
-    # [1,0]: Const PPL    [1,1]: Adapt PPL
+    fig, axes = plt.subplots(2, 2, figsize=(20, 10))
     configs = [
-        (axes[0, 0], p_c_score, p_c_ppl, "Constant — Score", "YlGn", 1, 5, ".2f"),
-        (axes[0, 1], p_a_score, p_a_ppl, "Adaptive — Score", "YlGn", 1, 5, ".2f"),
-        (axes[1, 0], p_c_ppl,   p_c_ppl, "Constant — PPL",   "RdYlGn_r", 1, 100, ".1f"),
-        (axes[1, 1], p_a_ppl,   p_a_ppl, "Adaptive — PPL",   "RdYlGn_r", 1, 100, ".1f"),
+        (axes[0, 0], p_c_score_dls, p_c_ppl_dls, "Constant — Score", "YlGn", 1, 5, ".2f"),
+        (axes[0, 1], p_a_score_dls, p_a_ppl_dls, "Adaptive — Score", "YlGn", 1, 5, ".2f"),
+        (axes[1, 0], p_c_ppl_dls,   p_c_ppl_dls, "Constant — PPL",   "RdYlGn_r", 1, 100, ".1f"),
+        (axes[1, 1], p_a_ppl_dls,   p_a_ppl_dls, "Adaptive — PPL",   "RdYlGn_r", 1, 100, ".1f"),
     ]
 
     for ax_obj, p_data, p_ppl_ref, title, cmap, vmin, vmax, fmt in configs:
@@ -161,32 +205,36 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path):
                     vmin=vmin, vmax=vmax,
                     linewidths=0.4, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        
-        # PPL <= 25 のセルを囲む
+
+        # DLS 列を視覚的に強調（列境界線を太く）
+        n_cols = len(p_data.columns)
+        if "DLS" in p_data.columns:
+            dls_col_idx = list(p_data.columns).index("DLS")
+            ax_obj.axvline(x=dls_col_idx, color="navy", linewidth=2.5)
+
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
-        
-        ax_obj.set_title(f"{title} [{axis.capitalize()}] (Border: PPL<=25)", fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("Layer")
+        ax_obj.set_title(f"{title} [{axis.capitalize()}] (Border: PPL<=25, Blue line: DLS)",
+                         fontsize=12, fontweight="bold")
+        ax_obj.set_xlabel("Layer  (rightmost = DLS)")
         ax_obj.set_ylabel("Val")
 
     plt.suptitle(f"Layer-Sweep Results: {axis.capitalize()}", fontsize=16, fontweight="bold", y=1.02)
     plt.tight_layout()
-    
+
     out_path = out_dir / f"heatmap_{axis}_unified.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"  Saved unified heatmap: {out_path}")
 
-    # 古い個別ファイルを削除
     for old_file in [f"heatmap_{axis}_score.png", f"heatmap_{axis}_ppl.png"]:
         p_old = out_dir / old_file
         if p_old.exists():
             p_old.unlink()
             print(f"  Removed obsolete file: {p_old}")
 
-    # ---- 3. スコア-PPL トレードオフ (これは有用なので残す) ----
+    # ---- 3. スコア-PPL トレードオフ ----
     tradeoff_path = out_dir / f"tradeoff_{axis}.png"
-    make_tradeoff_plot(df, axis, tradeoff_path)
+    make_tradeoff_plot(df, axis, tradeoff_path, dls_df)
 
 
 def make_summary_heatmaps(all_df: pd.DataFrame, out_dir: Path):

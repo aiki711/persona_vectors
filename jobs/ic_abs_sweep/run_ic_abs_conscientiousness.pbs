@@ -1,0 +1,61 @@
+#!/bin/bash
+#SBATCH --job-name=ic_abs_conscientiousness
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --output=log/ic_abs_conscientiousness.out
+#SBATCH --error=log/ic_abs_conscientiousness.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+OUT_DIR="exp_steering_ic_adaptive/results/conscientiousness"
+mkdir -p "$OUT_DIR"
+
+# Same vector bank and prompts as baseline and DLS for fair comparison
+CONFIG="config/mistral_7b.yaml"
+VECTOR_BANK="exp_steering_layer_analysis/vectors/mean_diff_vectors.npz"
+PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
+JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+
+LAYERS=(0 3 6 9 12 15 18 21 24 27 30)
+VALS=(0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0)
+
+for L in "${LAYERS[@]}"; do
+    for V in "${VALS[@]}"; do
+        echo "=== IC-Adaptive: Trait=conscientiousness, Layer=$L, Tau=$V ==="
+        JSONL_OUT="${OUT_DIR}/ic_adapt_layer${L}_Tau${V}_S1.5.jsonl"
+        CSV_OUT="${OUT_DIR}/scores_ic_adapt_layer${L}_Tau${V}.csv"
+
+        # Step 1: Generation
+        if [ ! -f "$JSONL_OUT" ]; then
+            "$PYTHON_BIN" scripts/50_run_ic_adaptive_steering.py \
+                --config "$CONFIG" \
+                --vector_bank "$VECTOR_BANK" \
+                --prompts "$PROMPT_IN" \
+                --out_dir "$OUT_DIR" \
+                --axis "conscientiousness" \
+                --target_layer "$L" \
+                --tau "$V" \
+                --ic_scale 1.5
+        else
+            echo "  [SKIP] Generation done: $JSONL_OUT"
+        fi
+
+        # Step 2: Absolute score evaluation (Llama-3)
+        if [ ! -f "$CSV_OUT" ]; then
+            "$PYTHON_BIN" scripts/60_eval_ic_absolute.py \
+                --input "$JSONL_OUT" \
+                --output "$CSV_OUT" \
+                --axis "conscientiousness" \
+                --model "$JUDGE_MODEL"
+        else
+            echo "  [SKIP] Evaluation done: $CSV_OUT"
+        fi
+    done
+done
