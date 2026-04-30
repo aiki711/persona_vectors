@@ -56,8 +56,9 @@ def load_pairwise_summary(input_dir: Path, trait: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 def plot_pairwise_heatmap(df: pd.DataFrame, trait: str, out_dir: Path):
-    """Plot heatmap for IC-Adaptive pairwise shifts."""
-    out_dir.mkdir(parents=True, exist_ok=True)
+    """Plot heatmap for IC-Adaptive pairwise shifts vs Constant."""
+    trait_out_dir = out_dir / trait
+    trait_out_dir.mkdir(parents=True, exist_ok=True)
     
     p_score = df.pivot(index="val", columns="layer", values="pairwise_score")
     p_ppl = df.pivot(index="val", columns="layer", values="ic_adapt_ppl")
@@ -76,14 +77,14 @@ def plot_pairwise_heatmap(df: pd.DataFrame, trait: str, out_dir: Path):
     
     plt.tight_layout()
     
-    out_path = out_dir / f"heatmap_{trait}_pairwise.png"
+    out_path = trait_out_dir / f"heatmap_{trait}_pairwise_vs_const.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"  Saved pairwise heatmap: {out_path}")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", default="exp_steering_ic_adaptive/pairwise_results")
+    parser.add_argument("--input_dir", default="exp_steering_ic_adaptive/pairwise_vs_const_results")
     parser.add_argument("--out_dir", default="exp_steering_ic_adaptive/figures")
     args = parser.parse_args()
     

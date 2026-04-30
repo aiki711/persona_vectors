@@ -76,21 +76,9 @@ def main():
     parser.add_argument("--model", type=str, default="meta-llama/Meta-Llama-3-8B-Instruct")
     args = parser.parse_args()
 
-    # Base texts
-    base_file = Path(f"exp_steering_layer_analysis/results/{args.trait}/layer_0_Val5.jsonl")
-    base_texts = {}
-    if base_file.exists():
-        with open(base_file, "r") as f:
-            for line in f:
-                item = json.loads(line)
-                base_texts[item["orig_idx"]] = item["base_text"]
-    else:
-        print(f"Error: Base file not found for {args.trait} at {base_file}")
-        return
-
     # In/Out dirs
     in_dir = Path(f"exp_steering_ic_adaptive/results/{args.trait}")
-    out_dir = Path(f"exp_steering_ic_adaptive/pairwise_results/{args.trait}")
+    out_dir = Path(f"exp_steering_ic_adaptive/pairwise_vs_const_results/{args.trait}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     jsonl_files = sorted(list(in_dir.glob("*.jsonl")))
@@ -114,39 +102,59 @@ def main():
         if csv_path.exists() and csv_path.stat().st_size > 0:
             continue
 
+        match = re.search(r'layer(\d+)_Tau([\d\.]+)_', j_path.name)
+        if not match: continue
+        layer, val_str = match.groups()
+        
+        # Determine the correct constant file name
+        const_files = [
+            Path(f"exp_steering_layer_analysis/results/{args.trait}/layer_{layer}_Val{val_str}.jsonl"),
+            Path(f"exp_steering_layer_analysis/results/{args.trait}/layer_{layer}_Val{float(val_str)}.jsonl"),
+            Path(f"exp_steering_layer_analysis/results/{args.trait}/layer_{layer}_Val{int(float(val_str)) if float(val_str).is_integer() else float(val_str)}.jsonl")
+        ]
+        
+        const_file = None
+        for cf in const_files:
+            if cf.exists():
+                const_file = cf
+                break
+                
+        if not const_file:
+            print(f"Constant file not found for {j_path.name}")
+            continue
+            
+        const_texts = {}
+        const_ppls = {}
+        with open(const_file, "r") as f:
+            for line in f:
+                item = json.loads(line)
+                const_texts[item["orig_idx"]] = item["const_text"]  # from Constant steering
+                const_ppls[item["orig_idx"]] = item["const_ppl"]
+
         results = []
         with open(j_path, "r") as f:
             for line in f:
                 item = json.loads(line)
-                b_text = base_texts.get(item["orig_idx"], "")
-                if not b_text: continue
+                c_text = const_texts.get(item["orig_idx"], "")
+                if not c_text: continue
                 
                 s_text = item["ic_adapt_text"]
-                ppl = item.get("ic_adapt_ppl", None)
+                ic_ppl = item.get("ic_adapt_ppl", None)
+                c_ppl = const_ppls.get(item["orig_idx"], None)
                 
-                score, reasoning = get_pairwise_score(model, tokenizer, b_text, s_text, args.trait, device)
+                score, reasoning = get_pairwise_score(model, tokenizer, c_text, s_text, args.trait, device)
                 
                 results.append({
                     "orig_idx": item["orig_idx"],
                     "prompt": item["prompt"],
-                    "base_text": b_text,
+                    "const_text": c_text,
                     "steered_text": s_text,
-                    "base_ppl": item.get("base_ppl", None), # May not exist in IC file, but can be loaded if needed. Actually we didn't save base_ppl in IC files.
-                    "ic_adapt_ppl": ppl,
+                    "const_ppl": c_ppl,
+                    "ic_adapt_ppl": ic_ppl,
                     "pairwise_score": score,
                     "reasoning": reasoning
                 })
-                
-        # Load base_ppl from base_file just to be sure
-        base_ppls = {}
-        with open(base_file, "r") as f:
-             for line in f:
-                 b_item = json.loads(line)
-                 base_ppls[b_item["orig_idx"]] = b_item["base_ppl"]
         
-        for r in results:
-             r["base_ppl"] = base_ppls.get(r["orig_idx"], None)
-
         if results:
             df = pd.DataFrame(results)
             df.to_csv(csv_path, index=False)

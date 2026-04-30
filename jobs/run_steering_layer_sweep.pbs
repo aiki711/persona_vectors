@@ -23,7 +23,7 @@ WORKDIR="${SLURM_SUBMIT_DIR:-$PWD}"
 cd "$WORKDIR"
 
 # ログ用ディレクトリ作成
-mkdir -p log exp_steering_layer_sweep/results exp_steering_layer_sweep/figures exp_steering_layer_sweep/summary_stats
+mkdir -p log exp_steering_layer_analysis/results exp_steering_layer_analysis/figures exp_steering_layer_analysis/summary_stats
 
 echo "=== STARTING STEERING LAYER-SWEEP EXPERIMENT (Slurm) ==="
 echo "START TIME: $(date)"
@@ -49,13 +49,13 @@ PYTHON_BIN="$PROJECT_DIR/persona_steering/bin/python"
 # ==================== Params ====================
 TRAITS=("extraversion" "neuroticism" "openness" "conscientiousness" "agreeableness")
 LAYERS=(0 3 6 9 12 15 18 21 24 27 30)
-PARAMS=(10 20 30 40 50)
+PARAMS=(0.5 1 2 4 5 6 8 10 15 20 25 30 35 40)
 
 CONFIG="config/mistral_7b.yaml"
-VECTOR_BANK="exp_steering_layer_sweep/vectors/mean_diff_vectors.npz"
-PROMPT_IN="exp_adaptive_steering/test_prompts_10.jsonl"
+VECTOR_BANK="exp_steering_layer_analysis/vectors/mean_diff_vectors.npz"
+PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
 JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
-BASE_OUT_DIR="exp_steering_layer_sweep/results"
+BASE_OUT_DIR="exp_steering_layer_analysis/results"
 
 TOTAL=$((${#TRAITS[@]} * ${#LAYERS[@]} * ${#PARAMS[@]}))
 COUNT=0

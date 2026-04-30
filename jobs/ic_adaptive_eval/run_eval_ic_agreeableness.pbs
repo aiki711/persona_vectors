@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=eval_ic_agreeableness
+#SBATCH --job-name=eval_vs_const_agreeableness
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=04:00:00
-#SBATCH --output=log/eval_ic_agreeableness.out
-#SBATCH --error=log/eval_ic_agreeableness.err
+#SBATCH --output=log/eval_vs_const_agreeableness.out
+#SBATCH --error=log/eval_vs_const_agreeableness.err
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"

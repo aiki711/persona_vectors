@@ -44,51 +44,52 @@ def load_ppl_delta(input_dir: Path, trait: str) -> pd.DataFrame:
             if df.empty:
                 continue
                 
-            b_ppl = df["base_ppl"].mean()
+            c_ppl = df["const_ppl"].mean()
             ic_ppl = df["ic_adapt_ppl"].mean()
             
             # Improvement Rate (%)
-            # base_ppl is usually > 0.
-            # positive rate means IC is better (lower PPL).
-            rate = 100.0 * (b_ppl - ic_ppl) / b_ppl if b_ppl > 0 else 0
+            # const_ppl is usually > 0.
+            # positive rate means IC is better (lower PPL) than Constant.
+            rate = 100.0 * (c_ppl - ic_ppl) / c_ppl if c_ppl > 0 else 0
             
             records.append({
                 "layer": layer,
                 "val": val,
                 "ppl_rate": rate,
-                "base_ppl": b_ppl,
+                "const_ppl": c_ppl,
                 "ic_adapt_ppl": ic_ppl
             })
     
     return pd.DataFrame(records)
 
 def plot_ppl_comparison(df: pd.DataFrame, trait: str, out_dir: Path):
-    """Plot PPL comparison heatmap (Base vs IC-Adaptive)."""
-    out_dir.mkdir(parents=True, exist_ok=True)
+    """Plot PPL comparison heatmap (IC-Adaptive vs Constant)."""
+    trait_out_dir = out_dir / trait
+    trait_out_dir.mkdir(parents=True, exist_ok=True)
     
     p_rate = df.pivot(index="val", columns="layer", values="ppl_rate")
     p_ic_ppl = df.pivot(index="val", columns="layer", values="ic_adapt_ppl")
     
     plt.figure(figsize=(8, 6))
     
-    # Red for positive (IC is better than Base), Blue for negative
+    # Red for positive (IC is better than Constant), Blue for negative
     sns.heatmap(p_rate, annot=True, fmt=".1f", cmap="RdBu_r", vmin=-80, vmax=80, center=0, 
-                linewidths=0.5, linecolor="gray", cbar_kws={'label': 'PPL Improvement Rate vs Base (%)'})
+                linewidths=0.5, linecolor="gray", cbar_kws={'label': 'PPL Improvement Rate vs Constant (%)'})
     
     highlight_safe_cells(plt.gca(), p_ic_ppl, threshold=24.0)
     
-    plt.title(f"PPL Improvement Rate: IC-Adaptive vs Base [{trait.capitalize()}]\n(Red = IC Better, Border: IC PPL <= 24)", fontsize=12, fontweight="bold")
+    plt.title(f"PPL Improvement: IC-Adaptive vs Constant [{trait.capitalize()}]\n(Red = IC Better, Border: IC PPL <= 24)", fontsize=12, fontweight="bold")
     plt.xlabel("Layer")
     plt.ylabel("Val (Tau)")
     
-    out_path = out_dir / f"heatmap_{trait}_ppl_comparison.png"
+    out_path = trait_out_dir / f"heatmap_{trait}_ppl_comparison_vs_const.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"  Saved PPL comparison heatmap: {out_path}")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", default="exp_steering_ic_adaptive/pairwise_results")
+    parser.add_argument("--input_dir", default="exp_steering_ic_adaptive/pairwise_vs_const_results")
     parser.add_argument("--out_dir", default="exp_steering_ic_adaptive/figures")
     args = parser.parse_args()
     
@@ -117,7 +118,7 @@ def main():
         sns.heatmap(p_rate, annot=True, fmt=".1f", cmap="RdBu_r", vmin=-80, vmax=80, center=0,
                     linewidths=0.5, linecolor="gray", cbar_kws={'label': 'Avg PPL Improvement Rate (%)'})
         highlight_safe_cells(plt.gca(), p_ic_ppl, threshold=24.0)
-        plt.title("Avg PPL Improvement: IC-Adaptive vs Base (All Traits)\n(Border: IC PPL <= 24)", fontsize=12, fontweight="bold")
+        plt.title("Avg PPL Improvement: IC-Adaptive vs Constant (All Traits)\n(Border: IC PPL <= 24)", fontsize=12, fontweight="bold")
         plt.xlabel("Layer")
         plt.ylabel("Val (Tau)")
         

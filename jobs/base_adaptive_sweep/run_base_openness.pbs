@@ -1,0 +1,60 @@
+#!/bin/bash
+#SBATCH --job-name=base_steer_openness
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
+#SBATCH --output=log/base_steer_openness.out
+#SBATCH --error=log/base_steer_openness.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+# Setup directories
+OUT_DIR="exp_steering_layer_analysis/results/openness"
+mkdir -p "$OUT_DIR"
+
+CONFIG="config/mistral_7b.yaml"
+VECTOR_BANK="exp_steering_layer_analysis/vectors/mean_diff_vectors.npz"
+PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
+JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+
+LAYERS=(0 3 6 9 12 15 18 21 24 27 30)
+VALS=(0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0)
+
+for L in "${LAYERS[@]}"; do
+    for V in "${VALS[@]}"; do
+        echo "Running Generation: Trait=openness, Layer=$L, Val=$V"
+        JSONL_OUT="${OUT_DIR}/layer_${L}_Val${V}.jsonl"
+        CSV_OUT="${OUT_DIR}/scores_layer_${L}_Val${V}.csv"
+        
+        if [ ! -f "$JSONL_OUT" ]; then
+            "$PYTHON_BIN" scripts/40_run_layer_sweep.py \
+                --config "$CONFIG" \
+                --vector_bank "$VECTOR_BANK" \
+                --prompts "$PROMPT_IN" \
+                --out_dir "$OUT_DIR" \
+                --axis "openness" \
+                --target_layer "$L" \
+                --tau "$V" \
+                --alpha "$V" \
+                --mode both
+        else
+            echo "  [SKIP] Generation already done: $JSONL_OUT"
+        fi
+        
+        if [ ! -f "$CSV_OUT" ]; then
+            "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+                --input "$JSONL_OUT" \
+                --output "$CSV_OUT" \
+                --axis "openness" \
+                --model "$JUDGE_MODEL"
+        else
+            echo "  [SKIP] Evaluation already done: $CSV_OUT"
+        fi
+    done
+done

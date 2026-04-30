@@ -5,14 +5,14 @@ from pathlib import Path
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 
 PBS_TEMPLATE = """#!/bin/bash
-#SBATCH --job-name=eval_ic_{trait}
+#SBATCH --job-name=eval_vs_const_{trait}
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=04:00:00
-#SBATCH --output=log/eval_ic_{trait}.out
-#SBATCH --error=log/eval_ic_{trait}.err
+#SBATCH --output=log/eval_vs_const_{trait}.out
+#SBATCH --error=log/eval_vs_const_{trait}.err
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
