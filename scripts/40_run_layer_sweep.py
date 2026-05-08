@@ -241,7 +241,7 @@ def main():
         results.append(res)
 
     # Save
-    out_file = out_dir / f"layer_{args.target_layer}_Val{args.alpha:g}.jsonl"
+    out_file = out_dir / f"layer_{args.target_layer}_Val{args.alpha}.jsonl"
     with open(out_file, "w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
