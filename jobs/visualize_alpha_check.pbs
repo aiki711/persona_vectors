@@ -13,7 +13,7 @@ source persona_steering/bin/activate
 
 # 可視化スクリプトの実行
 # 代表的なプロンプトで、Layer 18 (エリート層) の挙動を確認
-python scripts/49_visualize_token_alpha.py \
+python scripts/02_base_steering/49_visualize_token_alpha.py \
     --config configs/mistral_7b.yaml \
     --vector_bank exp/exp_adaptive_steering/vectors/boundary_vectors.npz \
     --axis extraversion \
@@ -22,7 +22,7 @@ python scripts/49_visualize_token_alpha.py \
     --max_alpha 15.0 \
     --prompt "Tell me about your most exciting travel experience. What made it so special?"
 
-python scripts/49_visualize_token_alpha.py \
+python scripts/02_base_steering/49_visualize_token_alpha.py \
     --config configs/mistral_7b.yaml \
     --vector_bank exp/exp_adaptive_steering/vectors/boundary_vectors.npz \
     --axis extraversion \

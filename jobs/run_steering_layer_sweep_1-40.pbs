@@ -88,7 +88,7 @@ for TRAIT in "${TRAITS[@]}"; do
 
             # Step1: 生成
             if [ ! -f "$JSONL_OUT" ]; then
-                "$PYTHON_BIN" scripts/40_run_layer_sweep.py \
+                "$PYTHON_BIN" scripts/02_base_steering/40_run_layer_sweep.py \
                     --config "$CONFIG" \
                     --vector_bank "$VECTOR_BANK" \
                     --prompts "$PROMPT_IN" \
@@ -104,7 +104,7 @@ for TRAIT in "${TRAITS[@]}"; do
 
             # Step2: Llama-3 ジャッジによる評価
             if [ ! -f "$CSV_OUT" ]; then
-                "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+                "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py \
                     --input "$JSONL_OUT" \
                     --output "$CSV_OUT" \
                     --axis "$TRAIT" \
@@ -121,7 +121,7 @@ done
 
 # ==================== Plotting ====================
 echo "=== GENERATING FIGURES (INCLUDING PREVIOUS RESULTS) ==="
-"$PYTHON_BIN" scripts/41_plot_layer_sweep.py \
+"$PYTHON_BIN" scripts/02_base_steering/41_plot_layer_sweep.py \
     --input_dir "$BASE_OUT_DIR" \
     --out_dir "$FIGURES_DIR"
 

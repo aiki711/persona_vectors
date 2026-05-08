@@ -76,7 +76,7 @@ PROMPT_OUT="exp_adaptive_steering/results/test_prompts_10.jsonl"
 if [ ! -f "$PROMPT_OUT" ]; then
     echo ">> [0/5] Extracting Prompts..."
     mkdir -p exp_adaptive_steering/results
-    "$PYTHON_BIN" scripts/util_extract_prompts.py --trait all --count 10 --out "$PROMPT_OUT"
+    "$PYTHON_BIN" scripts/99_utils/util_extract_prompts.py --trait all --count 10 --out "$PROMPT_OUT"
 fi
 
 # ==================== 2. Main Pipeline ====================
@@ -87,23 +87,23 @@ for TRAIT in "${TRAITS[@]}"; do
 
     # 1. Train Boundary
     echo ">> [1/5] Training Boundary..."
-    "$PYTHON_BIN" scripts/30_train_boundary.py --config "$CONFIG" --out_dir exp_adaptive_steering/vectors --axis $TRAIT
+    "$PYTHON_BIN" scripts/01_vectors/30_train_boundary.py --config "$CONFIG" --out_dir exp_adaptive_steering/vectors --axis $TRAIT
     
     # 2. Visualize Boundary
     echo ">> [2/5] Visualizing Boundary..."
-    "$PYTHON_BIN" scripts/31_visualize_boundary.py --config "$CONFIG" --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --out_dir exp_adaptive_steering/figures --axis $TRAIT --layer $LAYER
+    "$PYTHON_BIN" scripts/01_vectors/31_visualize_boundary.py --config "$CONFIG" --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --out_dir exp_adaptive_steering/figures --axis $TRAIT --layer $LAYER
     
     # 3. Run Adaptive Steering Text Generation
     echo ">> [3/5] Generating Text (Base, Constant, Adaptive)..."
-    "$PYTHON_BIN" scripts/32_run_adaptive_steering.py --config "$CONFIG" --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --prompts "$PROMPT_OUT" --out_dir exp_adaptive_steering/results --axis $TRAIT --layer $LAYER --tau $TAU --max_alpha $MAX_ALPHA --constant_alpha $CONST_ALPHA
+    "$PYTHON_BIN" scripts/02_base_steering/32_run_adaptive_steering.py --config "$CONFIG" --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz --prompts "$PROMPT_OUT" --out_dir exp_adaptive_steering/results --axis $TRAIT --layer $LAYER --tau $TAU --max_alpha $MAX_ALPHA --constant_alpha $CONST_ALPHA
     
     # 4. Evaluate with LLM Judge
     echo ">> [4/5] Evaluating with LLM Judge..."
-    "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py --input exp_adaptive_steering/results/adaptive_${TRAIT}_high_L${LAYER}.jsonl --output exp_adaptive_steering/results/scores_adaptive_${TRAIT}_high_L${LAYER}.csv --axis $TRAIT --model $JUDGE_MODEL
+    "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py --input exp_adaptive_steering/results/adaptive_${TRAIT}_high_L${LAYER}.jsonl --output exp_adaptive_steering/results/scores_adaptive_${TRAIT}_high_L${LAYER}.csv --axis $TRAIT --model $JUDGE_MODEL
     
     # 5. Plot Trade-off
     echo ">> [5/5] Plotting Trade-off..."
-    "$PYTHON_BIN" scripts/34_plot_adaptive_tradeoff.py --input exp_adaptive_steering/results/scores_adaptive_${TRAIT}_high_L${LAYER}.csv --output exp_adaptive_steering/figures/tradeoff_${TRAIT}_high_L${LAYER}.png --axis $TRAIT
+    "$PYTHON_BIN" scripts/02_base_steering/34_plot_adaptive_tradeoff.py --input exp_adaptive_steering/results/scores_adaptive_${TRAIT}_high_L${LAYER}.csv --output exp_adaptive_steering/figures/tradeoff_${TRAIT}_high_L${LAYER}.png --axis $TRAIT
     
     echo "Finished processing ${TRAIT^^}."
     echo ""

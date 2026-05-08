@@ -15,7 +15,7 @@ export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 # Run pilot: Extraversion, Layer 24, Tau 25, IC_Scale 1.5
-"$PYTHON_BIN" scripts/50_run_ic_adaptive_steering.py \
+"$PYTHON_BIN" scripts/03_ic_adaptive/50_run_ic_adaptive_steering.py \
     --config config/mistral_7b.yaml \
     --vector_bank exp_steering_layer_sweep_1-40/vectors/mean_diff_vectors.npz \
     --prompts exp_steering_layer_sweep_1-40/test_prompts_10.jsonl \

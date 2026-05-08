@@ -20,7 +20,7 @@ TRAITS=("extraversion" "neuroticism" "agreeableness" "conscientiousness" "openne
 echo "=== STARTING CLEAN BOUNDARY PLOT GENERATION ==="
 for trait in "${TRAITS[@]}"; do
     echo "Processing $trait..."
-    "$CONDA_PYTHON" scripts/31_visualize_boundary.py \
+    "$CONDA_PYTHON" scripts/01_vectors/31_visualize_boundary.py \
         --config config/mistral_7b.yaml \
         --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz \
         --out_dir exp_adaptive_steering/figures/ \

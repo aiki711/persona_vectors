@@ -26,7 +26,7 @@ for trait in "${TRAITS[@]}"; do
     echo "=================================================="
     
     # Run bidirectional (High and Low)
-    bash scripts/37_run_multi_layer_bidirectional.sh "$trait" "$layers"
+    bash scripts/02_base_steering/37_run_multi_layer_bidirectional.sh "$trait" "$layers"
     
     # Move results to target folder
     mkdir -p exp_adaptive_steering/results/phase5_trait_specific_optimized

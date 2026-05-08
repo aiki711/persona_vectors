@@ -29,7 +29,7 @@ VALS=({vals_str})
 for L in "${{LAYERS[@]}}"; do
     for V in "${{VALS[@]}}"; do
         echo "Running: Trait={trait}, Layer=$L, Tau=$V"
-        "$PYTHON_BIN" scripts/50_run_ic_adaptive_steering.py \\
+        "$PYTHON_BIN" scripts/03_ic_adaptive/50_run_ic_adaptive_steering.py \\
             --config config/mistral_7b.yaml \\
             --vector_bank exp_steering_layer_sweep_1-40/vectors/mean_diff_vectors.npz \\
             --prompts exp_steering_layer_sweep_1-40/test_prompts_10.jsonl \\

@@ -80,7 +80,7 @@ for P in "${PARAMS[@]}"; do
         # Actually 32_run_adaptive_steering.py always runs base/const. 
         # To save time, we could have a version that only runs adaptive.
         # But for now, we'll run it as is.
-        "$PYTHON_BIN" scripts/32_run_adaptive_steering.py \
+        "$PYTHON_BIN" scripts/02_base_steering/32_run_adaptive_steering.py \
             --config "$CONFIG" \
             --boundary_bank exp_adaptive_steering/vectors/boundary_vectors.npz \
             --prompts "$PROMPT_IN" \
@@ -95,14 +95,14 @@ for P in "${PARAMS[@]}"; do
         mv "exp_adaptive_steering/results/adaptive_${TRAIT}_high_L${LAYER}.jsonl" "$OUT_JSONL"
 
         # 2. Evaluate with LLM Judge
-        "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+        "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py \
             --input "$OUT_JSONL" \
             --output "$OUT_CSV" \
             --axis "$TRAIT" \
             --model "$JUDGE_MODEL"
 
         # 3. Plot Trade-off
-        "$PYTHON_BIN" scripts/34_plot_adaptive_tradeoff.py \
+        "$PYTHON_BIN" scripts/02_base_steering/34_plot_adaptive_tradeoff.py \
             --input "$OUT_CSV" \
             --output "$OUT_PLOT" \
             --axis "$TRAIT"

@@ -42,7 +42,7 @@ for L in "${{LAYERS[@]}}"; do
 
         # Step 1: Generation
         if [ ! -f "$JSONL_OUT" ]; then
-            "$PYTHON_BIN" scripts/50_run_ic_adaptive_steering.py \\
+            "$PYTHON_BIN" scripts/03_ic_adaptive/50_run_ic_adaptive_steering.py \\
                 --config "$CONFIG" \\
                 --vector_bank "$VECTOR_BANK" \\
                 --prompts "$PROMPT_IN" \\
@@ -57,7 +57,7 @@ for L in "${{LAYERS[@]}}"; do
 
         # Step 2: Absolute score evaluation (Llama-3)
         if [ ! -f "$CSV_OUT" ]; then
-            "$PYTHON_BIN" scripts/60_eval_ic_absolute.py \\
+            "$PYTHON_BIN" scripts/03_ic_adaptive/60_eval_ic_absolute.py \\
                 --input "$JSONL_OUT" \\
                 --output "$CSV_OUT" \\
                 --axis "{trait}" \\

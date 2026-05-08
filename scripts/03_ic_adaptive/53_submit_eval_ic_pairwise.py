@@ -21,7 +21,7 @@ export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${{PYTHONPATH:-}}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 echo "Evaluating IC-Adaptive pairwise for {trait}..."
-"$PYTHON_BIN" scripts/53_eval_ic_pairwise_all.py --trait {trait}
+"$PYTHON_BIN" scripts/03_ic_adaptive/53_eval_ic_pairwise_all.py --trait {trait}
 """
 
 def main():

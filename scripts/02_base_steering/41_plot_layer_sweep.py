@@ -11,7 +11,7 @@
 #   3. スコア-PPLトレードオフプロット (Layer ごとに色付け)
 #
 # Usage:
-#   python scripts/41_plot_layer_sweep.py \
+#   python scripts/02_base_steering/41_plot_layer_sweep.py \
 #     --input_dir exp_steering_layer_sweep/results \
 #     --out_dir exp_steering_layer_sweep/figures \
 #     --axis extraversion

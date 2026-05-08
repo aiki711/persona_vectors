@@ -45,8 +45,8 @@ CONFIG="config/mistral_7b.yaml"
 OUT_DIR="exp_steering_layer_sweep/vectors"
 
 # ==================== Main ====================
-echo ">> Running scripts/30b_train_mean_diff.py..."
-"$PYTHON_BIN" scripts/30b_train_mean_diff.py --config "$CONFIG" --out_dir "$OUT_DIR"
+echo ">> Running scripts/01_vectors/30b_train_mean_diff.py..."
+"$PYTHON_BIN" scripts/01_vectors/30b_train_mean_diff.py --config "$CONFIG" --out_dir "$OUT_DIR"
 
 echo "=== VECTOR PREPARATION COMPLETED ==="
 echo "END TIME: $(date)"

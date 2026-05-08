@@ -57,7 +57,7 @@ for TRAIT in "${TRAITS[@]}"; do
 
         TAG="Granular_Val${VAL}"
         # Raw generation
-        "$PYTHON_BIN" scripts/32b_run_full_layer_steering.py \
+        "$PYTHON_BIN" scripts/02_base_steering/32b_run_full_layer_steering.py \
             --config "$CONFIG" \
             --vector_bank exp_adaptive_steering/vectors/mean_diff_vectors.npz \
             --prompts "$PROMPT_IN" \
@@ -85,7 +85,7 @@ for TRAIT in "${TRAITS[@]}"; do
         mv "$RAW_JSONL" "$FINAL_JSONL"
 
         # 2. Evaluate with Llama-3 Judge
-        "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+        "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py \
             --input "$FINAL_JSONL" \
             --output "$FINAL_CSV" \
             --axis "$TRAIT" \

@@ -2,7 +2,7 @@
 # 37_run_multi_layer_bidirectional.sh
 # 
 # Run adaptive steering on multiple layers simultaneously.
-# Usage: bash scripts/37_run_multi_layer_bidirectional.sh <trait> <layers>
+# Usage: bash scripts/02_base_steering/37_run_multi_layer_bidirectional.sh <trait> <layers>
 
 set -e
 
@@ -34,7 +34,7 @@ for DIRECTION in high low; do
     echo ">> Direction: $DIRECTION"
     
     # 1. Text Generation
-    python3 scripts/32_run_adaptive_steering.py \
+    python3 scripts/02_base_steering/32_run_adaptive_steering.py \
         --config $CONFIG \
         --boundary_bank $BOUNDARY \
         --prompts $PROMPTS \
@@ -51,7 +51,7 @@ for DIRECTION in high low; do
     JSONL_FILE="${OUT_DIR}/adaptive_${TRAIT}_${DIRECTION}_L${LAYER_STR}.jsonl"
     CSV_FILE="${OUT_DIR}/scores_adaptive_${TRAIT}_${DIRECTION}_L${LAYER_STR}.csv"
     
-    python3 scripts/33_eval_adaptive_steering.py \
+    python3 scripts/02_base_steering/33_eval_adaptive_steering.py \
         --input $JSONL_FILE \
         --output $CSV_FILE \
         --axis $TRAIT \

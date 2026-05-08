@@ -40,7 +40,7 @@ for M in "${{METHODS[@]}}"; do
         CSV_OUT="${{OUT_DIR}}/{trait}/scores_${{M}}_Val${{V}}.csv"
         
         if [ ! -f "$JSONL_OUT" ]; then
-            "$PYTHON_BIN" scripts/61_run_dyn_layer_compare.py \\
+            "$PYTHON_BIN" scripts/04_dyn_layer/61_run_dyn_layer_compare.py \\
                 --config "$CONFIG" \\
                 --vector_bank "$VECTOR_BANK" \\
                 --prompts "$PROMPT_IN" \\
@@ -53,7 +53,7 @@ for M in "${{METHODS[@]}}"; do
         fi
         
         if [ ! -f "$CSV_OUT" ]; then
-            "$PYTHON_BIN" scripts/62_eval_dyn_compare.py \\
+            "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \\
                 --input "$JSONL_OUT" \\
                 --output "$CSV_OUT" \\
                 --axis "{trait}" \\

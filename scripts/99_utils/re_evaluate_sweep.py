@@ -35,8 +35,8 @@ def main():
         traits = all_traits
 
     python_bin = "/home/s2550009/persona_vectors/persona_steering/bin/python"
-    eval_script = "scripts/33_eval_adaptive_steering.py"
-    run_script = "scripts/40_run_layer_sweep.py"
+    eval_script = "scripts/02_base_steering/33_eval_adaptive_steering.py"
+    run_script = "scripts/02_base_steering/40_run_layer_sweep.py"
     judge_model = "meta-llama/Meta-Llama-3-8B-Instruct"
     
     config = "config/mistral_7b.yaml"

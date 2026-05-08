@@ -26,7 +26,7 @@ fi
 echo "=== STARTING PAIRWISE EVALUATION [neuroticism] ==="
 echo "START TIME: $(date)"
 
-/home/s2550009/persona_vectors/persona_steering/bin/python scripts/re_evaluate_pairwise_sweep.py --trait neuroticism
+/home/s2550009/persona_vectors/persona_steering/bin/python scripts/99_utils/re_evaluate_pairwise_sweep.py --trait neuroticism
 
 echo "=== PAIRWISE EVALUATION [neuroticism] COMPLETED ==="
 echo "END TIME: $(date)"

@@ -32,11 +32,11 @@ TRAITS=("extraversion" "neuroticism" "openness" "conscientiousness" "agreeablene
 
 for TRAIT in "${TRAITS[@]}"; do
     echo "Processing Pairwise for TRAIT: $TRAIT ..."
-    "$PYTHON_BIN" scripts/re_evaluate_pairwise_sweep.py --trait "$TRAIT"
+    "$PYTHON_BIN" scripts/99_utils/re_evaluate_pairwise_sweep.py --trait "$TRAIT"
 done
 
 echo "=== PLOTTING RESULTS ==="
-"$PYTHON_BIN" scripts/45_plot_pairwise_analysis.py
+"$PYTHON_BIN" scripts/02_base_steering/45_plot_pairwise_analysis.py
 
 echo "=== ALL PAIRWISE TASKS COMPLETED ==="
 echo "END TIME: $(date)"

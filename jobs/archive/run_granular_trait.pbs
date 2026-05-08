@@ -45,7 +45,7 @@ MD_BANK="exp_adaptive_steering/vectors/mean_diff_vectors.npz"
 # Using a lock file or just checking existence (race condition minor here as it checks axis by axis)
 if [ ! -f "$MD_BANK" ]; then
     echo ">> Preparing Mean-Diff Vectors for ${TRAIT}..."
-    "$PYTHON_BIN" scripts/30b_train_mean_diff.py --config "$CONFIG" --out_dir exp_adaptive_steering/vectors --axis "$TRAIT"
+    "$PYTHON_BIN" scripts/01_vectors/30b_train_mean_diff.py --config "$CONFIG" --out_dir exp_adaptive_steering/vectors --axis "$TRAIT"
 fi
 
 # 2. Sweep Tau
@@ -73,7 +73,7 @@ for METHOD in "${METHODS[@]}"; do
         fi
 
         echo "--- METHOD: $METHOD | TAU: $TAU ---"
-        "$PYTHON_BIN" scripts/32_run_adaptive_steering.py \
+        "$PYTHON_BIN" scripts/02_base_steering/32_run_adaptive_steering.py \
             --config "$CONFIG" \
             --boundary_bank "$BANK" \
             --prompts "$PROMPT_IN" \
@@ -84,7 +84,7 @@ for METHOD in "${METHODS[@]}"; do
             --max_alpha "$MAX_ALPHA" \
             --tag "$TAG"
             
-        "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+        "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py \
             --input "$OUT_JSONL" \
             --output "$OUT_CSV" \
             --axis "$TRAIT" \

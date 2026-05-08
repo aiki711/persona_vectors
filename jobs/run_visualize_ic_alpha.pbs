@@ -15,4 +15,4 @@ source persona_steering/bin/activate
 export PYTHONPATH="${WORKDIR}/src:${WORKDIR}/scripts:$PYTHONPATH"
 
 echo "Running 58_visualize_ic_token_alpha.py..."
-python3 scripts/58_visualize_ic_token_alpha.py
+python3 scripts/03_ic_adaptive/58_visualize_ic_token_alpha.py

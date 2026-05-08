@@ -14,4 +14,4 @@ cd "$WORKDIR"
 export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
-"$PYTHON_BIN" scripts/51_eval_ic_adaptive_pilot.py
+"$PYTHON_BIN" scripts/03_ic_adaptive/51_eval_ic_adaptive_pilot.py

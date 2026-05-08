@@ -14,7 +14,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     python_bin = "/home/s2550009/persona_vectors/persona_steering/bin/python"
-    eval_script = "scripts/44_eval_pairwise_comparison.py"
+    eval_script = "scripts/02_base_steering/44_eval_pairwise_comparison.py"
 
     jsonl_files = sorted(list(results_dir.glob("layer_*.jsonl")))
     print(f"Found {len(jsonl_files)} files for trait: {args.trait}")

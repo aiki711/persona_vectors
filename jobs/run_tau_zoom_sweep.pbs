@@ -66,7 +66,7 @@ for TRAIT in "${TRAITS[@]}"; do
                 fi
 
                 echo "--- TRAIT: $TRAIT | METHOD: $METHOD | TAU: $TAU | ALPHA: $ALPHA ---"
-                "$PYTHON_BIN" scripts/32_run_adaptive_steering.py \
+                "$PYTHON_BIN" scripts/02_base_steering/32_run_adaptive_steering.py \
                     --config "$CONFIG" \
                     --boundary_bank "$BANK" \
                     --prompts "$PROMPT_IN" \
@@ -77,7 +77,7 @@ for TRAIT in "${TRAITS[@]}"; do
                     --max_alpha "$ALPHA" \
                     --tag "$TAG"
                     
-                "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+                "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py \
                     --input "$OUT_JSONL" \
                     --output "$OUT_CSV" \
                     --axis "$TRAIT" \

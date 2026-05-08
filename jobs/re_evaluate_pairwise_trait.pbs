@@ -28,7 +28,7 @@ PYTHON_BIN="/home/s2550009/persona_vectors/persona_steering/bin/python"
 echo "=== STARTING PAIRWISE EVALUATION FOR TRAIT: $TRAIT ==="
 echo "START TIME: $(date)"
 
-"$PYTHON_BIN" scripts/re_evaluate_pairwise_sweep.py --trait "$TRAIT"
+"$PYTHON_BIN" scripts/99_utils/re_evaluate_pairwise_sweep.py --trait "$TRAIT"
 
 echo "=== EVALUATION COMPLETED FOR TRAIT: $TRAIT ==="
 echo "END TIME: $(date)"

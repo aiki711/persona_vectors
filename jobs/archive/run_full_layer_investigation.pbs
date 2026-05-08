@@ -68,7 +68,7 @@ for VAL in "${PARAMS[@]}"; do
     OUT_CSV="exp_adaptive_steering/results/scores_investigation_${TRAIT}_${TAG}.csv"
 
     # 1. Run Generation (Base, Constant, Adaptive)
-    "$PYTHON_BIN" scripts/32b_run_full_layer_steering.py \
+    "$PYTHON_BIN" scripts/02_base_steering/32b_run_full_layer_steering.py \
         --config "$CONFIG" \
         --vector_bank exp_adaptive_steering/vectors/mean_diff_vectors.npz \
         --prompts "$PROMPT_IN" \
@@ -85,7 +85,7 @@ for VAL in "${PARAMS[@]}"; do
     mv exp_adaptive_steering/results/investigation_${TRAIT}_high_T*_${TAG}.jsonl "$OUT_JSONL"
 
     # 2. Evaluate with Llama-3 Judge
-    "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+    "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py \
         --input "$OUT_JSONL" \
         --output "$OUT_CSV" \
         --axis "$TRAIT" \

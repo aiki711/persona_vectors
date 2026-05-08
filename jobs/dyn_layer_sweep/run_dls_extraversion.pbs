@@ -30,7 +30,7 @@ for V in "${VALS[@]}"; do
     CSV_OUT="${OUT_DIR}/scores_dyn_Val${V}.csv"
 
     if [ ! -f "$JSONL_OUT" ]; then
-        "$PYTHON_BIN" scripts/59_run_dynamic_layer_steering.py \
+        "$PYTHON_BIN" scripts/04_dyn_layer/59_run_dynamic_layer_steering.py \
             --config "$CONFIG" \
             --vector_bank "$VECTOR_BANK" \
             --prompts "$PROMPT_IN" \
@@ -42,7 +42,7 @@ for V in "${VALS[@]}"; do
     fi
 
     if [ ! -f "$CSV_OUT" ]; then
-        "$PYTHON_BIN" scripts/59_eval_dynamic_layer.py \
+        "$PYTHON_BIN" scripts/04_dyn_layer/59_eval_dynamic_layer.py \
             --input "$JSONL_OUT" \
             --output "$CSV_OUT" \
             --axis "extraversion" \

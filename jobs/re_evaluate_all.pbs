@@ -26,7 +26,7 @@ fi
 echo "=== STARTING RE-EVALUATION BATCH JOB ==="
 echo "START TIME: $(date)"
 
-/home/s2550009/persona_vectors/persona_steering/bin/python scripts/re_evaluate_sweep.py
+/home/s2550009/persona_vectors/persona_steering/bin/python scripts/99_utils/re_evaluate_sweep.py
 
 echo "=== RE-EVALUATION COMPLETED ==="
 echo "END TIME: $(date)"

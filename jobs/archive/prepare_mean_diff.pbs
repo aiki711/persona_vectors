@@ -20,4 +20,4 @@ CONDA_PYTHON="/home/s2550009/anaconda3/envs/persona_vectors/bin/python"
 export PYTHON_BIN="$CONDA_PYTHON"
 
 echo ">> Preparing Mean-Diff Vectors for all traits..."
-"$PYTHON_BIN" scripts/30b_train_mean_diff.py --config config/mistral_7b.yaml --out_dir exp_adaptive_steering/vectors
+"$PYTHON_BIN" scripts/01_vectors/30b_train_mean_diff.py --config config/mistral_7b.yaml --out_dir exp_adaptive_steering/vectors

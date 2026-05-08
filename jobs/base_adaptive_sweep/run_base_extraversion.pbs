@@ -33,7 +33,7 @@ for L in "${LAYERS[@]}"; do
         CSV_OUT="${OUT_DIR}/scores_layer_${L}_Val${V}.csv"
         
         if [ ! -f "$JSONL_OUT" ]; then
-            "$PYTHON_BIN" scripts/40_run_layer_sweep.py \
+            "$PYTHON_BIN" scripts/02_base_steering/40_run_layer_sweep.py \
                 --config "$CONFIG" \
                 --vector_bank "$VECTOR_BANK" \
                 --prompts "$PROMPT_IN" \
@@ -48,7 +48,7 @@ for L in "${LAYERS[@]}"; do
         fi
         
         if [ ! -f "$CSV_OUT" ]; then
-            "$PYTHON_BIN" scripts/33_eval_adaptive_steering.py \
+            "$PYTHON_BIN" scripts/02_base_steering/33_eval_adaptive_steering.py \
                 --input "$JSONL_OUT" \
                 --output "$CSV_OUT" \
                 --axis "extraversion" \
