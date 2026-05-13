@@ -7,6 +7,8 @@
 # 1. Base Layer Sweeps (Constant & Adaptive)
 # 2. Bhandari et al. DLS (logit_diff)
 # 3. Proposed DLS (anti_alignment)
+# 4. Constrained Bhandari et al. DLS
+# 5. Constrained Proposed DLS
 
 import argparse
 import numpy as np
@@ -16,16 +18,19 @@ from pathlib import Path
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 LAYERS = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-VALS   = [1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
+VALS   = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
 def load_base_summary(input_dir: Path, axis: str) -> pd.DataFrame:
     records = []
     trait_dir = input_dir / axis
     for layer in LAYERS:
         for val in VALS:
-            # Note: 40_run_layer_sweep.py now saves with '.0' for integers
-            csv_path = trait_dir / f"scores_layer_{layer}_Val{val}.csv"
-            if not csv_path.exists(): continue
+            # Check float first, fallback to original
+            csv_path = trait_dir / f"scores_layer_{layer}_Val{float(val)}.csv"
+            if not csv_path.exists():
+                csv_path = trait_dir / f"scores_layer_{layer}_Val{val}.csv"
+                if not csv_path.exists():
+                    continue
             df = pd.read_csv(csv_path)
             records.append({
                 "layer": layer, "val": val,
@@ -39,8 +44,11 @@ def load_dyn_summary(input_dir: Path, axis: str, method: str) -> pd.DataFrame:
     records = []
     trait_dir = input_dir / axis
     for val in VALS:
-        csv_path = trait_dir / f"scores_{method}_Val{val}.csv"
-        if not csv_path.exists(): continue
+        csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
+        if not csv_path.exists():
+            csv_path = trait_dir / f"scores_{method}_Val{val}.csv"
+            if not csv_path.exists():
+                continue
         df = pd.read_csv(csv_path)
         records.append({
             "val": val,
@@ -49,7 +57,9 @@ def load_dyn_summary(input_dir: Path, axis: str, method: str) -> pd.DataFrame:
         })
     return pd.DataFrame(records)
 
-def make_tradeoff_plot(base_df: pd.DataFrame, logit_df: pd.DataFrame, anti_df: pd.DataFrame, axis: str, out_path: Path):
+def make_tradeoff_plot(base_df: pd.DataFrame, logit_df: pd.DataFrame, anti_df: pd.DataFrame, 
+                       logit_cns_df: pd.DataFrame, anti_cns_df: pd.DataFrame,
+                       axis: str, out_path: Path):
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
     
     if base_df.empty:
@@ -77,16 +87,26 @@ def make_tradeoff_plot(base_df: pd.DataFrame, logit_df: pd.DataFrame, anti_df: p
         # Plot Bhandari DLS (Logit Diff)
         if not logit_df.empty:
             logit_df = logit_df.sort_values("val")
-            ax.plot(logit_df["score"], logit_df["ppl"], "-o", color="blue", linewidth=2.5, markersize=8, zorder=6, label="Bhandari (Logit Diff)")
+            ax.plot(logit_df["score"], logit_df["ppl"], "-o", color="blue", linewidth=2.5, markersize=8, zorder=6, label="Bhandari (Unconstrained)")
             for _, row in logit_df.iterrows():
                 ax.annotate(f"{row['val']:g}", (row["score"], row["ppl"]), textcoords="offset points", xytext=(4, 4), fontsize=8, color="blue", weight='bold')
 
         # Plot Proposed DLS (Anti Alignment)
         if not anti_df.empty:
             anti_df = anti_df.sort_values("val")
-            ax.plot(anti_df["score"], anti_df["ppl"], "-s", color="red", linewidth=2.5, markersize=8, zorder=7, label="Proposed (Anti-Align)")
+            ax.plot(anti_df["score"], anti_df["ppl"], "-s", color="red", linewidth=2.5, markersize=8, zorder=7, label="Proposed (Unconstrained)")
             for _, row in anti_df.iterrows():
                 ax.annotate(f"{row['val']:g}", (row["score"], row["ppl"]), textcoords="offset points", xytext=(4, -12), fontsize=8, color="red", weight='bold')
+
+        # Plot Constrained Bhandari DLS
+        if not logit_cns_df.empty:
+            logit_cns_df = logit_cns_df.sort_values("val")
+            ax.plot(logit_cns_df["score"], logit_cns_df["ppl"], "--o", color="dodgerblue", linewidth=3.0, markersize=9, zorder=8, label="Bhandari (Constrained)")
+            
+        # Plot Constrained Proposed DLS
+        if not anti_cns_df.empty:
+            anti_cns_df = anti_cns_df.sort_values("val")
+            ax.plot(anti_cns_df["score"], anti_cns_df["ppl"], "--s", color="salmon", linewidth=3.0, markersize=9, zorder=9, label="Proposed (Constrained)")
 
         ax.set_title(f"Pareto Front Comparison — {axis.capitalize()}\n(Background: {mode})", fontsize=13, fontweight="bold")
         ax.set_xlabel(f"Personality Score ({axis.capitalize()})", fontsize=11)
@@ -104,7 +124,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base_dir", default="exp_steering_layer_analysis/results")
     ap.add_argument("--dyn_dir", default="exp_steering_dyn_layer_compare/results")
-    ap.add_argument("--out_dir", default="exp_steering_dyn_layer_compare/figures")
+    ap.add_argument("--cns_dir", default="exp_steering_dyn_layer_constrained/results")
+    ap.add_argument("--out_dir", default="exp_steering_dyn_layer_constrained/figures")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -115,9 +136,11 @@ def main():
         base_df = load_base_summary(Path(args.base_dir), axis)
         logit_df = load_dyn_summary(Path(args.dyn_dir), axis, "logit_diff")
         anti_df = load_dyn_summary(Path(args.dyn_dir), axis, "anti_alignment")
+        logit_cns_df = load_dyn_summary(Path(args.cns_dir), axis, "logit_diff")
+        anti_cns_df = load_dyn_summary(Path(args.cns_dir), axis, "anti_alignment")
         
         out_path = out_dir / f"tradeoff_comparison_{axis}.png"
-        make_tradeoff_plot(base_df, logit_df, anti_df, axis, out_path)
+        make_tradeoff_plot(base_df, logit_df, anti_df, logit_cns_df, anti_cns_df, axis, out_path)
 
 if __name__ == "__main__":
     main()

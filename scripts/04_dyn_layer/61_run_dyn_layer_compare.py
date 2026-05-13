@@ -159,7 +159,13 @@ def main():
     ap.add_argument("--alpha", type=float, required=True)
     ap.add_argument("--direction", type=str, choices=["high", "low"], default="high")
     ap.add_argument("--method", type=str, choices=["logit_diff", "anti_alignment"], required=True)
+    ap.add_argument("--layers", type=str, default="", help="Comma-separated list of layers to restrict DLS search space")
     args = ap.parse_args()
+
+    global LAYERS
+    if args.layers:
+        LAYERS = [int(x.strip()) for x in args.layers.split(",")]
+        print(f"  Restricting search space to layers: {LAYERS}")
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
 

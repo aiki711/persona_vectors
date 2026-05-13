@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=dyn_cmp_openness
+#SBATCH --job-name=dyn_cns_openness
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
-#SBATCH --output=log/dyn_cmp_openness.out
-#SBATCH --error=log/dyn_cmp_openness.err
+#SBATCH --output=log/dyn_cns_openness.out
+#SBATCH --error=log/dyn_cns_openness.err
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
@@ -14,7 +14,7 @@ cd "$WORKDIR"
 export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
-OUT_DIR="exp_steering_dyn_layer_compare/results"
+OUT_DIR="exp_steering_dyn_layer_constrained/results"
 mkdir -p "$OUT_DIR"
 
 CONFIG="config/mistral_7b.yaml"
@@ -39,7 +39,8 @@ for M in "${METHODS[@]}"; do
                 --out_dir "$OUT_DIR" \
                 --axis "openness" \
                 --alpha "$V" \
-                --method "$M"
+                --method "$M" \
+                --layers "12,15,18,21,24"
         else
             echo "  [SKIP] Generation already done: $JSONL_OUT"
         fi

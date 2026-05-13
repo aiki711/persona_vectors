@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=dyn_cmp_openness
+#SBATCH --job-name=dyn_cns_conscientiousness
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
-#SBATCH --output=log/dyn_cmp_openness.out
-#SBATCH --error=log/dyn_cmp_openness.err
+#SBATCH --output=log/dyn_cns_conscientiousness.out
+#SBATCH --error=log/dyn_cns_conscientiousness.err
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
@@ -14,7 +14,7 @@ cd "$WORKDIR"
 export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
-OUT_DIR="exp_steering_dyn_layer_compare/results"
+OUT_DIR="exp_steering_dyn_layer_constrained/results"
 mkdir -p "$OUT_DIR"
 
 CONFIG="config/mistral_7b.yaml"
@@ -27,9 +27,9 @@ METHODS=(logit_diff anti_alignment)
 
 for M in "${METHODS[@]}"; do
     for V in "${VALS[@]}"; do
-        echo "Running DLS Generation: Method=$M, Trait=openness, Alpha=$V"
-        JSONL_OUT="${OUT_DIR}/openness/${M}_Val${V}.jsonl"
-        CSV_OUT="${OUT_DIR}/openness/scores_${M}_Val${V}.csv"
+        echo "Running DLS Generation: Method=$M, Trait=conscientiousness, Alpha=$V"
+        JSONL_OUT="${OUT_DIR}/conscientiousness/${M}_Val${V}.jsonl"
+        CSV_OUT="${OUT_DIR}/conscientiousness/scores_${M}_Val${V}.csv"
         
         if [ ! -f "$JSONL_OUT" ]; then
             "$PYTHON_BIN" scripts/04_dyn_layer/61_run_dyn_layer_compare.py \
@@ -37,9 +37,10 @@ for M in "${METHODS[@]}"; do
                 --vector_bank "$VECTOR_BANK" \
                 --prompts "$PROMPT_IN" \
                 --out_dir "$OUT_DIR" \
-                --axis "openness" \
+                --axis "conscientiousness" \
                 --alpha "$V" \
-                --method "$M"
+                --method "$M" \
+                --layers "12,15,18,21,24"
         else
             echo "  [SKIP] Generation already done: $JSONL_OUT"
         fi
@@ -48,7 +49,7 @@ for M in "${METHODS[@]}"; do
             "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \
                 --input "$JSONL_OUT" \
                 --output "$CSV_OUT" \
-                --axis "openness" \
+                --axis "conscientiousness" \
                 --model "$JUDGE_MODEL"
         else
             echo "  [SKIP] Evaluation already done: $CSV_OUT"
