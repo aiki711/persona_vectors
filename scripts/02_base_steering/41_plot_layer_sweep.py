@@ -148,7 +148,7 @@ def make_tradeoff_plot(df: pd.DataFrame, axis: str, out_path: Path,
     print(f"  Saved: {out_path}")
 
 
-def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path):
+def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path, cns_dir: Path | None = None):
     print(f"\n[{axis}] found {len(df)} conditions")
     if df.empty:
         print("  No data, skipping.")
@@ -159,7 +159,11 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path):
 
     # Load DLS results
     logit_df = load_dyn_summary(dyn_dir, axis, "logit_diff")
-    anti_df = load_dyn_summary(dyn_dir, axis, "anti_alignment")
+    anti_df  = load_dyn_summary(dyn_dir, axis, "anti_alignment")
+
+    # Load Constrained DLS results (optional)
+    logit_cns_df = load_dyn_summary(cns_dir, axis, "logit_diff")    if cns_dir else pd.DataFrame()
+    anti_cns_df  = load_dyn_summary(cns_dir, axis, "anti_alignment") if cns_dir else pd.DataFrame()
 
     # Pivot tables (index=val, columns=layer)
     def pivot(col):
@@ -171,22 +175,22 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path):
     p_a_ppl   = pivot("adapt_ppl")
 
     # Append DLS columns to score/ppl pivots
-    def append_dls_cols(pivot_df, score_col, logit_df, anti_df):
+    def append_dls_cols(pivot_df, score_col, logit_df, anti_df, logit_cns_df, anti_cns_df):
         result = pivot_df.copy()
         if not logit_df.empty and score_col in logit_df.columns:
-            dls_s = logit_df.set_index("val")[score_col]
-            dls_s.name = "Bhandari"
-            result["Bhandari"] = dls_s
+            result["Bhandari"] = logit_df.set_index("val")[score_col]
         if not anti_df.empty and score_col in anti_df.columns:
-            dls_s = anti_df.set_index("val")[score_col]
-            dls_s.name = "Proposed"
-            result["Proposed"] = dls_s
+            result["Proposed"] = anti_df.set_index("val")[score_col]
+        if not logit_cns_df.empty and score_col in logit_cns_df.columns:
+            result["Bhandari_Cns"] = logit_cns_df.set_index("val")[score_col]
+        if not anti_cns_df.empty and score_col in anti_cns_df.columns:
+            result["Proposed_Cns"] = anti_cns_df.set_index("val")[score_col]
         return result
 
-    p_c_score_dls = append_dls_cols(p_c_score, "dyn_score", logit_df, anti_df)
-    p_a_score_dls = append_dls_cols(p_a_score, "dyn_score", logit_df, anti_df)
-    p_c_ppl_dls   = append_dls_cols(p_c_ppl,   "dyn_ppl",   logit_df, anti_df)
-    p_a_ppl_dls   = append_dls_cols(p_a_ppl,   "dyn_ppl",   logit_df, anti_df)
+    p_c_score_dls = append_dls_cols(p_c_score, "dyn_score", logit_df, anti_df, logit_cns_df, anti_cns_df)
+    p_a_score_dls = append_dls_cols(p_a_score, "dyn_score", logit_df, anti_df, logit_cns_df, anti_cns_df)
+    p_c_ppl_dls   = append_dls_cols(p_c_ppl,   "dyn_ppl",   logit_df, anti_df, logit_cns_df, anti_cns_df)
+    p_a_ppl_dls   = append_dls_cols(p_a_ppl,   "dyn_ppl",   logit_df, anti_df, logit_cns_df, anti_cns_df)
 
     # ---- 統合ヒートマップ (2x2) ----
     fig, axes = plt.subplots(2, 2, figsize=(22, 10))
@@ -204,18 +208,17 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path):
                     ax=ax_obj, annot_kws={"size": 9})
 
         # DLS 列を視覚的に強調（列境界線を太く）
-        if "Bhandari" in p_data.columns:
-            idx = list(p_data.columns).index("Bhandari")
-            ax_obj.axvline(x=idx, color="navy", linewidth=3)
-        if "Proposed" in p_data.columns:
-            idx = list(p_data.columns).index("Proposed")
-            # Separate the proposed from Bhandari
-            ax_obj.axvline(x=idx, color="darkred", linewidth=3)
+        cols = list(p_data.columns)
+        for col_name, color in [("Bhandari", "navy"), ("Proposed", "darkred"),
+                                 ("Bhandari_Cns", "dodgerblue"), ("Proposed_Cns", "salmon")]:
+            if col_name in cols:
+                ax_obj.axvline(x=cols.index(col_name), color=color, linewidth=3)
 
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
-        ax_obj.set_title(f"{title} [{axis.capitalize()}] (Border: PPL<=25, Navy: Bhandari, Red: Proposed)",
-                         fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("Layer  (rightmost = DLS)")
+        ax_obj.set_title(
+            f"{title} [{axis.capitalize()}] (Border: PPL<=25, Navy: Bhandari, Red: Proposed, Blue/Pink: Constrained)",
+            fontsize=11, fontweight="bold")
+        ax_obj.set_xlabel("Layer  (rightmost = DLS / Constrained)")
         ax_obj.set_ylabel("Val")
 
     plt.suptitle(f"Layer-Sweep Results: {axis.capitalize()}", fontsize=16, fontweight="bold", y=1.02)
@@ -234,32 +237,34 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path):
     make_tradeoff_plot(df, axis, tradeoff_path, logit_df, anti_df)
 
 
-def make_summary_heatmaps(all_df: pd.DataFrame, logit_all_df: pd.DataFrame, anti_all_df: pd.DataFrame, out_dir: Path):
-    """全特性を平均した Layer x Val ヒートマップ (DLS列付き)"""
+def make_summary_heatmaps(all_df: pd.DataFrame,
+                          logit_all_df: pd.DataFrame, anti_all_df: pd.DataFrame,
+                          out_dir: Path,
+                          logit_cns_all_df: pd.DataFrame | None = None,
+                          anti_cns_all_df:  pd.DataFrame | None = None):
+    """全特性を平均した Layer x Val ヒートマップ (DLS + Constrained DLS 列付き)"""
     if all_df.empty:
         return
     avg = all_df.groupby(["layer", "val"])[
         ["const_score", "adapt_score", "const_ppl", "adapt_ppl"]
     ].mean().reset_index()
 
-    # DLS も全特性で平均
-    logit_avg = pd.DataFrame()
-    if not logit_all_df.empty:
-        logit_avg = logit_all_df.groupby("val")[["dyn_score", "dyn_ppl"]].mean().reset_index()
-    
-    anti_avg = pd.DataFrame()
-    if not anti_all_df.empty:
-        anti_avg = anti_all_df.groupby("val")[["dyn_score", "dyn_ppl"]].mean().reset_index()
+    def avg_dyn(df):
+        if df is None or df.empty:
+            return pd.DataFrame()
+        return df.groupby("val")[["dyn_score", "dyn_ppl"]].mean().reset_index()
+
+    logit_avg     = avg_dyn(logit_all_df)
+    anti_avg      = avg_dyn(anti_all_df)
+    logit_cns_avg = avg_dyn(logit_cns_all_df)
+    anti_cns_avg  = avg_dyn(anti_cns_all_df)
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(2, 2, figsize=(20, 10))
-    # レイアウト統一:
-    # [0,0]: Const Score  [0,1]: Adapt Score
-    # [1,0]: Const PPL    [1,1]: Adapt PPL
+    fig, axes = plt.subplots(2, 2, figsize=(22, 10))
     configs = [
-        ("const_score", "Constant — Score (All traits avg)", "YlGn", 1, 5, axes[0, 0]),
-        ("adapt_score", "Adaptive — Score (All traits avg)",  "YlGn", 1, 5, axes[0, 1]),
+        ("const_score", "Constant — Score (All traits avg)", "YlGn",     1,   5, axes[0, 0]),
+        ("adapt_score", "Adaptive — Score (All traits avg)",  "YlGn",     1,   5, axes[0, 1]),
         ("const_ppl",   "Constant — PPL (All traits avg)",    "RdYlGn_r", 1, 100, axes[1, 0]),
         ("adapt_ppl",   "Adaptive — PPL (All traits avg)",    "RdYlGn_r", 1, 100, axes[1, 1]),
     ]
@@ -267,45 +272,42 @@ def make_summary_heatmaps(all_df: pd.DataFrame, logit_all_df: pd.DataFrame, anti
     for col, title, cmap, vmin, vmax, ax_obj in configs:
         p = avg.pivot(index="val", columns="layer", values=col)
         fmt = ".2f" if "score" in col else ".1f"
-        
-        # PPLデータを持ってきて強調表示に使う
         ppl_col = col.replace("score", "ppl")
-        p_ppl = avg.pivot(index="val", columns="layer", values=ppl_col) if "score" in col else p
+        p_ppl = avg.pivot(index="val", columns="layer", values=ppl_col) if "score" in col else p.copy()
 
-        # DLS を appending する
         dls_score_col = "dyn_score" if "score" in col else "dyn_ppl"
-        
-        if not logit_avg.empty and dls_score_col in logit_avg.columns:
-            p["Bhandari"] = logit_avg.set_index("val")[dls_score_col]
+
+        def add_col(p, p_ppl, avg_df, col_name):
+            if avg_df.empty or dls_score_col not in avg_df.columns:
+                return
+            idx = avg_df.set_index("val")
+            p[col_name] = idx[dls_score_col]
             if "score" in col:
-                p_ppl["Bhandari"] = logit_avg.set_index("val")["dyn_ppl"]
+                p_ppl[col_name] = idx["dyn_ppl"]
             else:
-                p_ppl["Bhandari"] = logit_avg.set_index("val")[dls_score_col]
-                
-        if not anti_avg.empty and dls_score_col in anti_avg.columns:
-            p["Proposed"] = anti_avg.set_index("val")[dls_score_col]
-            if "score" in col:
-                p_ppl["Proposed"] = anti_avg.set_index("val")["dyn_ppl"]
-            else:
-                p_ppl["Proposed"] = anti_avg.set_index("val")[dls_score_col]
+                p_ppl[col_name] = idx[dls_score_col]
+
+        add_col(p, p_ppl, logit_avg,     "Bhandari")
+        add_col(p, p_ppl, anti_avg,      "Proposed")
+        add_col(p, p_ppl, logit_cns_avg, "Bhandari_Cns")
+        add_col(p, p_ppl, anti_cns_avg,  "Proposed_Cns")
 
         sns.heatmap(p, annot=True, fmt=fmt, cmap=cmap,
                     vmin=vmin, vmax=vmax,
                     linewidths=0.4, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        
-        if "Bhandari" in p.columns:
-            idx = list(p.columns).index("Bhandari")
-            ax_obj.axvline(x=idx, color="navy", linewidth=3)
-        if "Proposed" in p.columns:
-            idx = list(p.columns).index("Proposed")
-            ax_obj.axvline(x=idx, color="darkred", linewidth=3)
 
-        # PPL <= 25 のセルを囲む
+        cols = list(p.columns)
+        for col_name, color in [("Bhandari", "navy"), ("Proposed", "darkred"),
+                                 ("Bhandari_Cns", "dodgerblue"), ("Proposed_Cns", "salmon")]:
+            if col_name in cols:
+                ax_obj.axvline(x=cols.index(col_name), color=color, linewidth=3)
+
         highlight_safe_cells(ax_obj, p_ppl, threshold=25.0)
-        
-        ax_obj.set_title(title + " (Border: PPL<=25, Navy: Bhandari, Red: Proposed)", fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("Layer (rightmost = DLS)")
+        ax_obj.set_title(
+            title + " (Border: PPL<=25, Navy: Bhandari, Red: Proposed, Blue/Pink: Constrained)",
+            fontsize=11, fontweight="bold")
+        ax_obj.set_xlabel("Layer (rightmost = DLS / Constrained)")
         ax_obj.set_ylabel("Val")
 
     plt.suptitle("Layer-Sweep Summary (All Traits Average)", fontsize=15, fontweight="bold", y=1.01)
@@ -323,40 +325,54 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input_dir", default="exp_steering_layer_analysis/results")
     ap.add_argument("--dyn_dir",   default="exp_steering_dyn_layer_compare/results")
+    ap.add_argument("--cns_dir",   default=None, help="制約付きDLS結果ディレクトリ (省略可)")
     ap.add_argument("--out_dir",   default="exp_steering_layer_analysis/figures")
     ap.add_argument("--axis",      default=None, help="特定特性のみ。省略で全特性。")
     args = ap.parse_args()
 
     input_dir = Path(args.input_dir)
     dyn_dir   = Path(args.dyn_dir)
+    cns_dir   = Path(args.cns_dir) if args.cns_dir else None
     out_dir   = Path(args.out_dir)
 
     target_axes = [args.axis] if args.axis else TRAITS
     all_dfs = []
     all_logit_dfs = []
     all_anti_dfs = []
+    all_logit_cns_dfs = []
+    all_anti_cns_dfs  = []
 
     for axis in target_axes:
         df = load_summary(input_dir, axis)
         if not df.empty:
             all_dfs.append(df)
-            
+
         logit_df = load_dyn_summary(dyn_dir, axis, "logit_diff")
         if not logit_df.empty:
             all_logit_dfs.append(logit_df)
-            
+
         anti_df = load_dyn_summary(dyn_dir, axis, "anti_alignment")
         if not anti_df.empty:
             all_anti_dfs.append(anti_df)
 
-        plot_axis(df, axis, out_dir / axis, dyn_dir)
+        if cns_dir:
+            logit_cns_df = load_dyn_summary(cns_dir, axis, "logit_diff")
+            if not logit_cns_df.empty:
+                all_logit_cns_dfs.append(logit_cns_df)
+            anti_cns_df = load_dyn_summary(cns_dir, axis, "anti_alignment")
+            if not anti_cns_df.empty:
+                all_anti_cns_dfs.append(anti_cns_df)
+
+        plot_axis(df, axis, out_dir / axis, dyn_dir, cns_dir)
 
     if all_dfs:
-        all_df = pd.concat(all_dfs, ignore_index=True)
-        logit_all_df = pd.concat(all_logit_dfs, ignore_index=True) if all_logit_dfs else pd.DataFrame()
-        anti_all_df = pd.concat(all_anti_dfs, ignore_index=True) if all_anti_dfs else pd.DataFrame()
-        
-        make_summary_heatmaps(all_df, logit_all_df, anti_all_df, out_dir)
+        all_df        = pd.concat(all_dfs,           ignore_index=True)
+        logit_all_df  = pd.concat(all_logit_dfs,     ignore_index=True) if all_logit_dfs     else pd.DataFrame()
+        anti_all_df   = pd.concat(all_anti_dfs,      ignore_index=True) if all_anti_dfs      else pd.DataFrame()
+        logit_cns_all = pd.concat(all_logit_cns_dfs, ignore_index=True) if all_logit_cns_dfs else pd.DataFrame()
+        anti_cns_all  = pd.concat(all_anti_cns_dfs,  ignore_index=True) if all_anti_cns_dfs  else pd.DataFrame()
+
+        make_summary_heatmaps(all_df, logit_all_df, anti_all_df, out_dir, logit_cns_all, anti_cns_all)
 
     print("\nDone.")
 

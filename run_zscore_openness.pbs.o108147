@@ -1,0 +1,336 @@
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=0.5
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 0.5
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val0.5.jsonl
+
+--- Averages ---
+  Base : PPL=7.14, Score=3.10
+  DLS  : PPL=15.81,  Score=2.80
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=1.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 1.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val1.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.77, Score=3.50
+  DLS  : PPL=81.87,  Score=4.30
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=2.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 2.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val2.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.47, Score=3.20
+  DLS  : PPL=478.33,  Score=4.50
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=4.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 4.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val4.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.21, Score=2.90
+  DLS  : PPL=241.73,  Score=4.10
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=5.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 5.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val5.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.94, Score=3.10
+  DLS  : PPL=281.40,  Score=4.20
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=6.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 6.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val6.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.54, Score=2.40
+  DLS  : PPL=251.00,  Score=3.90
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=8.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 8.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val8.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.28, Score=3.30
+  DLS  : PPL=325.17,  Score=3.20
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=10.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 10.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val10.0.jsonl
+
+--- Averages ---
+  Base : PPL=5.95, Score=3.20
+  DLS  : PPL=170.28,  Score=2.60
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=15.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 15.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val15.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.57, Score=3.50
+  DLS  : PPL=271.70,  Score=4.30
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=20.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 20.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val20.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.41, Score=3.30
+  DLS  : PPL=592.92,  Score=4.20
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=25.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 25.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val25.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.76, Score=3.40
+  DLS  : PPL=660.99,  Score=4.30
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=30.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 30.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val30.0.jsonl
+
+--- Averages ---
+  Base : PPL=5.74, Score=3.20
+  DLS  : PPL=616.09,  Score=4.60
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=35.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 35.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val35.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.64, Score=3.00
+  DLS  : PPL=984.70,  Score=4.00
+Running DLS Z-score: Method=logit_diff, Trait=openness, Alpha=40.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : openness
+  Alpha : 40.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/logit_diff_Val40.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.18, Score=3.20
+  DLS  : PPL=1481.02,  Score=4.00
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=0.5
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 0.5
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val0.5.jsonl
+
+--- Averages ---
+  Base : PPL=6.77, Score=2.90
+  DLS  : PPL=7.59,  Score=3.70
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=1.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 1.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val1.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.68, Score=3.40
+  DLS  : PPL=7.55,  Score=4.10
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=2.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 2.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val2.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.80, Score=3.20
+  DLS  : PPL=12.41,  Score=4.80
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=4.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 4.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val4.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.50, Score=3.60
+  DLS  : PPL=200.55,  Score=4.90
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=5.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 5.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val5.0.jsonl
+
+--- Averages ---
+  Base : PPL=5.93, Score=3.30
+  DLS  : PPL=305.17,  Score=4.40
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=6.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 6.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val6.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.05, Score=3.50
+  DLS  : PPL=198.23,  Score=4.60
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=8.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 8.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val8.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.55, Score=3.30
+  DLS  : PPL=225.50,  Score=4.40
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=10.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 10.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val10.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.43, Score=3.10
+  DLS  : PPL=213.82,  Score=3.90
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=15.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 15.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val15.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.76, Score=3.40
+  DLS  : PPL=336.84,  Score=4.50
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=20.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 20.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val20.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.86, Score=3.90
+  DLS  : PPL=394.30,  Score=4.90
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=25.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 25.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val25.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.88, Score=4.00
+  DLS  : PPL=486.79,  Score=4.40
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=30.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 30.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val30.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.10, Score=3.30
+  DLS  : PPL=554.95,  Score=4.90
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=35.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 35.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val35.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.41, Score=3.50
+  DLS  : PPL=641.32,  Score=4.80
+Running DLS Z-score: Method=anti_alignment, Trait=openness, Alpha=40.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : openness
+  Alpha : 40.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/openness/anti_alignment_Val40.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.36, Score=3.10
+  DLS  : PPL=739.07,  Score=4.50

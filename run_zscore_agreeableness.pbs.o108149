@@ -1,0 +1,336 @@
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=0.5
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 0.5
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val0.5.jsonl
+
+--- Averages ---
+  Base : PPL=6.66, Score=4.30
+  DLS  : PPL=7.76,  Score=2.90
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=1.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 1.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val1.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.27, Score=4.30
+  DLS  : PPL=20.53,  Score=1.40
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=2.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 2.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val2.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.69, Score=4.20
+  DLS  : PPL=77.02,  Score=4.30
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=4.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 4.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val4.0.jsonl
+
+--- Averages ---
+  Base : PPL=5.96, Score=4.40
+  DLS  : PPL=89.34,  Score=2.40
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=5.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 5.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val5.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.07, Score=4.40
+  DLS  : PPL=105.12,  Score=4.00
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=6.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 6.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val6.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.97, Score=4.60
+  DLS  : PPL=123.04,  Score=4.00
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=8.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 8.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val8.0.jsonl
+
+--- Averages ---
+  Base : PPL=5.77, Score=4.20
+  DLS  : PPL=96.68,  Score=3.00
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=10.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 10.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val10.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.08, Score=4.50
+  DLS  : PPL=115.61,  Score=1.70
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=15.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 15.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val15.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.51, Score=4.60
+  DLS  : PPL=3650.28,  Score=3.00
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=20.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 20.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val20.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.95, Score=4.40
+  DLS  : PPL=2058.42,  Score=4.90
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=25.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 25.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val25.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.35, Score=4.20
+  DLS  : PPL=3874.55,  Score=3.80
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=30.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 30.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val30.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.23, Score=4.00
+  DLS  : PPL=4140.82,  Score=4.60
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=35.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 35.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val35.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.68, Score=4.30
+  DLS  : PPL=3168.19,  Score=4.80
+Running DLS Z-score: Method=logit_diff, Trait=agreeableness, Alpha=40.0
+=== DLS Z-score Compare: logit_diff ===
+  Axis  : agreeableness
+  Alpha : 40.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/logit_diff_Val40.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.50, Score=4.60
+  DLS  : PPL=3000.48,  Score=4.80
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=0.5
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 0.5
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val0.5.jsonl
+
+--- Averages ---
+  Base : PPL=6.76, Score=4.30
+  DLS  : PPL=9.35,  Score=3.20
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=1.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 1.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val1.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.55, Score=4.50
+  DLS  : PPL=17.66,  Score=1.90
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=2.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 2.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val2.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.38, Score=4.60
+  DLS  : PPL=52.67,  Score=2.80
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=4.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 4.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val4.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.82, Score=4.30
+  DLS  : PPL=81.81,  Score=3.70
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=5.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 5.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val5.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.12, Score=4.20
+  DLS  : PPL=99.60,  Score=3.40
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=6.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 6.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val6.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.87, Score=4.40
+  DLS  : PPL=120.57,  Score=3.50
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=8.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 8.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val8.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.50, Score=4.30
+  DLS  : PPL=87.48,  Score=3.30
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=10.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 10.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val10.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.14, Score=4.40
+  DLS  : PPL=40.58,  Score=2.50
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=15.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 15.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val15.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.45, Score=4.40
+  DLS  : PPL=323.35,  Score=1.80
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=20.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 20.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val20.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.12, Score=4.30
+  DLS  : PPL=599.63,  Score=0.90
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=25.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 25.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val25.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.18, Score=4.50
+  DLS  : PPL=727.10,  Score=0.60
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=30.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 30.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val30.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.03, Score=4.40
+  DLS  : PPL=918.60,  Score=0.90
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=35.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 35.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val35.0.jsonl
+
+--- Averages ---
+  Base : PPL=7.14, Score=4.50
+  DLS  : PPL=1406.58,  Score=0.10
+Running DLS Z-score: Method=anti_alignment, Trait=agreeableness, Alpha=40.0
+=== DLS Z-score Compare: anti_alignment ===
+  Axis  : agreeableness
+  Alpha : 40.0
+  Layers: [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+Loading model: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Loading tokenizer: mistralai/Mistral-7B-Instruct-v0.3 (with retry logic)...
+Saved: exp_steering_dyn_layer_zscore/results/agreeableness/anti_alignment_Val40.0.jsonl
+
+--- Averages ---
+  Base : PPL=6.19, Score=4.40
+  DLS  : PPL=1862.55,  Score=0.10
