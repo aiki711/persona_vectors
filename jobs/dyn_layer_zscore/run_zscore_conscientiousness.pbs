@@ -1,0 +1,55 @@
+#!/bin/bash
+#PBS -N dyn_zscore_conscientiousness
+#PBS -q GPU-1
+#PBS -l nodes=1:ppn=1:gpus=1
+#PBS -l walltime=08:00:00
+#PBS -o log/dyn_zscore_conscientiousness.out
+#PBS -e log/dyn_zscore_conscientiousness.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+OUT_DIR="exp_steering_dyn_layer_zscore/results"
+mkdir -p "$OUT_DIR"
+
+CONFIG="config/mistral_7b.yaml"
+VECTOR_BANK="exp_steering_layer_analysis/vectors/mean_diff_vectors.npz"
+PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
+JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+
+VALS=(0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0)
+METHODS=(logit_diff anti_alignment)
+
+for M in "${METHODS[@]}"; do
+    for V in "${VALS[@]}"; do
+        echo "Running DLS Z-score: Method=$M, Trait=conscientiousness, Alpha=$V"
+        JSONL_OUT="${OUT_DIR}/conscientiousness/${M}_Val${V}.jsonl"
+        CSV_OUT="${OUT_DIR}/conscientiousness/scores_${M}_Val${V}.csv"
+
+        if [ ! -f "$JSONL_OUT" ]; then
+            "$PYTHON_BIN" scripts/04_dyn_layer/63_run_dyn_layer_zscore.py \
+                --config "$CONFIG" \
+                --vector_bank "$VECTOR_BANK" \
+                --prompts "$PROMPT_IN" \
+                --out_dir "$OUT_DIR" \
+                --axis "conscientiousness" \
+                --alpha "$V" \
+                --method "$M"
+        else
+            echo "  [SKIP] Generation already done: $JSONL_OUT"
+        fi
+
+        if [ ! -f "$CSV_OUT" ]; then
+            "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \
+                --input "$JSONL_OUT" \
+                --output "$CSV_OUT" \
+                --axis "conscientiousness" \
+                --model "$JUDGE_MODEL"
+        else
+            echo "  [SKIP] Evaluation already done: $CSV_OUT"
+        fi
+    done
+done

@@ -139,7 +139,10 @@ def make_tradeoff_plot(df: pd.DataFrame, axis: str, out_path: Path,
         ax.grid(True, which="both", alpha=0.2)
         ax.legend(fontsize=9, loc="upper left")
 
-    plt.tight_layout()
+    try:
+        plt.tight_layout()
+    except Exception:
+        pass
     plt.savefig(out_path, dpi=200)
     plt.close()
     print(f"  Saved: {out_path}")
@@ -151,6 +154,7 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path):
         print("  No data, skipping.")
         return
 
+    plt.close("all")  # Reset matplotlib state between traits
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Load DLS results
@@ -215,7 +219,10 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, dyn_dir: Path):
         ax_obj.set_ylabel("Val")
 
     plt.suptitle(f"Layer-Sweep Results: {axis.capitalize()}", fontsize=16, fontweight="bold", y=1.02)
-    plt.tight_layout()
+    try:
+        plt.tight_layout()
+    except Exception:
+        pass
 
     out_path = out_dir / f"heatmap_{axis}_unified.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
@@ -302,7 +309,10 @@ def make_summary_heatmaps(all_df: pd.DataFrame, logit_all_df: pd.DataFrame, anti
         ax_obj.set_ylabel("Val")
 
     plt.suptitle("Layer-Sweep Summary (All Traits Average)", fontsize=15, fontweight="bold", y=1.01)
-    plt.tight_layout()
+    try:
+        plt.tight_layout()
+    except Exception:
+        pass
     summary_path = out_dir / "summary_all_traits.png"
     plt.savefig(summary_path, dpi=200, bbox_inches="tight")
     plt.close()
