@@ -22,3 +22,7 @@ __pycache__/
 
 # Dynamic Experiment Directories
 exp_*/
+
+# PBS logs
+*.pbs.e*
+*.pbs.o*

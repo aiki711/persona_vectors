@@ -3,8 +3,8 @@
 #PBS -q GPU-1
 #PBS -l nodes=1:ppn=1:gpus=1
 #PBS -l walltime=08:00:00
-#PBS -o log/dyn_zscore_conscientiousness.out
-#PBS -e log/dyn_zscore_conscientiousness.err
+#PBS -o /home/s2550009/persona_vectors/log/dyn_zscore_conscientiousness.out
+#PBS -e /home/s2550009/persona_vectors/log/dyn_zscore_conscientiousness.err
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"

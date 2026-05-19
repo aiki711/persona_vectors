@@ -81,17 +81,21 @@ def zscore_normalize(score_dict: dict, layer_stats: dict) -> dict:
 
 # ==================== Layer Selection Methods (z-score normalized) ====================
 
-def select_layer_logit_diff(model, input_ids, layer_w_dev, alpha, layer_stats):
+def select_layer_logit_diff(model, input_ids, layer_w_dev, alpha, layer_stats, calibration_alpha=10.0):
     """
     Bhandari et al. のロジット差ノルムを、層ごとの統計量で Z-score 正規化して選定。
     """
     base_logits = get_base_logits(model, input_ids)
     raw_norms = {}
+    scaled_norms = {}
     for L, w_dev in layer_w_dev.items():
         steered_logits = get_steered_logits(model, input_ids, L, w_dev, alpha)
         raw_norms[L] = (steered_logits - base_logits).norm().item()
+        # Scale raw norm linearly by the ratio of calibration alpha to current alpha
+        # to ensure comparability against Z-score stats.
+        scaled_norms[L] = raw_norms[L] * (calibration_alpha / alpha)
 
-    z_norms = zscore_normalize(raw_norms, layer_stats)
+    z_norms = zscore_normalize(scaled_norms, layer_stats)
     best_layer = max(z_norms, key=lambda L: z_norms[L])
     return best_layer, raw_norms, z_norms
 
@@ -182,6 +186,8 @@ def main():
     ap.add_argument("--method",       type=str, choices=["logit_diff", "anti_alignment"], required=True)
     ap.add_argument("--layers",       type=str, default="",
                     help="カンマ区切りで探索層を制限 (例: 12,15,18,21,24)")
+    ap.add_argument("--calibration_alpha", type=float, default=10.0,
+                    help="キャリブレーション時に使用したステアリング強度 (デフォルト: 10.0)")
     args = ap.parse_args()
 
     global LAYERS
@@ -260,7 +266,7 @@ def main():
         # Layer Selection (z-score normalized with calibration stats)
         if args.method == "logit_diff":
             best_layer, raw_scores, z_scores = select_layer_logit_diff(
-                model, inputs.input_ids, layer_w_dev, args.alpha, layer_stats
+                model, inputs.input_ids, layer_w_dev, args.alpha, layer_stats, args.calibration_alpha
             )
         else:
             best_layer, raw_scores, z_scores = select_layer_anti_alignment(
