@@ -65,25 +65,25 @@ def get_steered_logits(model, input_ids, layer, w_dev, alpha):
     return logits
 
 
-def zscore_normalize(score_dict: dict) -> dict:
+def zscore_normalize(score_dict: dict, layer_stats: dict) -> dict:
     """
-    各プロンプトのスコア辞書を z-score 正規化して返す。
-    標準偏差が 0 に近い場合（全層で同じ値）はそのまま返す。
+    キャリブレーション統計量（層ごとの平均と標準偏差）を用いて、各層のスコアを Z-score 正規化する。
     """
-    vals = np.array(list(score_dict.values()), dtype=float)
-    mean = vals.mean()
-    std  = vals.std()
-    if std < 1e-8:
-        return score_dict  # 全層が同値 → 正規化不要（任意の層を選ばせる）
-    return {L: (v - mean) / std for L, v in score_dict.items()}
+    z_scores = {}
+    for L, v in score_dict.items():
+        stats = layer_stats.get(str(L))
+        if stats and stats["std"] > 1e-8:
+            z_scores[L] = (v - stats["mean"]) / stats["std"]
+        else:
+            z_scores[L] = 0.0  # 統計量がない場合は 0 (平均的) とみなす
+    return z_scores
 
 
 # ==================== Layer Selection Methods (z-score normalized) ====================
 
-def select_layer_logit_diff(model, input_ids, layer_w_dev, alpha):
+def select_layer_logit_diff(model, input_ids, layer_w_dev, alpha, layer_stats):
     """
-    Bhandari et al. のロジット差ノルムを z-score 正規化してから argmax。
-    Layer 0 の絶対的な大きさによる偏りを補正する。
+    Bhandari et al. のロジット差ノルムを、層ごとの統計量で Z-score 正規化して選定。
     """
     base_logits = get_base_logits(model, input_ids)
     raw_norms = {}
@@ -91,16 +91,14 @@ def select_layer_logit_diff(model, input_ids, layer_w_dev, alpha):
         steered_logits = get_steered_logits(model, input_ids, L, w_dev, alpha)
         raw_norms[L] = (steered_logits - base_logits).norm().item()
 
-    z_norms = zscore_normalize(raw_norms)
+    z_norms = zscore_normalize(raw_norms, layer_stats)
     best_layer = max(z_norms, key=lambda L: z_norms[L])
     return best_layer, raw_norms, z_norms
 
 
-def select_layer_anti_alignment(model, input_ids, layer_w_dev, target_direction):
+def select_layer_anti_alignment(model, input_ids, layer_w_dev, target_direction, layer_stats):
     """
-    提案手法（コサイン類似度）を z-score 正規化してから argmax。
-    各層の -cos_sim を z-score 正規化することで、全層が正/負に偏っている場合でも
-    相対的に最も逆向きな層を選べるようにする。
+    提案手法（コサイン類似度）を、層ごとの統計量で Z-score 正規化して選定。
     """
     saved_h = {}
     handles = []
@@ -127,11 +125,11 @@ def select_layer_anti_alignment(model, input_ids, layer_w_dev, target_direction)
         h = saved_h[L]
         cos_sim = F.cosine_similarity(h.unsqueeze(0), w_dev.unsqueeze(0)).item()
         if target_direction == "high":
-            raw_scores[L] = -cos_sim   # 最も逆向き（最も負の cos_sim）を選ぶ
+            raw_scores[L] = -cos_sim
         else:
             raw_scores[L] = cos_sim
 
-    z_scores = zscore_normalize(raw_scores)
+    z_scores = zscore_normalize(raw_scores, layer_stats)
     best_layer = max(z_scores, key=lambda L: z_scores[L])
     return best_layer, raw_scores, z_scores
 
@@ -176,7 +174,8 @@ def main():
     ap.add_argument("--config",       "-c", required=True)
     ap.add_argument("--vector_bank",  required=True)
     ap.add_argument("--prompts",      required=True)
-    ap.add_argument("--out_dir",      required=True)
+    ap.add_argument("--stats_path",   required=True, help="キャリブレーション統計量ファイル (JSON)")
+    ap.add_argument("--out_dir",      default="exp_steering_dyn_layer_zscore/results")
     ap.add_argument("--axis",         type=str, default="extraversion")
     ap.add_argument("--alpha",        type=float, required=True)
     ap.add_argument("--direction",    type=str, choices=["high", "low"], default="high")
@@ -194,6 +193,11 @@ def main():
 
     with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    
+    # Load stats
+    with open(args.stats_path, "r", encoding="utf-8") as f:
+        all_stats = json.load(f)
+    layer_stats = all_stats.get(args.axis, {}).get(args.method, {})
 
     out_dir = Path(args.out_dir) / args.axis
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -228,10 +232,10 @@ def main():
                 prompts.append(("", item))
     prompts = prompts[:10]
 
-    print(f"=== DLS Z-score Compare: {args.method} ===")
+    print(f"=== DLS Z-score Execution: {args.method} ===")
     print(f"  Axis  : {args.axis}")
     print(f"  Alpha : {args.alpha}")
-    print(f"  Layers: {LAYERS}")
+    print(f"  Stats : {args.stats_path}")
 
     model, tokenizer = load_model_and_tokenizer(cfg.get("model_name"), quant=cfg.get("quant", "auto"))
     device = _infer_main_device(model)
@@ -253,14 +257,14 @@ def main():
         base_text = tokenizer.decode(base_outputs[0][prompt_len:], skip_special_tokens=True)
         base_ppl = calc_ppl(model, base_outputs[0])
 
-        # Layer Selection (z-score normalized)
+        # Layer Selection (z-score normalized with calibration stats)
         if args.method == "logit_diff":
             best_layer, raw_scores, z_scores = select_layer_logit_diff(
-                model, inputs.input_ids, layer_w_dev, args.alpha
+                model, inputs.input_ids, layer_w_dev, args.alpha, layer_stats
             )
         else:
             best_layer, raw_scores, z_scores = select_layer_anti_alignment(
-                model, inputs.input_ids, layer_w_dev, args.direction
+                model, inputs.input_ids, layer_w_dev, args.direction, layer_stats
             )
 
         # Generate

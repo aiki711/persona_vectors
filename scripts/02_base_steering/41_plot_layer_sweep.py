@@ -365,7 +365,7 @@ def main():
 
         plot_axis(df, axis, out_dir / axis, dyn_dir, cns_dir)
 
-    if all_dfs:
+    if len(all_dfs) > 1:
         all_df        = pd.concat(all_dfs,           ignore_index=True)
         logit_all_df  = pd.concat(all_logit_dfs,     ignore_index=True) if all_logit_dfs     else pd.DataFrame()
         anti_all_df   = pd.concat(all_anti_dfs,      ignore_index=True) if all_anti_dfs      else pd.DataFrame()
@@ -373,6 +373,8 @@ def main():
         anti_cns_all  = pd.concat(all_anti_cns_dfs,  ignore_index=True) if all_anti_cns_dfs  else pd.DataFrame()
 
         make_summary_heatmaps(all_df, logit_all_df, anti_all_df, out_dir, logit_cns_all, anti_cns_all)
+    elif len(all_dfs) == 1:
+        print("\nOnly one trait processed. Skipping summary_all_traits.png generation to avoid overwriting.")
 
     print("\nDone.")
 

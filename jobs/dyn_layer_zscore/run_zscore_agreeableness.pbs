@@ -35,7 +35,7 @@ for M in "${METHODS[@]}"; do
                 --vector_bank "$VECTOR_BANK" \
                 --prompts "$PROMPT_IN" \
                 --out_dir "$OUT_DIR" \
-                --axis "agreeableness" \
+                --stats_path "exp_steering_dyn_layer_zscore/dls_calibration_stats.json" --axis "agreeableness" \
                 --alpha "$V" \
                 --method "$M"
         else
@@ -46,7 +46,7 @@ for M in "${METHODS[@]}"; do
             "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \
                 --input "$JSONL_OUT" \
                 --output "$CSV_OUT" \
-                --axis "agreeableness" \
+                --stats_path "exp_steering_dyn_layer_zscore/dls_calibration_stats.json" --axis "agreeableness" \
                 --model "$JUDGE_MODEL"
         else
             echo "  [SKIP] Evaluation already done: $CSV_OUT"
