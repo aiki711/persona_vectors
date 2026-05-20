@@ -1,0 +1,26 @@
+#!/bin/bash
+#PBS -N dls_calibrate_fine
+#PBS -q GPU-1
+#PBS -l nodes=1:ppn=1:gpus=1
+#PBS -l walltime=04:00:00
+#PBS -o /home/s2550009/persona_vectors/log/dls_calibrate_fine.out
+#PBS -e /home/s2550009/persona_vectors/log/dls_calibrate_fine.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+echo "Running DLS Fine Calibration (Layers 9-24)..."
+mkdir -p exp_steering_dyn_layer_CnsZsc_fine
+
+"$PYTHON_BIN" scripts/04_dyn_layer/64_calibrate_dls_stats.py \
+    --config config/mistral_7b.yaml \
+    --vector_bank vectors/mean_diff_vectors.npz \
+    --prompts inputs/test_prompts_10.jsonl \
+    --out_file exp_steering_dyn_layer_CnsZsc_fine/dls_calibration_stats_fine.json \
+    --layers "9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24" \
+    --num_prompts 50
+
+echo "Calibration done."

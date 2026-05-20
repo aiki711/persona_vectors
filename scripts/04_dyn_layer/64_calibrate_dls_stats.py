@@ -69,7 +69,13 @@ def main():
     ap.add_argument("--out_file", default="data/dls_calibration_stats.json")
     ap.add_argument("--alpha", type=float, default=10.0, help="Calibration alpha (typically a mid-range value)")
     ap.add_argument("--num_prompts", type=int, default=50)
+    ap.add_argument("--layers", type=str, default="", help="Comma-separated list of layers to calibrate")
     args = ap.parse_args()
+
+    global LAYERS
+    if args.layers:
+        LAYERS = [int(x.strip()) for x in args.layers.split(",")]
+        print(f"Calibrating layers: {LAYERS}")
 
     with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
