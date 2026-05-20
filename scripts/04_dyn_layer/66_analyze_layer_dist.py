@@ -40,7 +40,8 @@ def main():
     dirs = {
         "Unconstrained": Path("exp_steering_dyn_layer/results"),
         "Constrained (12-24)": Path("exp_steering_dyn_layer_constrained/results"),
-        "Z-score Normalized": Path("exp_steering_dyn_layer_zscore/results")
+        "Z-score Normalized": Path("exp_steering_dyn_layer_zscore/results"),
+        "Constrained Z-score (9-30)": Path("exp_steering_dyn_layer_CnsZsc/results")
     }
     
     all_dists = {}

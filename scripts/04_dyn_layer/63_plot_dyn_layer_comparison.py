@@ -59,6 +59,8 @@ def load_dyn_summary(input_dir: Path, axis: str, method: str) -> pd.DataFrame:
 
 def make_tradeoff_plot(base_df: pd.DataFrame, logit_df: pd.DataFrame, anti_df: pd.DataFrame, 
                        logit_cns_df: pd.DataFrame, anti_cns_df: pd.DataFrame,
+                       logit_zsc_df: pd.DataFrame, anti_zsc_df: pd.DataFrame,
+                       logit_czs_df: pd.DataFrame, anti_czs_df: pd.DataFrame,
                        axis: str, out_path: Path):
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
     
@@ -108,6 +110,26 @@ def make_tradeoff_plot(base_df: pd.DataFrame, logit_df: pd.DataFrame, anti_df: p
             anti_cns_df = anti_cns_df.sort_values("val")
             ax.plot(anti_cns_df["score"], anti_cns_df["ppl"], "--s", color="salmon", linewidth=3.0, markersize=9, zorder=9, label="Proposed (Constrained)")
 
+        # Plot Z-score Normalized Bhandari DLS
+        if not logit_zsc_df.empty:
+            logit_zsc_df = logit_zsc_df.sort_values("val")
+            ax.plot(logit_zsc_df["score"], logit_zsc_df["ppl"], "-.^", color="darkblue", linewidth=3.0, markersize=9, zorder=10, label="Bhandari (Z-score)")
+            
+        # Plot Z-score Normalized Proposed DLS
+        if not anti_zsc_df.empty:
+            anti_zsc_df = anti_zsc_df.sort_values("val")
+            ax.plot(anti_zsc_df["score"], anti_zsc_df["ppl"], "-.v", color="darkred", linewidth=3.0, markersize=9, zorder=11, label="Proposed (Z-score)")
+
+        # Plot Constrained Z-score Normalized Bhandari DLS
+        if not logit_czs_df.empty:
+            logit_czs_df = logit_czs_df.sort_values("val")
+            ax.plot(logit_czs_df["score"], logit_czs_df["ppl"], ":d", color="teal", linewidth=3.0, markersize=9, zorder=12, label="Bhandari (Constrained Z-score)")
+
+        # Plot Constrained Z-score Normalized Proposed DLS
+        if not anti_czs_df.empty:
+            anti_czs_df = anti_czs_df.sort_values("val")
+            ax.plot(anti_czs_df["score"], anti_czs_df["ppl"], ":D", color="purple", linewidth=3.0, markersize=9, zorder=13, label="Proposed (Constrained Z-score)")
+
         ax.set_title(f"Pareto Front Comparison — {axis.capitalize()}\n(Background: {mode})", fontsize=13, fontweight="bold")
         ax.set_xlabel(f"Personality Score ({axis.capitalize()})", fontsize=11)
         ax.set_ylabel("Perplexity (log scale)", fontsize=11)
@@ -123,9 +145,11 @@ def make_tradeoff_plot(base_df: pd.DataFrame, logit_df: pd.DataFrame, anti_df: p
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base_dir", default="exp_steering_layer_analysis/results")
-    ap.add_argument("--dyn_dir", default="exp_steering_dyn_layer_compare/results")
+    ap.add_argument("--dyn_dir", default="exp_steering_dyn_layer/results")
     ap.add_argument("--cns_dir", default="exp_steering_dyn_layer_constrained/results")
-    ap.add_argument("--out_dir", default="exp_steering_dyn_layer_constrained/figures")
+    ap.add_argument("--zsc_dir", default="exp_steering_dyn_layer_zscore/results")
+    ap.add_argument("--czs_dir", default="exp_steering_dyn_layer_CnsZsc/results")
+    ap.add_argument("--out_dir", default="exp_steering_dyn_layer_CnsZsc/figures")
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -138,9 +162,13 @@ def main():
         anti_df = load_dyn_summary(Path(args.dyn_dir), axis, "anti_alignment")
         logit_cns_df = load_dyn_summary(Path(args.cns_dir), axis, "logit_diff")
         anti_cns_df = load_dyn_summary(Path(args.cns_dir), axis, "anti_alignment")
+        logit_zsc_df = load_dyn_summary(Path(args.zsc_dir), axis, "logit_diff")
+        anti_zsc_df = load_dyn_summary(Path(args.zsc_dir), axis, "anti_alignment")
+        logit_czs_df = load_dyn_summary(Path(args.czs_dir), axis, "logit_diff")
+        anti_czs_df = load_dyn_summary(Path(args.czs_dir), axis, "anti_alignment")
         
         out_path = out_dir / f"tradeoff_comparison_{axis}.png"
-        make_tradeoff_plot(base_df, logit_df, anti_df, logit_cns_df, anti_cns_df, axis, out_path)
+        make_tradeoff_plot(base_df, logit_df, anti_df, logit_cns_df, anti_cns_df, logit_zsc_df, anti_zsc_df, logit_czs_df, anti_czs_df, axis, out_path)
 
 if __name__ == "__main__":
     main()
