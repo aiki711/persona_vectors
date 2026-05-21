@@ -157,6 +157,7 @@ def main():
             
             final_data[f"{L}|{ax}|w"] = w_norm.astype(np.float32)
             final_data[f"{L}|{ax}|b"] = np.array([b_norm], dtype=np.float32)
+            final_data[f"{L}|{ax}|midpoint"] = midpoint.astype(np.float32)
             
         np.savez_compressed(bank_path, **final_data)
     print(f"\n[Done] Saved mean-diff vectors to {bank_path}.")

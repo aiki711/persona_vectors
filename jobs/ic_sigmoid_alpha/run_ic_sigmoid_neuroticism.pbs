@@ -1,0 +1,78 @@
+#!/bin/bash
+#PBS -N ic_sigmoid_eval_neuroticism
+#PBS -q GPU-1
+#PBS -l nodes=1:ppn=1:gpus=1
+#PBS -l walltime=08:00:00
+#PBS -o /home/s2550009/persona_vectors/log/ic_sigmoid_neuroticism.out
+#PBS -e /home/s2550009/persona_vectors/log/ic_sigmoid_neuroticism.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+OUT_DIR="exp_ic_sigmoid_alpha/results"
+mkdir -p "$OUT_DIR"
+
+CONFIG="config/mistral_7b.yaml"
+VECTOR_BANK="vectors/mean_diff_vectors.npz"
+PROMPT_IN="inputs/test_prompts_10.jsonl"
+JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+
+# Phase 2: target_layer は Phase 1 の fine-grained DLS 実験結果から決定する
+# 暫定値として neuroticism では 15 を使用（実験結果確認後に更新）
+TARGET_LAYER=15
+
+# ICハイパーパラメータのスイープ対象
+IC_THETAS=(2.0 3.0 4.0)
+IC_KS=(0.5 0.8 1.2)
+ALPHA_MAXS=(10.0 20.0 30.0)
+IC_MODES=(sigmoid hard_gate fixed)
+
+for MODE in "${IC_MODES[@]}"; do
+    for AMAX in "${ALPHA_MAXS[@]}"; do
+        for THETA in "${IC_THETAS[@]}"; do
+            # k は sigmoid モードのみ有効、他のモードは固定
+            if [ "$MODE" == "sigmoid" ]; then
+                KS_TO_USE=("${IC_KS[@]}")
+            else
+                KS_TO_USE=(0.8)  # dummy value for non-sigmoid modes
+            fi
+
+            for K in "${KS_TO_USE[@]}"; do
+                JSONL_OUT="${OUT_DIR}/neuroticism/ic_${MODE}_L${TARGET_LAYER}_amax${AMAX}_theta${THETA}_k${K}.jsonl"
+                CSV_OUT="${OUT_DIR}/neuroticism/scores_ic_${MODE}_L${TARGET_LAYER}_amax${AMAX}_theta${THETA}_k${K}.csv"
+
+                if [ ! -f "$JSONL_OUT" ]; then
+                    echo "Running IC Sigmoid Steering: Mode=$MODE, AMAX=$AMAX, THETA=$THETA, K=$K"
+                    "$PYTHON_BIN" scripts/04_dyn_layer/69_run_ic_sigmoid_steering.py \
+                        --config "$CONFIG" \
+                        --vector_bank "$VECTOR_BANK" \
+                        --prompts "$PROMPT_IN" \
+                        --out_dir "$OUT_DIR" \
+                        --axis "neuroticism" \
+                        --direction "high" \
+                        --target_layer "$TARGET_LAYER" \
+                        --alpha_max "$AMAX" \
+                        --ic_theta "$THETA" \
+                        --ic_k "$K" \
+                        --ic_mode "$MODE"
+                else
+                    echo "  [SKIP] Already exists: $JSONL_OUT"
+                fi
+
+                if [ -f "$JSONL_OUT" ] && [ ! -f "$CSV_OUT" ]; then
+                    echo "Evaluating: $JSONL_OUT"
+                    "$PYTHON_BIN" scripts/03_ic_adaptive/60_eval_ic_absolute.py \
+                        --input "$JSONL_OUT" \
+                        --output "$CSV_OUT" \
+                        --axis "neuroticism" \
+                        --model "$JUDGE_MODEL"
+                fi
+            done
+        done
+    done
+done
+
+echo "Done."
