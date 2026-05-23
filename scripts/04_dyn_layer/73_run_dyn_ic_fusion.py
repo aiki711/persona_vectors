@@ -294,6 +294,7 @@ def main():
     ap.add_argument("--max_new_tokens", type=int, default=150)
     ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--num_prompts", type=int, default=10)
+    ap.add_argument("--norm_mode", type=str, choices=["none", "midpoint"], default="none", help="Normalization mode for steering vectors")
     args = ap.parse_args()
 
     global LAYERS
@@ -324,6 +325,11 @@ def main():
             layer_w[L] = torch.tensor(v_data[w_key], dtype=torch.float32) * direction_mult
         if mp_key in v_data:
             layer_midpoint[L] = torch.tensor(v_data[mp_key], dtype=torch.float32)
+            
+        if args.norm_mode == "midpoint" and L in layer_w and L in layer_midpoint:
+            w_norm = torch.norm(layer_w[L]).item()
+            m_norm = torch.norm(layer_midpoint[L]).item()
+            layer_w[L] = (layer_w[L] / (w_norm + 1e-10)) * m_norm
 
     if not layer_w:
         print("[ERROR] No layer vectors found.")

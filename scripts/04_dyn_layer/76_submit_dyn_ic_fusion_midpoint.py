@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# 74_submit_dyn_ic_fusion.py
+# 76_submit_dyn_ic_fusion_midpoint.py
 #
 # DLS (Relative Anti-alignment) と IC-Adaptive Steering (Sigmoid / Soft-Plateau) の
-# 融合実験ジョブを SLURM に投入するスクリプト。
+# 融合実験（中点活性化ノルムによる正規化モード：--norm_mode midpoint）の
+# ジョブを SLURM に投入するスクリプト。
 #
-# 実験フォルダ: exp_steering_dyn_ic_fusion/
+# 実験フォルダ: exp_steering_dyn_ic_fusion_midpoint/
 #
 
 import os
@@ -14,30 +15,28 @@ import subprocess
 from pathlib import Path
 
 TRAITS      = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
-ALPHA_MAXES = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
-IC_MODES    = ["sigmoid", "soft_plateau"]
+# 相対強度としての alpha_max スイープ範囲 (14点)
+ALPHA_MAXES = [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.5, 2.0, 3.0]
+IC_MODES    = ["fixed", "sigmoid", "soft_plateau"]
 ALL_LAYERS  = ",".join(map(str, range(32)))
 
 PBS_TEMPLATE = """#!/bin/bash
-#SBATCH --job-name=dyn_ic_{trait}
+#SBATCH --job-name=dyn_mid_{trait}
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=24:00:00
-#SBATCH --output=log/dyn_ic_{trait}.out
-#SBATCH --error=log/dyn_ic_{trait}.err
+#SBATCH --output=log/dyn_mid_{trait}.out
+#SBATCH --error=log/dyn_mid_{trait}.err
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
 
-# 仮想環境のアクティベート
-source persona_steering/bin/activate
-
 export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${{PYTHONPATH:-}}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
-OUT_DIR="exp_steering_dyn_ic_fusion/results"
+OUT_DIR="exp_steering_dyn_ic_fusion_midpoint/results"
 mkdir -p "$OUT_DIR"
 
 CONFIG="config/mistral_7b.yaml"
@@ -50,7 +49,7 @@ IC_MODES=({ic_modes_str})
 
 for MODE in "${{IC_MODES[@]}}"; do
     for AMAX in "${{AMAXES[@]}}"; do
-        echo "Running DLS + IC Fusion: Trait={trait}, Mode=$MODE, AlphaMax=$AMAX"
+        echo "Running DLS + IC Fusion (Midpoint): Trait={trait}, Mode=$MODE, AlphaMax=$AMAX"
         JSONL_OUT="${{OUT_DIR}}/{trait}/fusion_${{MODE}}_Val${{AMAX}}.jsonl"
         CSV_OUT="${{OUT_DIR}}/{trait}/scores_fusion_${{MODE}}_Val${{AMAX}}.csv"
 
@@ -64,7 +63,8 @@ for MODE in "${{IC_MODES[@]}}"; do
                 --direction "high" \\
                 --alpha_max "$AMAX" \\
                 --ic_mode "$MODE" \\
-                --layers "{layers}"
+                --layers "{layers}" \\
+                --norm_mode "midpoint"
         else
             echo "  [SKIP] Generation already done: $JSONL_OUT"
         fi
@@ -83,7 +83,7 @@ done
 """
 
 def main():
-    job_dir = Path("jobs/dyn_ic_fusion")
+    job_dir = Path("jobs/dyn_ic_fusion_midpoint")
     job_dir.mkdir(parents=True, exist_ok=True)
     log_dir = Path("log")
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -99,12 +99,12 @@ def main():
             layers=ALL_LAYERS,
         )
 
-        pbs_file = job_dir / f"run_fusion_{trait}.sh"
+        pbs_file = job_dir / f"run_fusion_mid_{trait}.sh"
         with open(pbs_file, "w") as f:
             f.write(pbs_content)
         pbs_file.chmod(0o755)
 
-        print(f"Submitting fusion job for {trait}...")
+        print(f"Submitting midpoint fusion job for {trait}...")
         res = subprocess.run(["sbatch", str(pbs_file)], capture_output=True, text=True)
         print(f"  {res.stdout.strip()} {res.stderr.strip()}")
 

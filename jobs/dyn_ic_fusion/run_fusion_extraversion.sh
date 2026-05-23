@@ -25,7 +25,7 @@ VECTOR_BANK="exp_steering_layer_sweep/vectors/mean_diff_vectors.npz"
 PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
 JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 
-AMAXES=(5.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0)
+AMAXES=(0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0)
 IC_MODES=(sigmoid soft_plateau)
 
 for MODE in "${IC_MODES[@]}"; do

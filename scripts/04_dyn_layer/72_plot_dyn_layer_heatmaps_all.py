@@ -18,7 +18,7 @@ from matplotlib.patches import Rectangle
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 LAYERS = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-VALS   = [1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
+VALS   = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
 def load_summary(input_dir: Path, axis: str) -> pd.DataFrame:
     records = []

@@ -26,7 +26,7 @@ PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
 STATS="exp_steering_dyn_layer_all_layers/dls_calibration_stats_all.json"
 JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
 
-VALS=(1.0 2.0 4.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0)
+VALS=(0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0)
 
 for V in "${VALS[@]}"; do
     # ---------------- 1. Z-score Logit Diff ----------------
