@@ -11,9 +11,9 @@ WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
 
 # 仮想環境のアクティベート
-source persona_steering/bin/activate
+source persona_steering/bin/activate 2>/dev/null || conda activate "$WORKDIR/persona_steering" 2>/dev/null || true
 
-export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${{PYTHONPATH:-}}"
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 echo "=== Running Plotting Scripts for All Experiments ==="

@@ -62,12 +62,15 @@ def main():
 
     results = []
     for row in tqdm(data):
+        text_key = "fusion_text" if "fusion_text" in row else "dyn_text"
+        ppl_key = "fusion_ppl" if "fusion_ppl" in row else "dyn_ppl"
+        
         b_score, b_reason = get_score(model, tokenizer, row.get("base_text", ""), args.axis, device) if row.get("base_text") else (3, "N/A")
-        dyn_score, dyn_reason = get_score(model, tokenizer, row.get("dyn_text", ""), args.axis, device)
+        dyn_score, dyn_reason = get_score(model, tokenizer, row.get(text_key, ""), args.axis, device)
         results.append({
             "idx": row.get("idx", 0),
             "base_score": b_score, "base_ppl": row.get("base_ppl", float("nan")),
-            "dyn_score": dyn_score, "dyn_ppl": row.get("dyn_ppl", float("nan")),
+            "dyn_score": dyn_score, "dyn_ppl": row.get(ppl_key, float("nan")),
             "base_reason": b_reason.replace("\n", " "), "dyn_reason": dyn_reason.replace("\n", " "),
         })
 

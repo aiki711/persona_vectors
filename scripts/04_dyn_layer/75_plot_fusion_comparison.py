@@ -379,7 +379,7 @@ def main():
     all_df          = pd.concat(all_dfs,          ignore_index=True) if all_dfs          else pd.DataFrame()
     logit_all_df    = pd.concat(all_logit_dfs,    ignore_index=True) if all_logit_dfs    else pd.DataFrame()
     anti_all_df     = pd.concat(all_anti_dfs,     ignore_index=True) if all_anti_dfs     else pd.DataFrame()
-    relative_all_df = pd.concat(all_relative_dfs, ignore_index=True) if relative_all_df else pd.DataFrame()
+    relative_all_df = pd.concat(all_relative_dfs, ignore_index=True) if all_relative_dfs else pd.DataFrame()
     sig_all_df      = pd.concat(all_sig_dfs,      ignore_index=True) if all_sig_dfs      else pd.DataFrame()
     plat_all_df     = pd.concat(all_plat_dfs,     ignore_index=True) if all_plat_dfs     else pd.DataFrame()
 
