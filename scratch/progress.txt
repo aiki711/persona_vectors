@@ -1,0 +1,5 @@
+extraversion: 29 / 42 csv files generated
+neuroticism: 33 / 42 csv files generated
+openness: 29 / 42 csv files generated
+conscientiousness: 27 / 42 csv files generated
+agreeableness: 0 / 42 csv files generated
