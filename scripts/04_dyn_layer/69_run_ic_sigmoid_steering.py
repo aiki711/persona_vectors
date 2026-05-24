@@ -149,6 +149,7 @@ def generate_with_ic_sigmoid(
 
     prev_ic = 0.0          # 最初のステップのICはゼロ（デフォルト: 介入なし）
     alpha_t = 0.0
+    alphas_so_far = []     # Track the alpha values used for each generated token
     token_trace = []       # デバッグ・解析用トレースログ
 
     # 繰り返しペナルティのためのトークン頻度カウンタ
@@ -176,19 +177,24 @@ def generate_with_ic_sigmoid(
 
         # --- フック登録（alpha_t をクロージャでキャプチャ）---
         _current_alpha = alpha_t  # 確実に現在値をキャプチャ
+        _alphas_past = list(alphas_so_far)
 
-        def hook(mod, inp, out, _alpha=_current_alpha):
+        def hook(mod, inp, out, _alpha=_current_alpha, _alphas_past=_alphas_past):
             hs = out[0] if isinstance(out, tuple) else out
             if not torch.isfinite(hs).all():
                 return out
-            if hs.size(1) != 1:  # 生成フェーズのみ（prefill はスキップ）
+            seq_len = hs.size(1)
+            if seq_len <= prompt_len:
                 return out
             hs_f32 = hs.to(torch.float32)
-            steered = hs_f32 + _alpha * w_dev.view(1, 1, -1)
+            steered = hs_f32.clone()
+            for idx in range(prompt_len, seq_len):
+                gen_idx = idx - prompt_len
+                a = _alphas_past[gen_idx] if gen_idx < len(_alphas_past) else _alpha
+                steered[:, idx, :] = hs_f32[:, idx, :] + a * w_dev.view(1, 1, -1)
             if not torch.isfinite(steered).all():
                 return out
-            steered = steered.to(hs.dtype)
-            return (steered, *out[1:]) if isinstance(out, tuple) else steered
+            return (steered.to(hs.dtype), *out[1:]) if isinstance(out, tuple) else steered.to(hs.dtype)
 
         handle = stack[target_layer].register_forward_hook(hook)
 
@@ -230,6 +236,10 @@ def generate_with_ic_sigmoid(
         token_freq[selected_id] = token_freq.get(selected_id, 0) + 1
 
         gen_ids = torch.cat([gen_ids, next_token], dim=-1)
+
+        # Record the alpha_t used for this step's generation.
+        if step >= 1:
+            alphas_so_far.append(alpha_t)
 
         if selected_id == tokenizer.eos_token_id:
             break

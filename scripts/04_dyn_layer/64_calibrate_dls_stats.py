@@ -69,6 +69,7 @@ def main():
     ap.add_argument("--out_file", default="data/dls_calibration_stats.json")
     ap.add_argument("--alpha", type=float, default=10.0, help="Calibration alpha (typically a mid-range value)")
     ap.add_argument("--num_prompts", type=int, default=50)
+    ap.add_argument("--norm_mode", type=str, choices=["none", "midpoint"], default="none")
     ap.add_argument("--layers", type=str, default="", help="Comma-separated list of layers to calibrate")
     args = ap.parse_args()
 
@@ -134,6 +135,14 @@ def main():
             for L in LAYERS:
                 w_vec = torch.tensor(v_data[f"{L}|{axis}|w"], device=device, dtype=torch.float32)
                 
+                if args.norm_mode == "midpoint":
+                    mp_key = f"{L}|{axis}|midpoint"
+                    if mp_key in v_data:
+                        m_vec = torch.tensor(v_data[mp_key], device=device, dtype=torch.float32)
+                        w_norm = torch.norm(w_vec).item()
+                        m_norm = torch.norm(m_vec).item()
+                        w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
+
                 # 1. logit_diff score
                 steered_logits = get_steered_logits(model, inputs.input_ids, L, w_vec, args.alpha)
                 l_diff = (steered_logits - base_logits).norm().item()

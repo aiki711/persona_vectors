@@ -130,11 +130,10 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
     # Load All-Layers DLS results
     logit_df    = load_dyn_summary(all_layers_dir, axis, "logit_diff")
     anti_df     = load_dyn_summary(all_layers_dir, axis, "anti_alignment")
-    relative_df = load_dyn_summary(all_layers_dir, axis, "relative_anti_alignment")
-
-    # Load Midpoint Fusion results
-    sig_df  = load_fusion_summary(fusion_dir, axis, "sigmoid")
-    plat_df = load_fusion_summary(fusion_dir, axis, "soft_plateau")
+    # Load Midpoint-Normalized DLS and Fusion results
+    relative_df = load_fusion_summary(fusion_dir, axis, "fixed")
+    sig_df      = load_fusion_summary(fusion_dir, axis, "sigmoid")
+    plat_df     = load_fusion_summary(fusion_dir, axis, "soft_plateau")
 
     has_layer_data = not df.empty
     if has_layer_data:
@@ -349,7 +348,7 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input_dir",      default="exp_steering_layer_analysis/results")
-    ap.add_argument("--all_layers_dir", default="exp_steering_dyn_layer_all_layers/results")
+    ap.add_argument("--all_layers_dir", default="exp_steering_dyn_layer_all_layers_midpoint/results")
     ap.add_argument("--fusion_dir",     default="exp_steering_dyn_ic_fusion_midpoint/results")
     ap.add_argument("--out_dir",        default="exp_steering_dyn_ic_fusion_midpoint/figures")
     args = ap.parse_args()
@@ -379,7 +378,7 @@ def main():
         if not anti_df.empty:
             all_anti_dfs.append(anti_df)
 
-        relative_df = load_dyn_summary(all_layers_dir, axis, "relative_anti_alignment")
+        relative_df = load_fusion_summary(fusion_dir, axis, "fixed")
         if not relative_df.empty:
             all_relative_dfs.append(relative_df)
 

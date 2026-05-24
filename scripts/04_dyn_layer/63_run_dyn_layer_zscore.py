@@ -188,6 +188,7 @@ def main():
                     help="カンマ区切りで探索層を制限 (例: 12,15,18,21,24)")
     ap.add_argument("--calibration_alpha", type=float, default=10.0,
                     help="キャリブレーション時に使用したステアリング強度 (デフォルト: 10.0)")
+    ap.add_argument("--norm_mode", type=str, choices=["none", "midpoint"], default="none")
     args = ap.parse_args()
 
     global LAYERS
@@ -218,8 +219,15 @@ def main():
     layer_w = {}
     for L in LAYERS:
         w_key = f"{L}|{args.axis}|w"
+        mp_key = f"{L}|{args.axis}|midpoint"
         if w_key in v_data:
-            layer_w[L] = torch.tensor(v_data[w_key], dtype=torch.float32) * direction_mult
+            w_vec = torch.tensor(v_data[w_key], dtype=torch.float32) * direction_mult
+            if args.norm_mode == "midpoint" and mp_key in v_data:
+                m_vec = torch.tensor(v_data[mp_key], dtype=torch.float32)
+                w_norm = torch.norm(w_vec).item()
+                m_norm = torch.norm(m_vec).item()
+                w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
+            layer_w[L] = w_vec
 
     if not layer_w:
         return print("[ERROR] No layer vectors found.")
