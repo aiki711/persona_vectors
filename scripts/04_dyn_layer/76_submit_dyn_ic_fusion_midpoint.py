@@ -16,7 +16,7 @@ from pathlib import Path
 
 TRAITS      = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 # 相対強度としての alpha_max スイープ範囲 (14点)
-ALPHA_MAXES = [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.5, 2.0, 3.0]
+ALPHA_MAXES = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 IC_MODES    = ["fixed", "sigmoid", "soft_plateau"]
 ALL_LAYERS  = ",".join(map(str, range(32)))
 
