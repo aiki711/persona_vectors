@@ -120,7 +120,12 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
     final_scores = {}
     for L in layer_w_dev.keys():
         w_prior = layer_priors.get(L, 0.0)
-        final_scores[L] = w_prior * raw_scores[L]
+        if w_prior > 1e-5:
+            # Shift low-prior layers downwards. Since raw_scores can be negative,
+            # subtraction is mathematically correct (multiplication would make negative scores closer to 0, which favors low priors).
+            final_scores[L] = raw_scores[L] - (1.0 - w_prior) * 100.0
+        else:
+            final_scores[L] = -1e9  # Exclude masked layers completely
 
     best_layer = max(final_scores, key=lambda L: final_scores[L])
     return best_layer, raw_scores, final_scores
@@ -221,7 +226,9 @@ def main():
     print(f"  Axis  : {args.axis}")
     print(f"  Alpha : {args.alpha}")
 
-    model, tokenizer = load_model_and_tokenizer(cfg=None, model_name=yaml.safe_load(open(args.config))["model_name"])
+    with open(args.config, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    model, tokenizer = load_model_and_tokenizer(cfg.get("model_name"), quant=cfg.get("quant", "auto"))
     device = _infer_main_device(model)
     model.eval()
 

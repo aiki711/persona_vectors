@@ -9,10 +9,10 @@ v_bank = 'exp_steering_layer_sweep/vectors/mean_diff_vectors.npz'
 data = np.load(v_bank)
 
 traits = ['extraversion', 'neuroticism', 'openness', 'conscientiousness', 'agreeableness']
-layers = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+layers = list(range(32))
 vals = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
-# 1. Compute average midpoint norms for the 11 layers
+# 1. Compute average midpoint norms for all 32 layers
 mp_norms = []
 for L in layers:
     layer_mp_norms = []
@@ -48,7 +48,7 @@ for L in layers:
 
 # 3. Create the dual-axis plot
 sns.set_theme(style="whitegrid")
-fig, ax1 = plt.subplots(figsize=(10, 6))
+fig, ax1 = plt.subplots(figsize=(14, 7))
 
 color = '#1f77b4'
 ax1.set_xlabel('Layer Number', fontsize=12, labelpad=10)
@@ -64,17 +64,17 @@ ax2 = ax1.twinx()
 color = '#e31a1c'
 ax2.set_ylabel('Max Safe Alpha (PPL <= 25) (Right Axis)', color=color, fontsize=12, labelpad=10)
 # Plot bars for max safe alpha
-bars = ax2.bar(layers, max_safe_alphas, alpha=0.35, color=color, width=1.5, label='Max Safe Alpha (PPL <= 25)')
+bars = ax2.bar(layers, max_safe_alphas, alpha=0.35, color=color, width=0.5, label='Max Safe Alpha (PPL <= 25)')
 ax2.tick_params(axis='y', labelcolor=color)
 ax2.set_ylim(0, 45) # Max alpha is 40
 ax2.grid(False) # Prevent overlapping grid lines
 
-# Annotate bars with their values
+# Annotate bars with their values (rotated 90 degrees for readability with 32 bars)
 for i, val in enumerate(max_safe_alphas):
-    ax2.text(layers[i], val + 1, f'{val}', ha='center', va='bottom', color=color, fontsize=9, fontweight='bold')
+    ax2.text(layers[i], val + 0.8, f'{val}', ha='center', va='bottom', color=color, fontsize=8.5, fontweight='bold', rotation=90)
 
 # Title
-plt.title('Relationship between Layer Midpoint Norm and Maximum Safe Alpha (PPL <= 25)\n(Mistral-7B Single-Layer Constant Alpha Steering)', fontsize=13, fontweight='bold', pad=15)
+plt.title('Relationship between Layer Midpoint Norm and Maximum Safe Alpha (PPL <= 25)\n(Mistral-7B Full 32-Layer Single-Layer Constant Alpha Steering Sweep)', fontsize=14, fontweight='bold', pad=15)
 
 # Add legends
 lines = line1 + [bars]
@@ -83,14 +83,14 @@ ax1.legend(lines, labels, loc='upper left')
 
 plt.tight_layout()
 
-# Save
+# Save to artifacts
 out_dir = Path('/home/s2550009/.gemini/antigravity-ide/brain/42af965e-7b98-48aa-bc1b-ea07d6f49983/images')
 out_dir.mkdir(parents=True, exist_ok=True)
 out_path = out_dir / 'midpoint_vs_max_safe_alpha.png'
 plt.savefig(out_path, dpi=200)
 plt.close()
 
-# 4. Also calculate correlation coefficient
+# Also calculate correlation coefficient
 corr = np.corrcoef(mp_norms, max_safe_alphas)[0, 1]
 print(f"Midpoint norms: {[round(x, 2) for x in mp_norms]}")
 print(f"Max safe alphas: {max_safe_alphas}")

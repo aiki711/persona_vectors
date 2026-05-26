@@ -62,15 +62,6 @@ def main():
 
     vals_str = " ".join(str(v) for v in VALS)
 
-    # Map traits to their corresponding running 32-layer sweep job IDs
-    SWEEP_JOBS = {
-        "extraversion": "135702",
-        "neuroticism": "135703",
-        "openness": "135704",
-        "conscientiousness": "135705",
-        "agreeableness": "135706"
-    }
-
     for trait in TRAITS:
         pbs_content = PBS_TEMPLATE.format(trait=trait, vals_list=vals_str)
         pbs_file = job_dir / f"run_dls_proj_{trait}.sh"
@@ -78,15 +69,8 @@ def main():
             f.write(pbs_content)
         pbs_file.chmod(0o755)
 
-        cmd = ["sbatch"]
-        sweep_job_id = SWEEP_JOBS.get(trait)
-        if sweep_job_id:
-            cmd.append(f"--dependency=afterok:{sweep_job_id}")
-            print(f"Submitting Proj & Prior DLS job for {trait} (dependent on job {sweep_job_id})...")
-        else:
-            print(f"Submitting Proj & Prior DLS job for {trait}...")
-            
-        cmd.append(str(pbs_file))
+        cmd = ["sbatch", str(pbs_file)]
+        print(f"Submitting Proj & Prior DLS job for {trait}...")
         res = subprocess.run(cmd, capture_output=True, text=True)
         print(f"  {res.stdout.strip()} {res.stderr.strip()}")
 

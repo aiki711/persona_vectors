@@ -1,0 +1,13 @@
+=== 32-Layer Sweep Files ===
+extraversion: 448 / 448 csv files
+neuroticism: 448 / 448 csv files
+openness: 448 / 448 csv files
+conscientiousness: 448 / 448 csv files
+agreeableness: 448 / 448 csv files
+
+=== Proj-Prior DLS Files ===
+extraversion: 0 csv files, 0 jsonl files
+neuroticism: 0 csv files, 0 jsonl files
+openness: 0 csv files, 0 jsonl files
+conscientiousness: 0 csv files, 0 jsonl files
+agreeableness: 0 csv files, 0 jsonl files

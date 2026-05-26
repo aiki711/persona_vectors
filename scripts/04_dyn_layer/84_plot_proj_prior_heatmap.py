@@ -85,48 +85,25 @@ def load_fusion_summary(fusion_dir: Path, axis: str, mode: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 def load_proj_prior_summary(proj_prior_dir: Path, axis: str) -> pd.DataFrame:
+    """Load proj-prior evaluated results.
+    62_eval_dyn_compare.py writes: dyn_score, dyn_ppl, base_score, base_ppl, ...
+    """
     records = []
     trait_dir = proj_prior_dir / axis
     for val in VALS:
-        jsonl_path = trait_dir / f"proj_prior_Val{float(val)}.jsonl"
-        if not jsonl_path.exists():
-            jsonl_path = trait_dir / f"proj_prior_Val{val}.jsonl"
-            if not jsonl_path.exists():
-                # Also check for potential CSV results (if evaluated and outputted as CSV)
-                csv_path = trait_dir / f"scores_proj_prior_Val{float(val)}.csv"
-                if not csv_path.exists():
-                    csv_path = trait_dir / f"scores_proj_prior_Val{val}.csv"
-                if csv_path.exists():
-                    try:
-                        df = pd.read_csv(csv_path)
-                        records.append({
-                            "val": val,
-                            "dyn_score": df["dyn_score"].mean(),
-                            "dyn_ppl": df["dyn_ppl"].mean(),
-                        })
-                    except Exception:
-                        pass
-                continue
-        try:
-            # Fallback read raw JSONL
-            scores = []
-            ppls = []
-            with open(jsonl_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    d = json.loads(line)
-                    # Note: raw jsonl might not contain graded scores yet.
-                    # We look for dyn_score/const_score if graded.
-                    if "dyn_score" in d:
-                        scores.append(d["dyn_score"])
-                        ppls.append(d["dyn_ppl"])
-            if scores:
+        csv_path = trait_dir / f"scores_proj_prior_Val{float(val)}.csv"
+        if not csv_path.exists():
+            csv_path = trait_dir / f"scores_proj_prior_Val{val}.csv"
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
                 records.append({
-                    "val": val,
-                    "dyn_score": np.mean(scores),
-                    "dyn_ppl": np.mean(ppls),
+                    "val":       val,
+                    "dyn_score": df["dyn_score"].mean(),
+                    "dyn_ppl":   df["dyn_ppl"].mean(),
                 })
-        except Exception:
-            pass
+            except Exception:
+                pass
     return pd.DataFrame(records)
 
 def highlight_safe_cells(ax, p_ppl, threshold=25.0):
@@ -142,14 +119,12 @@ def highlight_safe_cells(ax, p_ppl, threshold=25.0):
 def make_empty_pivot(vals):
     return pd.DataFrame(index=pd.Index(vals, name="val"))
 
-def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, relative_df, sig_df, plat_df, proj_prior_df):
+def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, sig_df, plat_df, proj_prior_df):
     result = pivot_df.copy()
     if not logit_df.empty and score_col in logit_df.columns:
         result["DLS_logit_diff"] = logit_df.set_index("val")[score_col]
     if not anti_df.empty and score_col in anti_df.columns:
         result["DLS_anti_align"] = anti_df.set_index("val")[score_col]
-    if not relative_df.empty and score_col in relative_df.columns:
-        result["DLS_relative"] = relative_df.set_index("val")[score_col]
     if not sig_df.empty and score_col in sig_df.columns:
         result["Fusion_Sigmoid"] = sig_df.set_index("val")[score_col]
     if not plat_df.empty and score_col in plat_df.columns:
@@ -163,11 +138,10 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    logit_df    = load_dyn_summary(all_layers_dir, axis, "logit_diff")
-    anti_df     = load_dyn_summary(all_layers_dir, axis, "anti_alignment")
-    relative_df = load_fusion_summary(fusion_dir, axis, "fixed")
-    sig_df      = load_fusion_summary(fusion_dir, axis, "sigmoid")
-    plat_df     = load_fusion_summary(fusion_dir, axis, "soft_plateau")
+    logit_df      = load_dyn_summary(all_layers_dir, axis, "logit_diff")
+    anti_df       = load_dyn_summary(all_layers_dir, axis, "anti_alignment")
+    sig_df        = load_fusion_summary(fusion_dir, axis, "sigmoid")
+    plat_df       = load_fusion_summary(fusion_dir, axis, "soft_plateau")
     proj_prior_df = load_proj_prior_summary(proj_prior_dir, axis)
 
     has_layer_data = not df.empty
@@ -180,8 +154,8 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         p_score = make_empty_pivot(VALS)
         p_ppl   = make_empty_pivot(VALS)
 
-    p_score_comp = append_comparison_cols(p_score, "dyn_score", logit_df, anti_df, relative_df, sig_df, plat_df, proj_prior_df)
-    p_ppl_comp   = append_comparison_cols(p_ppl,   "dyn_ppl",   logit_df, anti_df, relative_df, sig_df, plat_df, proj_prior_df)
+    p_score_comp = append_comparison_cols(p_score, "dyn_score", logit_df, anti_df, sig_df, plat_df, proj_prior_df)
+    p_ppl_comp   = append_comparison_cols(p_ppl,   "dyn_ppl",   logit_df, anti_df, sig_df, plat_df, proj_prior_df)
 
     p_score_comp = p_score_comp.reindex(VALS)
     p_ppl_comp   = p_ppl_comp.reindex(VALS)
@@ -195,7 +169,6 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
     separators = [
         ("DLS_logit_diff", "navy"),
         ("DLS_anti_align", "darkred"),
-        ("DLS_relative",   "darkgreen"),
         ("Fusion_Sigmoid", "darkorange"),
         ("Fusion_Plateau", "purple"),
         ("DLS_proj_prior", "darkcyan"),
@@ -215,7 +188,7 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title} [{axis.capitalize()}]"
-            f" (Black Border: PPL <= 25.0 | Navy/Red/Green: DLS | Orange/Purple: Midpoint Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Midpoint Fusion | Teal: Proj-Prior)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer (0 to 31) / Evaluation Variants (rightmost)", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)
@@ -238,14 +211,13 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
 def make_summary_heatmaps(all_df: pd.DataFrame,
                           logit_all_df: pd.DataFrame,
                           anti_all_df: pd.DataFrame,
-                          relative_all_df: pd.DataFrame,
                           sig_all_df: pd.DataFrame,
                           plat_all_df: pd.DataFrame,
                           proj_prior_all_df: pd.DataFrame,
                           out_dir: Path,
                           artifact_dir: Path | None):
     print("\n[Summary] plotting unified all-traits summary heatmap...")
-    
+
     def avg_dyn(df):
         if df is None or df.empty:
             return pd.DataFrame()
@@ -253,7 +225,6 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
 
     logit_avg      = avg_dyn(logit_all_df)
     anti_avg       = avg_dyn(anti_all_df)
-    relative_avg   = avg_dyn(relative_all_df)
     sig_avg        = avg_dyn(sig_all_df)
     plat_avg       = avg_dyn(plat_all_df)
     proj_prior_avg = avg_dyn(proj_prior_all_df)
@@ -263,7 +234,6 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
     separators = [
         ("DLS_logit_diff", "navy"),
         ("DLS_anti_align", "darkred"),
-        ("DLS_relative",   "darkgreen"),
         ("Fusion_Sigmoid", "darkorange"),
         ("Fusion_Plateau", "purple"),
         ("DLS_proj_prior", "darkcyan"),
@@ -272,7 +242,6 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
     method_dfs = [
         ("DLS_logit_diff", logit_avg),
         ("DLS_anti_align", anti_avg),
-        ("DLS_relative",   relative_avg),
         ("Fusion_Sigmoid", sig_avg),
         ("Fusion_Plateau", plat_avg),
         ("DLS_proj_prior", proj_prior_avg),
@@ -320,7 +289,7 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title}"
-            f" (Black Border: PPL <= 25.0 | Navy/Red/Green: DLS | Orange/Purple: Midpoint Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Midpoint Fusion | Teal: Proj-Prior)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer (0 to 31) / Evaluation Variants (rightmost)", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)
@@ -357,12 +326,11 @@ def main():
     out_dir        = Path(args.out_dir)
     artifact_dir   = Path(args.artifact_dir) if args.artifact_dir else None
 
-    all_dfs      = []
-    all_logit_dfs    = []
-    all_anti_dfs     = []
-    all_relative_dfs = []
-    all_sig_dfs  = []
-    all_plat_dfs = []
+    all_dfs            = []
+    all_logit_dfs      = []
+    all_anti_dfs       = []
+    all_sig_dfs        = []
+    all_plat_dfs       = []
     all_proj_prior_dfs = []
 
     for axis in TRAITS:
@@ -378,10 +346,6 @@ def main():
         if not anti_df.empty:
             all_anti_dfs.append(anti_df)
 
-        relative_df = load_fusion_summary(fusion_dir, axis, "fixed")
-        if not relative_df.empty:
-            all_relative_dfs.append(relative_df)
-
         sig_df = load_fusion_summary(fusion_dir, axis, "sigmoid")
         if not sig_df.empty:
             all_sig_dfs.append(sig_df)
@@ -396,15 +360,14 @@ def main():
 
         plot_axis(df, axis, out_dir / axis, all_layers_dir, fusion_dir, proj_prior_dir, artifact_dir)
 
-    all_df          = pd.concat(all_dfs,          ignore_index=True) if all_dfs          else pd.DataFrame()
-    logit_all_df    = pd.concat(all_logit_dfs,    ignore_index=True) if all_logit_dfs    else pd.DataFrame()
-    anti_all_df     = pd.concat(all_anti_dfs,     ignore_index=True) if all_anti_dfs     else pd.DataFrame()
-    relative_all_df = pd.concat(all_relative_dfs, ignore_index=True) if all_relative_dfs else pd.DataFrame()
-    sig_all_df      = pd.concat(all_sig_dfs,      ignore_index=True) if all_sig_dfs      else pd.DataFrame()
-    plat_all_df     = pd.concat(all_plat_dfs,     ignore_index=True) if all_plat_dfs     else pd.DataFrame()
-    proj_prior_all  = pd.concat(all_proj_prior_dfs, ignore_index=True) if all_proj_prior_dfs else pd.DataFrame()
+    all_df         = pd.concat(all_dfs,            ignore_index=True) if all_dfs            else pd.DataFrame()
+    logit_all_df   = pd.concat(all_logit_dfs,      ignore_index=True) if all_logit_dfs      else pd.DataFrame()
+    anti_all_df    = pd.concat(all_anti_dfs,       ignore_index=True) if all_anti_dfs       else pd.DataFrame()
+    sig_all_df     = pd.concat(all_sig_dfs,        ignore_index=True) if all_sig_dfs        else pd.DataFrame()
+    plat_all_df    = pd.concat(all_plat_dfs,       ignore_index=True) if all_plat_dfs       else pd.DataFrame()
+    proj_prior_all = pd.concat(all_proj_prior_dfs, ignore_index=True) if all_proj_prior_dfs else pd.DataFrame()
 
-    make_summary_heatmaps(all_df, logit_all_df, anti_all_df, relative_all_df, sig_all_df, plat_all_df, proj_prior_all, out_dir, artifact_dir)
+    make_summary_heatmaps(all_df, logit_all_df, anti_all_df, sig_all_df, plat_all_df, proj_prior_all, out_dir, artifact_dir)
     print("\nAll layers projection-prior unified heatmap generation finished.")
 
 if __name__ == "__main__":
