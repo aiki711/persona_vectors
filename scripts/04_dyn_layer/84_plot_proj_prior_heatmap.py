@@ -106,6 +106,26 @@ def load_proj_prior_summary(proj_prior_dir: Path, axis: str) -> pd.DataFrame:
                 pass
     return pd.DataFrame(records)
 
+def load_cos_prior_summary(proj_prior_dir: Path, axis: str) -> pd.DataFrame:
+    """Load cos-prior evaluated results."""
+    records = []
+    trait_dir = proj_prior_dir / axis
+    for val in VALS:
+        csv_path = trait_dir / f"scores_cos_prior_Val{float(val)}.csv"
+        if not csv_path.exists():
+            csv_path = trait_dir / f"scores_cos_prior_Val{val}.csv"
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
+                records.append({
+                    "val":       val,
+                    "dyn_score": df["dyn_score"].mean(),
+                    "dyn_ppl":   df["dyn_ppl"].mean(),
+                })
+            except Exception:
+                pass
+    return pd.DataFrame(records)
+
 def highlight_safe_cells(ax, p_ppl, threshold=25.0):
     if p_ppl is None or p_ppl.empty:
         return
@@ -119,7 +139,7 @@ def highlight_safe_cells(ax, p_ppl, threshold=25.0):
 def make_empty_pivot(vals):
     return pd.DataFrame(index=pd.Index(vals, name="val"))
 
-def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, sig_df, plat_df, proj_prior_df):
+def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, sig_df, plat_df, proj_prior_df, cos_prior_df):
     result = pivot_df.copy()
     if not logit_df.empty and score_col in logit_df.columns:
         result["DLS_logit_diff"] = logit_df.set_index("val")[score_col]
@@ -131,6 +151,8 @@ def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, sig_df, plat_
         result["Fusion_Plateau"] = plat_df.set_index("val")[score_col]
     if not proj_prior_df.empty and score_col in proj_prior_df.columns:
         result["DLS_proj_prior"] = proj_prior_df.set_index("val")[score_col]
+    if not cos_prior_df.empty and score_col in cos_prior_df.columns:
+        result["DLS_cos_prior"] = cos_prior_df.set_index("val")[score_col]
     return result
 
 def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, fusion_dir: Path, proj_prior_dir: Path, artifact_dir: Path | None):
@@ -143,6 +165,7 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
     sig_df        = load_fusion_summary(fusion_dir, axis, "sigmoid")
     plat_df       = load_fusion_summary(fusion_dir, axis, "soft_plateau")
     proj_prior_df = load_proj_prior_summary(proj_prior_dir, axis)
+    cos_prior_df  = load_cos_prior_summary(proj_prior_dir, axis)
 
     has_layer_data = not df.empty
     if has_layer_data:
@@ -154,8 +177,8 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         p_score = make_empty_pivot(VALS)
         p_ppl   = make_empty_pivot(VALS)
 
-    p_score_comp = append_comparison_cols(p_score, "dyn_score", logit_df, anti_df, sig_df, plat_df, proj_prior_df)
-    p_ppl_comp   = append_comparison_cols(p_ppl,   "dyn_ppl",   logit_df, anti_df, sig_df, plat_df, proj_prior_df)
+    p_score_comp = append_comparison_cols(p_score, "dyn_score", logit_df, anti_df, sig_df, plat_df, proj_prior_df, cos_prior_df)
+    p_ppl_comp   = append_comparison_cols(p_ppl,   "dyn_ppl",   logit_df, anti_df, sig_df, plat_df, proj_prior_df, cos_prior_df)
 
     p_score_comp = p_score_comp.reindex(VALS)
     p_ppl_comp   = p_ppl_comp.reindex(VALS)
@@ -172,6 +195,7 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         ("Fusion_Sigmoid", "darkorange"),
         ("Fusion_Plateau", "purple"),
         ("DLS_proj_prior", "darkcyan"),
+        ("DLS_cos_prior", "coral"),
     ]
 
     for ax_obj, p_data, p_ppl_ref, title, cmap, vmin, vmax, fmt in configs:
@@ -208,12 +232,52 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         shutil.copy(out_path, dest)
         print(f"  Copied to artifact: {dest}")
 
+    # Plot single-layer only heatmap with reversed y-axis
+    if has_layer_data:
+        print(f"  Plotting single-layer only heatmap for {axis} (reversed y-axis)...")
+        p_score_rev = p_score.reindex(reversed(VALS))
+        p_ppl_rev   = p_ppl.reindex(reversed(VALS))
+
+        fig_s, axes_s = plt.subplots(2, 1, figsize=(22, 14))
+        configs_s = [
+            (axes_s[0], p_score_rev, p_ppl_rev, "Single-Layer Steering (Only) — Score", "YlGn",     1,   5, ".2f"),
+            (axes_s[1], p_ppl_rev,   p_ppl_rev, "Single-Layer Steering (Only) — PPL",   "RdYlGn_r", 1, 100, ".1f"),
+        ]
+
+        for ax_obj, p_data, p_ppl_ref, title, cmap, vmin, vmax, fmt in configs_s:
+            sns.heatmap(p_data, annot=True, fmt=fmt, cmap=cmap,
+                        vmin=vmin, vmax=vmax,
+                        linewidths=0.4, linecolor="gray",
+                        ax=ax_obj, annot_kws={"size": 8})
+
+            highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
+            ax_obj.set_title(
+                f"{title} [{axis.capitalize()}] (Black Border: PPL <= 25.0)",
+                fontsize=12, fontweight="bold")
+            ax_obj.set_xlabel("Layer (0 to 31)", fontsize=10)
+            ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)
+
+        plt.suptitle(f"Single-Layer Steering Sweep (Only): {axis.capitalize()} (Reversed Steering Intensity Axis)",
+                     fontsize=16, fontweight="bold", y=0.99)
+        plt.tight_layout()
+
+        out_path_s = out_dir / f"heatmap_{axis}_single_layer_only.png"
+        plt.savefig(out_path_s, dpi=200, bbox_inches="tight")
+        plt.close()
+        print(f"    Saved single-layer only heatmap to: {out_path_s}")
+
+        if artifact_dir and artifact_dir.exists():
+            dest_s = artifact_dir / f"heatmap_{axis}_single_layer_only.png"
+            shutil.copy(out_path_s, dest_s)
+            print(f"    Copied to artifact: {dest_s}")
+
 def make_summary_heatmaps(all_df: pd.DataFrame,
                           logit_all_df: pd.DataFrame,
                           anti_all_df: pd.DataFrame,
                           sig_all_df: pd.DataFrame,
                           plat_all_df: pd.DataFrame,
                           proj_prior_all_df: pd.DataFrame,
+                          cos_prior_all_df: pd.DataFrame,
                           out_dir: Path,
                           artifact_dir: Path | None):
     print("\n[Summary] plotting unified all-traits summary heatmap...")
@@ -228,6 +292,7 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
     sig_avg        = avg_dyn(sig_all_df)
     plat_avg       = avg_dyn(plat_all_df)
     proj_prior_avg = avg_dyn(proj_prior_all_df)
+    cos_prior_avg  = avg_dyn(cos_prior_all_df)
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -237,6 +302,7 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         ("Fusion_Sigmoid", "darkorange"),
         ("Fusion_Plateau", "purple"),
         ("DLS_proj_prior", "darkcyan"),
+        ("DLS_cos_prior", "coral"),
     ]
 
     method_dfs = [
@@ -245,6 +311,7 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         ("Fusion_Sigmoid", sig_avg),
         ("Fusion_Plateau", plat_avg),
         ("DLS_proj_prior", proj_prior_avg),
+        ("DLS_cos_prior", cos_prior_avg),
     ]
 
     has_layer_data = not all_df.empty
@@ -309,6 +376,50 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         shutil.copy(out_path, dest)
         print(f"  Copied to artifact: {dest}")
 
+    # Plot summary single-layer only heatmap with reversed y-axis
+    if has_layer_data:
+        print("  Plotting summary single-layer only heatmap (reversed y-axis)...")
+        p_score_rev = p_score.reindex(reversed(VALS))
+        p_ppl_rev   = p_ppl.reindex(reversed(VALS))
+
+        # Filter columns to keep only the integer layer columns (0 to 31)
+        layer_cols = [c for c in p_score_rev.columns if isinstance(c, int) or str(c).isdigit()]
+        p_score_only = p_score_rev[layer_cols]
+        p_ppl_only = p_ppl_rev[layer_cols]
+
+        fig_s, axes_s = plt.subplots(2, 1, figsize=(22, 14))
+        configs_s = [
+            (axes_s[0], p_score_only, p_ppl_only, "Unified Summary (Only) — Score (All traits avg)", "YlGn",     1,   5, ".2f"),
+            (axes_s[1], p_ppl_only,   p_ppl_only, "Unified Summary (Only) — PPL   (All traits avg)", "RdYlGn_r", 1, 100, ".1f"),
+        ]
+
+        for ax_obj, p_data, p_ppl_ref, title, cmap, vmin, vmax, fmt in configs_s:
+            sns.heatmap(p_data, annot=True, fmt=fmt, cmap=cmap,
+                        vmin=vmin, vmax=vmax,
+                        linewidths=0.4, linecolor="gray",
+                        ax=ax_obj, annot_kws={"size": 8})
+
+            highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
+            ax_obj.set_title(
+                f"{title} (Black Border: PPL <= 25.0)",
+                fontsize=12, fontweight="bold")
+            ax_obj.set_xlabel("Layer (0 to 31)", fontsize=10)
+            ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)
+
+        plt.suptitle("Unified 32-Layer Steering Summary (Only, All Traits Average - Reversed Steering Intensity Axis)",
+                     fontsize=16, fontweight="bold", y=0.99)
+        plt.tight_layout()
+
+        out_path_s = out_dir / "summary_single_layer_only.png"
+        plt.savefig(out_path_s, dpi=200, bbox_inches="tight")
+        plt.close()
+        print(f"    Saved summary single-layer only heatmap to: {out_path_s}")
+
+        if artifact_dir and artifact_dir.exists():
+            dest_s = artifact_dir / "summary_single_layer_only.png"
+            shutil.copy(out_path_s, dest_s)
+            print(f"    Copied to artifact: {dest_s}")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input_dir",      default="exp_steering_layer_analysis/results")
@@ -332,6 +443,7 @@ def main():
     all_sig_dfs        = []
     all_plat_dfs       = []
     all_proj_prior_dfs = []
+    all_cos_prior_dfs  = []
 
     for axis in TRAITS:
         df = load_summary(input_dir, axis)
@@ -358,6 +470,10 @@ def main():
         if not proj_prior_df.empty:
             all_proj_prior_dfs.append(proj_prior_df)
 
+        cos_prior_df = load_cos_prior_summary(proj_prior_dir, axis)
+        if not cos_prior_df.empty:
+            all_cos_prior_dfs.append(cos_prior_df)
+
         plot_axis(df, axis, out_dir / axis, all_layers_dir, fusion_dir, proj_prior_dir, artifact_dir)
 
     all_df         = pd.concat(all_dfs,            ignore_index=True) if all_dfs            else pd.DataFrame()
@@ -366,8 +482,9 @@ def main():
     sig_all_df     = pd.concat(all_sig_dfs,        ignore_index=True) if all_sig_dfs        else pd.DataFrame()
     plat_all_df    = pd.concat(all_plat_dfs,       ignore_index=True) if all_plat_dfs       else pd.DataFrame()
     proj_prior_all = pd.concat(all_proj_prior_dfs, ignore_index=True) if all_proj_prior_dfs else pd.DataFrame()
+    cos_prior_all  = pd.concat(all_cos_prior_dfs,  ignore_index=True) if all_cos_prior_dfs  else pd.DataFrame()
 
-    make_summary_heatmaps(all_df, logit_all_df, anti_all_df, sig_all_df, plat_all_df, proj_prior_all, out_dir, artifact_dir)
+    make_summary_heatmaps(all_df, logit_all_df, anti_all_df, sig_all_df, plat_all_df, proj_prior_all, cos_prior_all, out_dir, artifact_dir)
     print("\nAll layers projection-prior unified heatmap generation finished.")
 
 if __name__ == "__main__":

@@ -83,7 +83,7 @@ def load_layer_priors(input_dir: Path, axis: str) -> dict:
             
     return priors
 
-def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors):
+def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="projection"):
     saved_h = {}
     handles = []
     stack, _, _ = get_layer_stack(model)
@@ -107,15 +107,20 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
     raw_scores = {}
     for L, w_dev in layer_w_dev.items():
         h = saved_h[L]
-        # Normalize w_dev to a unit vector
-        w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
-        # Compute projection
-        proj = torch.dot(h, w_unit).item()
+        if score_mode == "cosine":
+            # Compute cosine similarity
+            h_unit = h / (torch.norm(h) + 1e-10)
+            w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+            score = torch.dot(h_unit, w_unit).item()
+        else:
+            # Normalize w_dev to a unit vector and compute projection
+            w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+            score = torch.dot(h, w_unit).item()
         
         if target_direction == "high":
-            raw_scores[L] = -proj
+            raw_scores[L] = -score
         else:
-            raw_scores[L] = proj
+            raw_scores[L] = score
 
     final_scores = {}
     for L in layer_w_dev.keys():
@@ -170,6 +175,8 @@ def main():
     ap.add_argument("--alpha",        type=float, required=True)
     ap.add_argument("--direction",    type=str, choices=["high", "low"], default="high")
     ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint"], default="midpoint")
+    ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
+    ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine"], default="projection", help="layer selection score mode")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -177,18 +184,26 @@ def main():
     out_dir = Path(args.out_dir) / args.axis
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    out_file = out_dir / f"proj_prior_Val{args.alpha}.jsonl"
+    if args.score_mode == "cosine":
+        method_name = "cos_only" if args.no_prior else "cos_prior"
+    else:
+        method_name = "proj_only" if args.no_prior else "proj_prior"
+    out_file = out_dir / f"{method_name}_Val{args.alpha}.jsonl"
     if out_file.exists():
         print(f"[SKIP] Already exists: {out_file}")
         return
 
     # Load layer priors
-    print(f"Loading layer priors for {args.axis} from {input_dir}...")
-    layer_priors = load_layer_priors(input_dir, args.axis)
-    print("Layer Prior Weights:")
-    for L in sorted(layer_priors.keys()):
-        if layer_priors[L] > 0.0:
-            print(f"  Layer {L:2d}: {layer_priors[L]:.4f}")
+    if args.no_prior:
+        print("Bypassing layer priors (prior weights set to 1.0 for all layers)...")
+        layer_priors = {L: 1.0 for L in LAYERS}
+    else:
+        print(f"Loading layer priors for {args.axis} from {input_dir}...")
+        layer_priors = load_layer_priors(input_dir, args.axis)
+        print("Layer Prior Weights:")
+        for L in sorted(layer_priors.keys()):
+            if layer_priors[L] > 0.0:
+                print(f"  Layer {L:2d}: {layer_priors[L]:.4f}")
 
     # Load vectors
     v_data = np.load(args.vector_bank)
@@ -256,7 +271,7 @@ def main():
 
         # Layer Selection
         best_layer, raw_scores, final_scores = select_layer_proj_prior(
-            model, inputs.input_ids, layer_w_dev, args.direction, layer_priors
+            model, inputs.input_ids, layer_w_dev, args.direction, layer_priors, args.score_mode
         )
 
         # Generate

@@ -3,8 +3,8 @@
 #
 # 87_plot_logit_vs_proj_prior.py
 #
-# Generates a side-by-side comparison heatmap of DLS_logit_diff vs DLS_proj_prior
-# for all 5 personality traits in a single figure.
+# Generates a beautifully formatted side-by-side comparison heatmap of DLS_logit_diff vs DLS_proj_prior
+# for all 5 personality traits.
 #
 # Output: exp_steering_dyn_layer_proj_prior/figures/logit_vs_proj_prior_all_traits.png
 #
@@ -21,11 +21,11 @@ from matplotlib.patches import Rectangle
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 TRAIT_LABELS = {
-    "extraversion":     "Extraversion",
-    "neuroticism":      "Neuroticism",
-    "openness":         "Openness",
+    "extraversion":      "Extraversion",
+    "neuroticism":       "Neuroticism",
+    "openness":          "Openness",
     "conscientiousness": "Conscientiousness",
-    "agreeableness":    "Agreeableness",
+    "agreeableness":     "Agreeableness",
 }
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
@@ -53,7 +53,7 @@ def load_dyn_summary(dyn_dir: Path, axis: str, method: str) -> pd.DataFrame:
 
 
 def load_proj_prior_summary(proj_prior_dir: Path, axis: str) -> pd.DataFrame:
-    """Load Proj-Prior evaluated by 62_eval_dyn_compare.py (dyn_score, dyn_ppl)."""
+    """Load Proj-Prior evaluated results (dyn_score, dyn_ppl)."""
     records = []
     trait_dir = proj_prior_dir / axis
     for val in VALS:
@@ -81,24 +81,33 @@ def df_to_series(df: pd.DataFrame, col: str) -> pd.Series:
 
 # ── highlight ──────────────────────────────────────────────────────────────────
 
-def highlight_safe_cells(ax, ppl_array, threshold=25.0):
-    """ppl_array: 2D numpy array (rows=vals, cols=methods)."""
-    for i in range(ppl_array.shape[0]):
-        for j in range(ppl_array.shape[1]):
-            v = ppl_array[i, j]
+def highlight_safe_cells(ax, ppl_matrix, threshold=25.0):
+    """
+    Draws thick black borders around cells where ppl <= threshold.
+    ppl_matrix shape: (2, 14) -> rows correspond to methods, cols to alphas.
+    """
+    for i in range(ppl_matrix.shape[0]):
+        for j in range(ppl_matrix.shape[1]):
+            v = ppl_matrix[i, j]
             if not np.isnan(v) and v <= threshold:
+                # Rectangle(xy, width, height)
+                # In seaborn heatmaps, columns are j (x-axis), rows are i (y-axis).
+                # The cell is bounded by [j, j+1] and [i, i+1].
                 rect = Rectangle((j, i), 1, 1, fill=False,
-                                  edgecolor="black", lw=2.5, clip_on=False)
+                                  edgecolor="black", lw=2.2, clip_on=False)
                 ax.add_patch(rect)
 
 
 # ── main plot ──────────────────────────────────────────────────────────────────
 
 def make_all_traits_figure(all_layers_dir, proj_prior_dir, out_dir, artifact_dir):
-    """Build a single figure: 2 rows (Score / PPL) × N_traits columns.
-    Each cell is a 2-column heatmap (Logit-Diff | Proj-Prior).
     """
-    print("\n[All Traits] Building logit_diff vs proj_prior comparison figure...")
+    Build a single figure: 5 rows (one per trait) x 2 columns (Score | PPL).
+    Inside each subplot:
+      - X-axis: Alpha (VALS)
+      - Y-axis: Method (Logit-Diff, Proj-Prior)
+    """
+    print("\n[All Traits] Building logit_diff vs proj_prior comparison figure (Horizontal Layout)...")
 
     n_traits = len(TRAITS)
     # --- collect data ---
@@ -111,7 +120,6 @@ def make_all_traits_figure(all_layers_dir, proj_prior_dir, out_dir, artifact_dir
         logit_data[axis] = (df_to_series(ld, "dyn_score"), df_to_series(ld, "dyn_ppl"))
         proj_data[axis]  = (df_to_series(pp, "dyn_score"), df_to_series(pp, "dyn_ppl"))
 
-        # diagnostics
         if not pp.empty:
             ppl_s = df_to_series(pp, "dyn_ppl")
             safe_mask = ppl_s <= 25.0
@@ -121,86 +129,109 @@ def make_all_traits_figure(all_layers_dir, proj_prior_dir, out_dir, artifact_dir
                 print(f"  [{axis}] proj_prior best safe alpha={best_a}, "
                       f"score={sc_s[best_a]:.3f}, ppl={ppl_s[best_a]:.2f}")
 
-    METHOD_COLS = ["Logit-Diff", "Proj-Prior"]
-    COL_COLORS  = ["navy", "darkcyan"]
+    # Set up matplotlib style for clean aesthetic
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = ["DejaVu Sans", "Arial", "Helvetica"]
 
-    # figsize: ~3.5 per trait column, ~14 for 14 rows
-    fig_w = n_traits * 4.0 + 1.5
-    fig_h = 20
-    fig = plt.figure(figsize=(fig_w, fig_h))
+    # 16 inches wide, 9.5 inches tall
+    fig = plt.figure(figsize=(16, 9.5))
+    
     fig.suptitle(
-        "DLS Logit-Diff vs Proj-Prior — All Personality Traits",
-        fontsize=16, fontweight="bold", y=1.01)
+        "DLS Method Comparison: Logit-Diff vs. Proj-Prior (All Traits)",
+        fontsize=18, fontweight="bold", y=0.98
+    )
+    fig.text(
+        0.5, 0.93,
+        "Comparison of dynamic layer steering methods across 14 scaling factors (alpha) for all 5 traits.\n"
+        "Safe cells (Perplexity <= 25.0) are highlighted with bold black borders.",
+        fontsize=11, style="italic", ha="center"
+    )
 
-    # 2 super-rows (Score / PPL), each subdivided into n_traits sub-columns
-    outer = gridspec.GridSpec(2, 1, figure=fig, hspace=0.35)
-    row_titles = ["Score", "PPL"]
-    row_cmaps  = ["YlGn", "RdYlGn_r"]
-    row_vmins  = [1, 1]
-    row_vmaxs  = [5, 100]
-    row_fmts   = [".2f", ".1f"]
+    # GridSpec: 5 rows, 5 columns:
+    #   Col 0: Score heatmap (width 1.0)
+    #   Col 1: Score colorbar (width 0.02)
+    #   Col 2: Spacer (width 0.12)
+    #   Col 3: PPL heatmap (width 1.0)
+    #   Col 4: PPL colorbar (width 0.02)
+    gs = gridspec.GridSpec(
+        5, 5, width_ratios=[1.0, 0.02, 0.12, 1.0, 0.02],
+        wspace=0.05, hspace=0.45,
+        left=0.12, right=0.95, top=0.86, bottom=0.08
+    )
 
-    for row_idx, (row_title, cmap, vmin, vmax, fmt) in enumerate(
-            zip(row_titles, row_cmaps, row_vmins, row_vmaxs, row_fmts)):
+    # Add shared colorbars spanning all rows in Col 1 and Col 4
+    cbar_score_ax = fig.add_subplot(gs[:, 1])
+    cbar_ppl_ax = fig.add_subplot(gs[:, 4])
 
-        inner = gridspec.GridSpecFromSubplotSpec(
-            1, n_traits, subplot_spec=outer[row_idx], wspace=0.3)
+    METHOD_LABELS = ["Logit-Diff", "Proj-Prior"]
 
-        for col_idx, axis in enumerate(TRAITS):
-            ax = fig.add_subplot(inner[col_idx])
+    for r, axis in enumerate(TRAITS):
+        ax_score = fig.add_subplot(gs[r, 0])
+        ax_ppl   = fig.add_subplot(gs[r, 3])
 
-            if row_idx == 0:
-                logit_s, logit_ppl = logit_data[axis]
-                proj_s,  proj_ppl  = proj_data[axis]
-                data_matrix = np.column_stack([logit_s.values, proj_s.values])
-                ppl_matrix  = np.column_stack([logit_ppl.values, proj_ppl.values])
-            else:
-                logit_ppl = logit_data[axis][1]
-                proj_ppl  = proj_data[axis][1]
-                data_matrix = np.column_stack([logit_ppl.values, proj_ppl.values])
-                ppl_matrix  = data_matrix
+        # Load series
+        logit_s, logit_ppl = logit_data[axis]
+        proj_s,  proj_ppl  = proj_data[axis]
 
-            plot_df = pd.DataFrame(
-                data_matrix, index=VALS, columns=METHOD_COLS)
-            plot_df.index.name = "alpha"
+        # Construct (2, 14) matrices
+        score_matrix = np.vstack([logit_s.values, proj_s.values])
+        ppl_matrix   = np.vstack([logit_ppl.values, proj_ppl.values])
 
-            sns.heatmap(
-                plot_df, annot=True, fmt=fmt, cmap=cmap,
-                vmin=vmin, vmax=vmax,
-                linewidths=0.6, linecolor="gray",
-                ax=ax, annot_kws={"size": 8},
-                cbar=(col_idx == n_traits - 1),   # show colorbar only on last col
-            )
+        # Convert to DataFrames
+        df_score = pd.DataFrame(score_matrix, index=METHOD_LABELS, columns=VALS)
+        df_ppl   = pd.DataFrame(ppl_matrix, index=METHOD_LABELS, columns=VALS)
 
-            # Separator lines between the two methods
-            for j, color in enumerate(COL_COLORS):
-                ax.axvline(x=j, color=color, linewidth=2.5)
+        # ── 1. Plot Score Heatmap ──
+        sns.heatmap(
+            df_score, annot=True, fmt=".2f", cmap="YlGnBu",
+            vmin=1.0, vmax=5.0, linewidths=0.5, linecolor="gainsboro",
+            ax=ax_score, annot_kws={"size": 8.5, "weight": "semibold"},
+            cbar=(r == 0), cbar_ax=cbar_score_ax if (r == 0) else None
+        )
+        highlight_safe_cells(ax_score, ppl_matrix, threshold=25.0)
 
-            # Black border for safe cells
-            highlight_safe_cells(ax, ppl_matrix, threshold=25.0)
+        # Style Score Subplot
+        ax_score.set_ylabel(TRAIT_LABELS[axis], fontsize=12, fontweight="bold", labelpad=15)
+        if r == 0:
+            ax_score.set_title("Steering Score (1.0 to 5.0, Higher is Better)", fontsize=11, fontweight="bold", pad=10)
+        
+        # Hide tick labels/labels based on position
+        if r < 4:
+            ax_score.set_xticklabels([])
+        else:
+            ax_score.set_xlabel("Alpha (Val)", fontsize=10)
+            ax_score.set_xticklabels(VALS, fontsize=9)
+            
+        ax_score.set_yticklabels(METHOD_LABELS, rotation=0, fontsize=9)
 
-            trait_label = TRAIT_LABELS[axis]
-            ax.set_title(
-                f"{trait_label}\n({row_title})",
-                fontsize=10, fontweight="bold")
-            ax.set_xlabel("")
-            if col_idx == 0:
-                ax.set_ylabel("Alpha (Val)", fontsize=9)
-            else:
-                ax.set_ylabel("")
-                ax.set_yticklabels([])
+        # ── 2. Plot PPL Heatmap ──
+        sns.heatmap(
+            df_ppl, annot=True, fmt=".1f", cmap="YlOrRd",
+            vmin=5.0, vmax=50.0, linewidths=0.5, linecolor="gainsboro",
+            ax=ax_ppl, annot_kws={"size": 8.5, "weight": "semibold"},
+            cbar=(r == 0), cbar_ax=cbar_ppl_ax if (r == 0) else None
+        )
+        highlight_safe_cells(ax_ppl, ppl_matrix, threshold=25.0)
 
-    # Add row super-labels on the left
-    for row_idx, label in enumerate(row_titles):
-        fig.text(0.005, 0.75 - row_idx * 0.5, label,
-                 va="center", ha="left", fontsize=13, fontweight="bold",
-                 rotation=90)
+        # Style PPL Subplot
+        if r == 0:
+            ax_ppl.set_title("Perplexity (PPL, Lower is Better, Safe <= 25.0)", fontsize=11, fontweight="bold", pad=10)
+        
+        # Hide labels based on position
+        if r < 4:
+            ax_ppl.set_xticklabels([])
+        else:
+            ax_ppl.set_xlabel("Alpha (Val)", fontsize=10)
+            ax_ppl.set_xticklabels(VALS, fontsize=9)
+            
+        ax_ppl.set_yticklabels([]) # Hide y-ticks for PPL since it's aligned with Score
+        ax_ppl.set_ylabel("")
 
-    # Legend note
-    fig.text(0.5, -0.01,
-             "Black border: PPL ≤ 25.0 (safe zone) | Navy: Logit-Diff | Teal: Proj-Prior",
-             ha="center", fontsize=10, style="italic")
+    # Adjust colorbar labels/titles
+    cbar_score_ax.set_ylabel("Score Scale", fontsize=10, fontweight="bold")
+    cbar_ppl_ax.set_ylabel("PPL Scale (Clipped at 50.0)", fontsize=10, fontweight="bold")
 
+    # Save outputs
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "logit_vs_proj_prior_all_traits.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
