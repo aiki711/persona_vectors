@@ -31,7 +31,7 @@ export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${{PYTHONPATH:-}}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 CONFIG="config/mistral_7b.yaml"
-VECTOR_BANK="exp_steering_layer_sweep/vectors/mean_diff_vectors.npz"
+VECTOR_BANK="vectors/mean_diff_vectors.npz"
 PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
 INPUT_DIR="exp_steering_layer_analysis/results"
 OUT_DIR="exp_steering_dyn_layer_proj_prior/results"

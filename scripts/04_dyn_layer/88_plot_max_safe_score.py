@@ -67,49 +67,41 @@ def main():
     for trait in TRAITS:
         # 1. Logit-Diff
         ld_score, ld_alpha, ld_ppl = get_max_safe_score(logit_diff_dir, trait, "logit_diff")
-        # 2. Proj-Only
-        po_score, po_alpha, po_ppl = get_max_safe_score(proj_prior_dir, trait, "proj_only")
-        # 3. Proj-Prior
+        # 2. Proj-Prior
         pp_score, pp_alpha, pp_ppl = get_max_safe_score(proj_prior_dir, trait, "proj_prior")
-        # 4. Cos-Prior
+        # 3. Cos-Prior
         cp_score, cp_alpha, cp_ppl = get_max_safe_score(proj_prior_dir, trait, "cos_prior")
         
         data.append({
             "trait": TRAIT_LABELS[trait],
             "logit_diff": (ld_score, ld_alpha, ld_ppl),
-            "proj_only":  (po_score, po_alpha, po_ppl),
             "proj_prior": (pp_score, pp_alpha, pp_ppl),
             "cos_prior":  (cp_score, cp_alpha, cp_ppl)
         })
         
         print(f"[{TRAIT_LABELS[trait]}]")
         print(f"  Logit-Diff : Score={ld_score:.2f} (alpha={ld_alpha}, ppl={ld_ppl:.2f})")
-        print(f"  Proj-Only  : Score={po_score:.2f} (alpha={po_alpha}, ppl={po_ppl:.2f})")
         print(f"  Proj-Prior : Score={pp_score:.2f} (alpha={pp_alpha}, ppl={pp_ppl:.2f})")
         print(f"  Cos-Prior  : Score={cp_score:.2f} (alpha={cp_alpha}, ppl={cp_ppl:.2f})")
 
     # Calculate averages
     ld_scores_all = [d["logit_diff"][0] for d in data]
-    po_scores_all = [d["proj_only"][0] for d in data]
     pp_scores_all = [d["proj_prior"][0] for d in data]
     cp_scores_all = [d["cos_prior"][0] for d in data]
     
     avg_ld = np.mean(ld_scores_all)
-    avg_po = np.mean(po_scores_all)
     avg_pp = np.mean(pp_scores_all)
     avg_cp = np.mean(cp_scores_all)
     
     data.append({
         "trait": "Average",
         "logit_diff": (avg_ld, np.nan, np.nan),
-        "proj_only":  (avg_po, np.nan, np.nan),
         "proj_prior": (avg_pp, np.nan, np.nan),
         "cos_prior":  (avg_cp, np.nan, np.nan)
     })
     
     print("\n[Averages]")
     print(f"  Logit-Diff : {avg_ld:.2f}")
-    print(f"  Proj-Only  : {avg_po:.2f}")
     print(f"  Proj-Prior : {avg_pp:.2f}")
     print(f"  Cos-Prior  : {avg_cp:.2f}")
 
@@ -119,27 +111,24 @@ def main():
     
     categories = [d["trait"] for d in data]
     x = np.arange(len(categories))
-    width = 0.20  # width of the bars
+    width = 0.24  # slightly wider bars for 3 methods
 
     fig, ax = plt.subplots(figsize=(15, 7.5))
     
     # Custom premium colors
     color_logit = "#1f4e79"   # Premium Deep Steel Blue
-    color_only  = "#7f8c8d"   # Premium Slate Gray (Neutral)
     color_prior = "#00a896"   # Premium Teal/Emerald
     color_cos   = "#d95f02"   # Premium Coral/Orange
     
     # Extract score values
     ld_vals = [d["logit_diff"][0] for d in data]
-    po_vals = [d["proj_only"][0] for d in data]
     pp_vals = [d["proj_prior"][0] for d in data]
     cp_vals = [d["cos_prior"][0] for d in data]
     
     # Plot bars
-    rects1 = ax.bar(x - 1.5*width, ld_vals, width, label="Logit-Diff (Baseline)", color=color_logit, zorder=3)
-    rects2 = ax.bar(x - 0.5*width, po_vals, width, label="Proj-Only (Ablation)", color=color_only, zorder=3)
-    rects3 = ax.bar(x + 0.5*width, pp_vals, width, label="Proj-Prior (Proposed)", color=color_prior, zorder=3)
-    rects4 = ax.bar(x + 1.5*width, cp_vals, width, label="Cos-Prior (Proposed)", color=color_cos, zorder=3)
+    rects1 = ax.bar(x - width, ld_vals, width, label="Logit-Diff (Baseline)", color=color_logit, zorder=3)
+    rects2 = ax.bar(x,         pp_vals, width, label="Proj-Prior (Proposed)", color=color_prior, zorder=3)
+    rects3 = ax.bar(x + width, cp_vals, width, label="Cos-Prior (Proposed)", color=color_cos, zorder=3)
 
     # Dashed baseline at 3.0 (unsteered neutral score)
     ax.axhline(y=3.0, color="#888888", linestyle="--", linewidth=1.2, zorder=2, label="Unsteered Baseline (3.0)")
@@ -159,7 +148,7 @@ def main():
     ax.grid(axis="y", linestyle=":", alpha=0.6, color="#bbbbbb", zorder=0)
 
     # Helper function to attach values on top of the bars
-    def autolabel(rects, data_key, is_prior=False, is_only=False):
+    def autolabel(rects, data_key, is_prior=False):
         for i, rect in enumerate(rects):
             height = rect.get_height()
             
@@ -177,7 +166,7 @@ def main():
             info = data[i][data_key]
             alpha_val = info[1]
             
-            if not np.isnan(alpha_val) and (is_prior or is_only):
+            if not np.isnan(alpha_val) and is_prior:
                 alpha_text = f"α={alpha_val}"
                 # Alpha label inside the bar
                 ax.annotate(alpha_text,
@@ -201,7 +190,7 @@ def main():
                             fontsize=8, color=imp_color, fontweight="bold")
                             
             # Add average improvement label for the Average category
-            if categories[i] == "Average" and (is_prior or is_only):
+            if categories[i] == "Average" and is_prior:
                 ld_score = data[i]["logit_diff"][0]
                 diff = height - ld_score
                 diff_text = f"{diff:+.2f}"
@@ -214,15 +203,14 @@ def main():
                             fontsize=8, color=imp_color, fontweight="bold")
 
     autolabel(rects1, "logit_diff")
-    autolabel(rects2, "proj_only", is_only=True)
-    autolabel(rects3, "proj_prior", is_prior=True)
-    autolabel(rects4, "cos_prior", is_prior=True)
+    autolabel(rects2, "proj_prior", is_prior=True)
+    autolabel(rects3, "cos_prior", is_prior=True)
 
     ax.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="#e0e0e0", framealpha=0.9, fontsize=9.5)
     
     plt.figtext(0.5, 0.01, 
                 "Note: Parentheses indicate improvement over Logit-Diff. "
-                "Optimal alpha scaling factors (α) for Proj-Only, Proj-Prior and Cos-Prior are displayed inside the bars.\n"
+                "Optimal alpha scaling factors (α) for Proj-Prior and Cos-Prior are displayed inside the bars.\n"
                 "All scores represent the maximum personality score achieved under the safety constraint of Perplexity (PPL) ≤ 25.0.",
                 ha="center", fontsize=9, style="italic", color="#555555")
 

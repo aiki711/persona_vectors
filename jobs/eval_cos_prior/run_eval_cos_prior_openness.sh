@@ -7,7 +7,7 @@
 #SBATCH --time=02:00:00
 #SBATCH --output=log/eval_cos_prior_openness.out
 #SBATCH --error=log/eval_cos_prior_openness.err
-#SBATCH --dependency=afterok:142342
+#SBATCH --dependency=afterok:143150
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
