@@ -7,7 +7,7 @@
 #SBATCH --time=02:00:00
 #SBATCH --output=log/eval_cos_prior_agreeableness.out
 #SBATCH --error=log/eval_cos_prior_agreeableness.err
-#SBATCH --dependency=afterok:143152
+#SBATCH --dependency=afterok:143476
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"

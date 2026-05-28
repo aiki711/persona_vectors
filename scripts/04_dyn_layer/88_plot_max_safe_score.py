@@ -111,24 +111,21 @@ def main():
     
     categories = [d["trait"] for d in data]
     x = np.arange(len(categories))
-    width = 0.24  # slightly wider bars for 3 methods
+    width = 0.35  # Adjust width for 2 bars
 
-    fig, ax = plt.subplots(figsize=(15, 7.5))
+    fig, ax = plt.subplots(figsize=(12, 7.5))
     
     # Custom premium colors
     color_logit = "#1f4e79"   # Premium Deep Steel Blue
-    color_prior = "#00a896"   # Premium Teal/Emerald
     color_cos   = "#d95f02"   # Premium Coral/Orange
     
     # Extract score values
     ld_vals = [d["logit_diff"][0] for d in data]
-    pp_vals = [d["proj_prior"][0] for d in data]
     cp_vals = [d["cos_prior"][0] for d in data]
     
     # Plot bars
-    rects1 = ax.bar(x - width, ld_vals, width, label="Logit-Diff (Baseline)", color=color_logit, zorder=3)
-    rects2 = ax.bar(x,         pp_vals, width, label="Proj-Prior (Proposed)", color=color_prior, zorder=3)
-    rects3 = ax.bar(x + width, cp_vals, width, label="Cos-Prior (Proposed)", color=color_cos, zorder=3)
+    rects1 = ax.bar(x - width/2, ld_vals, width, label="Logit-Diff (Baseline)", color=color_logit, zorder=3)
+    rects2 = ax.bar(x + width/2, cp_vals, width, label="Cos-Prior (Proposed)", color=color_cos, zorder=3)
 
     # Dashed baseline at 3.0 (unsteered neutral score)
     ax.axhline(y=3.0, color="#888888", linestyle="--", linewidth=1.2, zorder=2, label="Unsteered Baseline (3.0)")
@@ -203,14 +200,13 @@ def main():
                             fontsize=8, color=imp_color, fontweight="bold")
 
     autolabel(rects1, "logit_diff")
-    autolabel(rects2, "proj_prior", is_prior=True)
-    autolabel(rects3, "cos_prior", is_prior=True)
+    autolabel(rects2, "cos_prior", is_prior=True)
 
     ax.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="#e0e0e0", framealpha=0.9, fontsize=9.5)
     
     plt.figtext(0.5, 0.01, 
                 "Note: Parentheses indicate improvement over Logit-Diff. "
-                "Optimal alpha scaling factors (α) for Proj-Prior and Cos-Prior are displayed inside the bars.\n"
+                "Optimal alpha scaling factors (α) for Cos-Prior are displayed inside the bars.\n"
                 "All scores represent the maximum personality score achieved under the safety constraint of Perplexity (PPL) ≤ 25.0.",
                 ha="center", fontsize=9, style="italic", color="#555555")
 

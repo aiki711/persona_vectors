@@ -7,7 +7,7 @@
 #SBATCH --time=02:00:00
 #SBATCH --output=log/eval_cos_prior_conscientiousness.out
 #SBATCH --error=log/eval_cos_prior_conscientiousness.err
-#SBATCH --dependency=afterok:143151
+#SBATCH --dependency=afterok:143475
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"

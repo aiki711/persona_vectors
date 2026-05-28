@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=06:00:00
+#SBATCH --time=18:00:00
 #SBATCH --output=log/norm_sweep_agreeableness.out
 #SBATCH --error=log/norm_sweep_agreeableness.err
 
@@ -16,7 +16,7 @@ export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${PYTHONPATH:-}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 CONFIG="config/mistral_7b.yaml"
-VECTOR_BANK="exp/exp_steering_layer_sweep/vectors/mean_diff_vectors.npz"
+VECTOR_BANK="vectors/mean_diff_vectors.npz"
 PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
 OUT_DIR="exp_steering_layer_norm/results"
 

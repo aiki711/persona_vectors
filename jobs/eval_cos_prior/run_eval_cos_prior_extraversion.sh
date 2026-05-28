@@ -7,7 +7,7 @@
 #SBATCH --time=02:00:00
 #SBATCH --output=log/eval_cos_prior_extraversion.out
 #SBATCH --error=log/eval_cos_prior_extraversion.err
-#SBATCH --dependency=afterok:143148
+#SBATCH --dependency=afterok:143472
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
