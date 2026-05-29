@@ -45,6 +45,8 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
         if csv_path.exists():
             try:
                 df = pd.read_csv(csv_path)
+                if "dyn_score" in df.columns:
+                    df["dyn_score"] = df["dyn_score"].replace(0, 1)
                 mean_score = df["dyn_score"].mean()
                 mean_ppl = df["dyn_ppl"].mean()
                 
@@ -58,6 +60,25 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
                 pass
     return best_score, best_alpha, best_ppl
 
+def get_unsteered_baseline_score(results_dir: Path, trait: str, method: str) -> float:
+    """
+    Returns the average unsteered baseline score (base_score) for a given trait and method.
+    """
+    trait_dir = results_dir / trait
+    for val in VALS:
+        csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
+        if not csv_path.exists():
+            csv_path = trait_dir / f"scores_{method}_Val{val}.csv"
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
+                if "base_score" in df.columns:
+                    df["base_score"] = df["base_score"].replace(0, 1)
+                    return df["base_score"].mean()
+            except Exception:
+                pass
+    return 3.0  # Fallback
+
 def main():
     logit_diff_dir = Path("exp_steering_dyn_layer_all_layers_midpoint/results")
     proj_prior_dir = Path("exp_steering_dyn_layer_proj_prior/results")
@@ -67,42 +88,42 @@ def main():
     for trait in TRAITS:
         # 1. Logit-Diff
         ld_score, ld_alpha, ld_ppl = get_max_safe_score(logit_diff_dir, trait, "logit_diff")
-        # 2. Proj-Prior
-        pp_score, pp_alpha, pp_ppl = get_max_safe_score(proj_prior_dir, trait, "proj_prior")
-        # 3. Cos-Prior
+        # 2. Cos-Prior
         cp_score, cp_alpha, cp_ppl = get_max_safe_score(proj_prior_dir, trait, "cos_prior")
+        # 3. Unsteered Baseline
+        ub_score = get_unsteered_baseline_score(proj_prior_dir, trait, "cos_prior")
         
         data.append({
             "trait": TRAIT_LABELS[trait],
             "logit_diff": (ld_score, ld_alpha, ld_ppl),
-            "proj_prior": (pp_score, pp_alpha, pp_ppl),
-            "cos_prior":  (cp_score, cp_alpha, cp_ppl)
+            "cos_prior":  (cp_score, cp_alpha, cp_ppl),
+            "unsteered":  (ub_score, np.nan, np.nan)
         })
         
         print(f"[{TRAIT_LABELS[trait]}]")
+        print(f"  Unsteered  : Score={ub_score:.2f}")
         print(f"  Logit-Diff : Score={ld_score:.2f} (alpha={ld_alpha}, ppl={ld_ppl:.2f})")
-        print(f"  Proj-Prior : Score={pp_score:.2f} (alpha={pp_alpha}, ppl={pp_ppl:.2f})")
         print(f"  Cos-Prior  : Score={cp_score:.2f} (alpha={cp_alpha}, ppl={cp_ppl:.2f})")
 
     # Calculate averages
     ld_scores_all = [d["logit_diff"][0] for d in data]
-    pp_scores_all = [d["proj_prior"][0] for d in data]
     cp_scores_all = [d["cos_prior"][0] for d in data]
+    ub_scores_all = [d["unsteered"][0] for d in data]
     
     avg_ld = np.mean(ld_scores_all)
-    avg_pp = np.mean(pp_scores_all)
     avg_cp = np.mean(cp_scores_all)
+    avg_ub = np.mean(ub_scores_all)
     
     data.append({
         "trait": "Average",
         "logit_diff": (avg_ld, np.nan, np.nan),
-        "proj_prior": (avg_pp, np.nan, np.nan),
-        "cos_prior":  (avg_cp, np.nan, np.nan)
+        "cos_prior":  (avg_cp, np.nan, np.nan),
+        "unsteered":  (avg_ub, np.nan, np.nan)
     })
     
     print("\n[Averages]")
+    print(f"  Unsteered  : {avg_ub:.2f}")
     print(f"  Logit-Diff : {avg_ld:.2f}")
-    print(f"  Proj-Prior : {avg_pp:.2f}")
     print(f"  Cos-Prior  : {avg_cp:.2f}")
 
     # Plot setup
@@ -111,31 +132,34 @@ def main():
     
     categories = [d["trait"] for d in data]
     x = np.arange(len(categories))
-    width = 0.35  # Adjust width for 2 bars
+    width = 0.24  # Width for 3 bars
 
-    fig, ax = plt.subplots(figsize=(12, 7.5))
+    fig, ax = plt.subplots(figsize=(15, 7.5))
     
     # Custom premium colors
+    color_unsteered = "#7f8c8d" # Sleek Premium Muted Grey
     color_logit = "#1f4e79"   # Premium Deep Steel Blue
     color_cos   = "#d95f02"   # Premium Coral/Orange
     
     # Extract score values
+    ub_vals = [d["unsteered"][0] for d in data]
     ld_vals = [d["logit_diff"][0] for d in data]
     cp_vals = [d["cos_prior"][0] for d in data]
     
     # Plot bars
-    rects1 = ax.bar(x - width/2, ld_vals, width, label="Logit-Diff (Baseline)", color=color_logit, zorder=3)
-    rects2 = ax.bar(x + width/2, cp_vals, width, label="Cos-Prior (Proposed)", color=color_cos, zorder=3)
+    rects1 = ax.bar(x - width, ub_vals, width, label="Unsteered Baseline", color=color_unsteered, zorder=3)
+    rects2 = ax.bar(x,         ld_vals, width, label="Logit-Diff (Baseline)", color=color_logit, zorder=3)
+    rects3 = ax.bar(x + width, cp_vals, width, label="Cos-Sim (Proposed)", color=color_cos, zorder=3)
 
     # Dashed baseline at 3.0 (unsteered neutral score)
-    ax.axhline(y=3.0, color="#888888", linestyle="--", linewidth=1.2, zorder=2, label="Unsteered Baseline (3.0)")
+    ax.axhline(y=3.0, color="#cccccc", linestyle="--", linewidth=1.2, zorder=2)
     
     # Title and styling
     ax.set_title("Maximum Safe Steering Score Comparison (PPL ≤ 25.0)", fontsize=14, fontweight="bold", pad=20)
     ax.set_ylabel("Steering Score (1.0 to 5.0)", fontsize=11, fontweight="bold")
     ax.set_xticks(x)
     ax.set_xticklabels(categories, fontsize=10, fontweight="bold")
-    ax.set_ylim(2.5, 5.25)
+    ax.set_ylim(0.8, 5.25)
     
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -199,17 +223,12 @@ def main():
                             ha="center", va="bottom",
                             fontsize=8, color=imp_color, fontweight="bold")
 
-    autolabel(rects1, "logit_diff")
-    autolabel(rects2, "cos_prior", is_prior=True)
+    autolabel(rects1, "unsteered")
+    autolabel(rects2, "logit_diff")
+    autolabel(rects3, "cos_prior", is_prior=True)
 
     ax.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="#e0e0e0", framealpha=0.9, fontsize=9.5)
     
-    plt.figtext(0.5, 0.01, 
-                "Note: Parentheses indicate improvement over Logit-Diff. "
-                "Optimal alpha scaling factors (α) for Cos-Prior are displayed inside the bars.\n"
-                "All scores represent the maximum personality score achieved under the safety constraint of Perplexity (PPL) ≤ 25.0.",
-                ha="center", fontsize=9, style="italic", color="#555555")
-
     # Save figure
     out_dir = Path("exp_steering_dyn_layer_proj_prior/figures")
     out_dir.mkdir(parents=True, exist_ok=True)

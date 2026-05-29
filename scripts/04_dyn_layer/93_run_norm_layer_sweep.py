@@ -4,8 +4,8 @@
 # 93_run_norm_layer_sweep.py
 #
 # Single-layer steering sweep with steering vector normalized to each layer's
-# midpoint activation norm (||w_steered|| = ||midpoint||).
-# This matches the norm_mode="midpoint" used in 82_run_dyn_layer_proj_prior.py,
+# raw difference vector norm (||w_steered|| = ||w_raw||).
+# This matches the norm_mode="raw_norm" used in 82_run_dyn_layer_proj_prior.py,
 # enabling a fair comparison between fixed single-layer and dynamic layer methods.
 #
 # Output: exp_steering_layer_norm/results/{axis}/layer_{L}_Val{alpha}.jsonl
@@ -186,25 +186,29 @@ def main():
 
     prompts = load_prompts(args.prompts)
 
-    # Load vector bank (contains both 'w' and 'midpoint' keys per layer)
+    # Load vector bank (contains 'w', 'raw_norm', and 'midpoint' keys per layer)
     v_data = np.load(args.vector_bank)
 
-    # Build norm-scaled steering vectors: w_normed = (w/|w|) * |midpoint|
+    # Build norm-scaled steering vectors: scale to raw difference vector norm (raw_norm), fallback to midpoint
     layer_w_normed = {}
     for L in LAYERS:
         w_key = f"{L}|{args.axis}|w"
+        raw_norm_key = f"{L}|{args.axis}|raw_norm"
         mp_key = f"{L}|{args.axis}|midpoint"
         if w_key not in v_data:
             continue
         w_vec = torch.tensor(v_data[w_key], dtype=torch.float32) * direction_mult
         w_norm = torch.norm(w_vec).item()
-        if mp_key in v_data:
+        
+        if raw_norm_key in v_data:
+            r_norm = float(v_data[raw_norm_key][0])
+            w_normed = (w_vec / (w_norm + 1e-10)) * r_norm
+        elif mp_key in v_data:
             m_vec = torch.tensor(v_data[mp_key], dtype=torch.float32)
             m_norm = torch.norm(m_vec).item()
-            # Scale w to have the same norm as the midpoint activation
             w_normed = (w_vec / (w_norm + 1e-10)) * m_norm
         else:
-            # Fallback: keep raw w if no midpoint available
+            # Fallback: keep raw w if no norm source available
             w_normed = w_vec
         layer_w_normed[L] = w_normed
 
@@ -223,13 +227,14 @@ def main():
         model.eval()
 
         # Print norm comparison for verification
-        print("Steering vector norm (scaled to midpoint norm) per layer:")
+        print("Steering vector norm (scaled to raw norm / midpoint) per layer:")
         for L in sorted(layer_w_normed.keys()):
             raw_w_norm = np.linalg.norm(v_data[f"{L}|{args.axis}|w"])
             scaled_norm = torch.norm(layer_w_normed[L]).item()
+            raw_norm_key = f"{L}|{args.axis}|raw_norm"
             mp_key = f"{L}|{args.axis}|midpoint"
-            mp_norm = np.linalg.norm(v_data[mp_key]) if mp_key in v_data else float("nan")
-            print(f"  Layer {L:2d}: raw_w_norm={raw_w_norm:.3f}, midpoint_norm={mp_norm:.3f}, scaled_w_norm={scaled_norm:.3f}")
+            ref_norm = float(v_data[raw_norm_key][0]) if raw_norm_key in v_data else (np.linalg.norm(v_data[mp_key]) if mp_key in v_data else float("nan"))
+            print(f"  Layer {L:2d}: raw_w_norm={raw_w_norm:.3f}, ref_norm={ref_norm:.3f}, scaled_w_norm={scaled_norm:.3f}")
 
         # Generate baseline once
         print("Generating baseline texts...")

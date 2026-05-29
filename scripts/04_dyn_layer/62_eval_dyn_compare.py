@@ -9,8 +9,7 @@ import re
 import torch
 import pandas as pd
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from persona_vectors.live_axes import _resolve_hf_token
+from persona_vectors.live_axes import _resolve_hf_token, load_model_and_tokenizer
 
 TRAIT_DEFINITIONS = {
     "extraversion": "Extraversion reflects an individual's sociability, assertiveness, and enthusiasm. High scorers are outgoing and energetic; low scorers are solitary and reserved.",
@@ -47,15 +46,12 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--axis", required=True)
     ap.add_argument("--model", default="meta-llama/Meta-Llama-3-8B-Instruct")
+    ap.add_argument("--quant", default="auto", choices=["auto", "8bit", "4bit", "none"])
     args = ap.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    token = _resolve_hf_token()
-    tokenizer = AutoTokenizer.from_pretrained(args.model, token=token)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float16, device_map="auto", token=token)
+    quant_val = None if args.quant == "none" else args.quant
+    model, tokenizer = load_model_and_tokenizer(args.model, quant=quant_val)
     model.eval()
 
     data = [json.loads(line) for line in open(args.input, "r", encoding="utf-8") if line.strip()]

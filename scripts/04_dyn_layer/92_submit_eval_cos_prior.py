@@ -17,11 +17,11 @@ VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 4
 
 PBS_TEMPLATE = """#!/bin/bash
 #SBATCH --job-name=eval_cos_prior_{trait}
-#SBATCH --partition=GPU-1
+#SBATCH --partition=GPU-1A
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:1
-#SBATCH --time=02:00:00
+#SBATCH --gres=gpu:2
+#SBATCH --time=08:00:00
 #SBATCH --output=log/eval_cos_prior_{trait}.out
 #SBATCH --error=log/eval_cos_prior_{trait}.err
 {dependency_line}
@@ -45,7 +45,9 @@ for val in {vals_list}; do
             "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \\
                 --input "$JSONL_OUT" \\
                 --output "$CSV_OUT" \\
-                --axis "{trait}"
+                --axis "{trait}" \\
+                --model "{model_name}" \\
+                --quant "none"
         else
             echo "Already evaluated: $CSV_OUT"
         fi
@@ -76,6 +78,7 @@ def get_active_jobs():
         return {}
 
 def main():
+    JUDGE_MODEL="meta-llama/Meta-Llama-3-70B-Instruct"
     job_dir = Path("jobs/eval_cos_prior")
     job_dir.mkdir(parents=True, exist_ok=True)
     log_dir = Path("log")
@@ -98,7 +101,8 @@ def main():
         pbs_content = PBS_TEMPLATE.format(
             trait=trait,
             vals_list=vals_str,
-            dependency_line=dependency_line
+            dependency_line=dependency_line,
+            model_name=JUDGE_MODEL
         )
         pbs_file = job_dir / f"run_eval_cos_prior_{trait}.sh"
         with open(pbs_file, "w") as f:

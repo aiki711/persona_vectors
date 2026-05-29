@@ -174,7 +174,7 @@ def main():
     ap.add_argument("--axis",         type=str, default="extraversion")
     ap.add_argument("--alpha",        type=float, required=True)
     ap.add_argument("--direction",    type=str, choices=["high", "low"], default="high")
-    ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint"], default="midpoint")
+    ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm")
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
     ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine"], default="projection", help="layer selection score mode")
     args = ap.parse_args()
@@ -210,14 +210,23 @@ def main():
     layer_w = {}
     for L in LAYERS:
         w_key = f"{L}|{args.axis}|w"
+        raw_norm_key = f"{L}|{args.axis}|raw_norm"
         mp_key = f"{L}|{args.axis}|midpoint"
         if w_key in v_data:
             w_vec = torch.tensor(v_data[w_key], dtype=torch.float32) * direction_mult
-            if args.norm_mode == "midpoint" and mp_key in v_data:
-                m_vec = torch.tensor(v_data[mp_key], dtype=torch.float32)
-                w_norm = torch.norm(w_vec).item()
-                m_norm = torch.norm(m_vec).item()
-                w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
+            
+            # Scale using original raw norm of difference vector (raw_norm)
+            if args.norm_mode in ["midpoint", "raw_norm"]:
+                if raw_norm_key in v_data:
+                    r_norm = float(v_data[raw_norm_key][0])
+                    w_norm = torch.norm(w_vec).item()
+                    w_vec = (w_vec / (w_norm + 1e-10)) * r_norm
+                elif mp_key in v_data:
+                    # Fallback to midpoint norm if raw_norm is not present in older vector banks
+                    m_vec = torch.tensor(v_data[mp_key], dtype=torch.float32)
+                    w_norm = torch.norm(w_vec).item()
+                    m_norm = torch.norm(m_vec).item()
+                    w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
             layer_w[L] = w_vec
 
     if not layer_w:

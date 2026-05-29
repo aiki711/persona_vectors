@@ -188,7 +188,8 @@ def main():
                     help="カンマ区切りで探索層を制限 (例: 12,15,18,21,24)")
     ap.add_argument("--calibration_alpha", type=float, default=10.0,
                     help="キャリブレーション時に使用したステアリング強度 (デフォルト: 10.0)")
-    ap.add_argument("--norm_mode", type=str, choices=["none", "midpoint"], default="none")
+    ap.add_argument("--norm_mode", type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm",
+                    help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
     args = ap.parse_args()
 
     global LAYERS
@@ -219,14 +220,20 @@ def main():
     layer_w = {}
     for L in LAYERS:
         w_key = f"{L}|{args.axis}|w"
+        raw_norm_key = f"{L}|{args.axis}|raw_norm"
         mp_key = f"{L}|{args.axis}|midpoint"
         if w_key in v_data:
             w_vec = torch.tensor(v_data[w_key], dtype=torch.float32) * direction_mult
-            if args.norm_mode == "midpoint" and mp_key in v_data:
-                m_vec = torch.tensor(v_data[mp_key], dtype=torch.float32)
-                w_norm = torch.norm(w_vec).item()
-                m_norm = torch.norm(m_vec).item()
-                w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
+            if args.norm_mode in ["midpoint", "raw_norm"]:
+                if raw_norm_key in v_data:
+                    r_norm = float(v_data[raw_norm_key][0])
+                    w_norm = torch.norm(w_vec).item()
+                    w_vec = (w_vec / (w_norm + 1e-10)) * r_norm
+                elif mp_key in v_data:
+                    m_vec = torch.tensor(v_data[mp_key], dtype=torch.float32)
+                    w_norm = torch.norm(w_vec).item()
+                    m_norm = torch.norm(m_vec).item()
+                    w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
             layer_w[L] = w_vec
 
     if not layer_w:
