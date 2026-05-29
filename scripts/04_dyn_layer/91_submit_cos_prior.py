@@ -50,7 +50,7 @@ for val in {vals_list}; do
         --axis "{trait}" \\
         --alpha "$val" \\
         --direction "high" \\
-        --norm_mode "midpoint" \\
+        --norm_mode "raw_norm" \\
         --score_mode "cosine"
 done
 """

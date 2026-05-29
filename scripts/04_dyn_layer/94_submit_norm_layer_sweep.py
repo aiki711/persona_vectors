@@ -4,7 +4,7 @@
 # 94_submit_norm_layer_sweep.py
 #
 # Submits norm-scaled single-layer steering sweep jobs to SLURM.
-# Uses steering vectors normalized to each layer's midpoint activation norm.
+# Uses steering vectors normalized to each layer's raw difference vector norm.
 #
 
 import subprocess
