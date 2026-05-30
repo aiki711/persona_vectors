@@ -174,7 +174,8 @@ def main():
     ap.add_argument("--axis",         type=str, default="extraversion")
     ap.add_argument("--alpha",        type=float, required=True)
     ap.add_argument("--direction",    type=str, choices=["high", "low"], default="high")
-    ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm")
+    ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm",
+                    help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
     ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine"], default="projection", help="layer selection score mode")
     args = ap.parse_args()

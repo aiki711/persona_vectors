@@ -212,7 +212,7 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title} [{axis.capitalize()}]"
-            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Midpoint Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Raw-Norm Fusion | Teal: Proj-Prior)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer (0 to 31) / Evaluation Variants (rightmost)", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)
@@ -356,7 +356,7 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title}"
-            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Midpoint Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Raw-Norm Fusion | Teal: Proj-Prior)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer (0 to 31) / Evaluation Variants (rightmost)", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)

@@ -18,7 +18,7 @@ PBS_TEMPLATE = """#!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=18:00:00
+#SBATCH --time=9:00:00
 #SBATCH --output=log/norm_sweep_{trait}.out
 #SBATCH --error=log/norm_sweep_{trait}.err
 

@@ -17,10 +17,10 @@ VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 4
 
 PBS_TEMPLATE = """#!/bin/bash
 #SBATCH --job-name=eval_cos_prior_{trait}
-#SBATCH --partition=GPU-1A
+#SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:nvidia_a40:1
 #SBATCH --time=08:00:00
 #SBATCH --output=log/eval_cos_prior_{trait}.out
 #SBATCH --error=log/eval_cos_prior_{trait}.err
@@ -78,7 +78,7 @@ def get_active_jobs():
         return {}
 
 def main():
-    JUDGE_MODEL="meta-llama/Meta-Llama-3-70B-Instruct"
+    JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
     job_dir = Path("jobs/eval_cos_prior")
     job_dir.mkdir(parents=True, exist_ok=True)
     log_dir = Path("log")

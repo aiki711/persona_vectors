@@ -42,7 +42,7 @@ PYTHON_BIN="$PROJECT_DIR/persona_steering/bin/python"
 
 # ==================== Params ====================
 CONFIG="config/mistral_7b.yaml"
-OUT_DIR="exp_steering_layer_sweep/vectors"
+OUT_DIR="vectors"
 
 # ==================== Main ====================
 echo ">> Running scripts/01_vectors/30b_train_mean_diff.py..."

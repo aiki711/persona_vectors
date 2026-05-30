@@ -3,11 +3,11 @@
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:1
-#SBATCH --time=02:00:00
+#SBATCH --gres=gpu:nvidia_a40:1
+#SBATCH --time=08:00:00
 #SBATCH --output=log/eval_cos_prior_extraversion.out
 #SBATCH --error=log/eval_cos_prior_extraversion.err
-#SBATCH --dependency=afterok:143472
+
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
@@ -28,7 +28,9 @@ for val in 0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0; do
             "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \
                 --input "$JSONL_OUT" \
                 --output "$CSV_OUT" \
-                --axis "extraversion"
+                --axis "extraversion" \
+                --model "meta-llama/Meta-Llama-3-8B-Instruct" \
+                --quant "none"
         else
             echo "Already evaluated: $CSV_OUT"
         fi

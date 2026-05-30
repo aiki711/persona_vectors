@@ -35,6 +35,6 @@ for val in 0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0; do
         --axis "extraversion" \
         --alpha "$val" \
         --direction "high" \
-        --norm_mode "midpoint" \
+        --norm_mode "raw_norm" \
         --score_mode "cosine"
 done
