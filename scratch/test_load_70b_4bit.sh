@@ -24,6 +24,20 @@ from persona_vectors.live_axes import load_model_and_tokenizer
 
 try:
     print('Starting loading process (4bit)...')
+    from persona_vectors.live_axes import _resolve_hf_token
+    import persona_vectors.live_axes as la
+    import pathlib
+    p_file = la.__file__
+    proj_root = pathlib.Path(p_file).resolve().parent.parent.parent
+    tokfile = proj_root / \".hf_token\"
+    print('DEBUG: la.__file__ =', p_file)
+    print('DEBUG: proj_root =', proj_root)
+    print('DEBUG: tokfile =', tokfile)
+    print('DEBUG: tokfile exists? =', tokfile.exists())
+    if tokfile.exists():
+        print('DEBUG: tokfile content prefix =', tokfile.read_text().strip()[:10])
+    tok = _resolve_hf_token()
+    print('Resolved token prefix:', tok[:10] if tok else None)
     model, tokenizer = load_model_and_tokenizer('meta-llama/Meta-Llama-3-70B-Instruct', quant='4bit')
     print('Successfully loaded the model and tokenizer in 4bit!')
     print('Memory footprint:', model.get_memory_footprint())

@@ -174,6 +174,7 @@ def main():
     ap.add_argument("--axis", type=str, default="extraversion")
     ap.add_argument("--direction", type=str, choices=["high", "low"], default="high")
     ap.add_argument("--judge_model", type=str, default="meta-llama/Meta-Llama-3-8B-Instruct")
+    ap.add_argument("--judge_quant", type=str, choices=["auto", "8bit", "4bit", "none"], default="none")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -291,18 +292,8 @@ def main():
         print(f"Found {len(missing_evals)} missing evaluations. Loading judge: {args.judge_model}")
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        token = _resolve_hf_token()
-        tokenizer = AutoTokenizer.from_pretrained(args.judge_model, token=token)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            tokenizer.pad_token_id = tokenizer.eos_token_id
-
-        model = AutoModelForCausalLM.from_pretrained(
-            args.judge_model,
-            torch_dtype=torch.float16,
-            device_map="auto",
-            token=token,
-        )
+        quant_val = None if args.judge_quant == "none" else args.judge_quant
+        model, tokenizer = load_model_and_tokenizer(args.judge_model, quant=quant_val)
         model.eval()
 
         base_eval_cache = {}

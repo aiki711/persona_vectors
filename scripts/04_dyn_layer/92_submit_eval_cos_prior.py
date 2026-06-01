@@ -47,7 +47,7 @@ for val in {vals_list}; do
                 --output "$CSV_OUT" \\
                 --axis "{trait}" \\
                 --model "{model_name}" \\
-                --quant "none"
+                --quant "4bit"
         else
             echo "Already evaluated: $CSV_OUT"
         fi
@@ -78,7 +78,7 @@ def get_active_jobs():
         return {}
 
 def main():
-    JUDGE_MODEL="meta-llama/Meta-Llama-3-8B-Instruct"
+    JUDGE_MODEL="meta-llama/Meta-Llama-3-70B-Instruct"
     job_dir = Path("jobs/eval_cos_prior")
     job_dir.mkdir(parents=True, exist_ok=True)
     log_dir = Path("log")

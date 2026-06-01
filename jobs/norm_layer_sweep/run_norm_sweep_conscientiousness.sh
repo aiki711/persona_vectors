@@ -3,8 +3,8 @@
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:1
-#SBATCH --time=9:00:00
+#SBATCH --gres=gpu:nvidia_a40:1
+#SBATCH --time=12:00:00
 #SBATCH --output=log/norm_sweep_conscientiousness.out
 #SBATCH --error=log/norm_sweep_conscientiousness.err
 
@@ -28,6 +28,8 @@ echo "Running norm-scaled single-layer sweep for conscientiousness..."
     --prompts "$PROMPT_IN" \
     --out_dir "$OUT_DIR" \
     --axis "conscientiousness" \
-    --direction "high"
+    --direction "high" \
+    --judge_model "meta-llama/Meta-Llama-3-70B-Instruct" \
+    --judge_quant "4bit"
 
 echo "Done: conscientiousness"

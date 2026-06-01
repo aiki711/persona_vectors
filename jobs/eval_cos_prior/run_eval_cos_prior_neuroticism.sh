@@ -29,8 +29,8 @@ for val in 0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0; do
                 --input "$JSONL_OUT" \
                 --output "$CSV_OUT" \
                 --axis "neuroticism" \
-                --model "meta-llama/Meta-Llama-3-8B-Instruct" \
-                --quant "none"
+                --model "meta-llama/Meta-Llama-3-70B-Instruct" \
+                --quant "4bit"
         else
             echo "Already evaluated: $CSV_OUT"
         fi

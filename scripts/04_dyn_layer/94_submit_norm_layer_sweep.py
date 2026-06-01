@@ -17,8 +17,8 @@ PBS_TEMPLATE = """#!/bin/bash
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:1
-#SBATCH --time=9:00:00
+#SBATCH --gres=gpu:nvidia_a40:1
+#SBATCH --time=12:00:00
 #SBATCH --output=log/norm_sweep_{trait}.out
 #SBATCH --error=log/norm_sweep_{trait}.err
 
@@ -42,7 +42,9 @@ echo "Running norm-scaled single-layer sweep for {trait}..."
     --prompts "$PROMPT_IN" \\
     --out_dir "$OUT_DIR" \\
     --axis "{trait}" \\
-    --direction "high"
+    --direction "high" \\
+    --judge_model "meta-llama/Meta-Llama-3-70B-Instruct" \\
+    --judge_quant "4bit"
 
 echo "Done: {trait}"
 """

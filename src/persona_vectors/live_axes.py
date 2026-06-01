@@ -166,22 +166,24 @@ def _ensure_dialog_tokens(tokenizer, model=None):
 def _resolve_hf_token() -> str | None:
     """
     取得優先順位：
-      1) 環境変数 HUGGINGFACE_HUB_TOKEN
-      2) このファイル(scripts/)の一つ外側 (= プロジェクト直下) の .hf_token
+      1) このファイル(src/persona_vectors/)の二つ外側 (= プロジェクト直下) の .hf_token
+      2) 環境変数 HUGGINGFACE_HUB_TOKEN (フォールバック)
       3) 見つからなければ None
     """
-    token = os.environ.get("HUGGINGFACE_HUB_TOKEN")
-    if token:
-        return token.strip()
-
-    # scripts/ の一つ外側をプロジェクト直下とみなす
-    proj_root = Path(__file__).resolve().parent.parent
+    # 1) プロジェクト直下のファイルを最優先（環境変数の汚染を避けるため）
+    proj_root = Path(__file__).resolve().parent.parent.parent
     tokfile = proj_root / ".hf_token"
     if tokfile.exists():
         try:
             return tokfile.read_text(encoding="utf-8").strip()
         except Exception:
             pass
+
+    # 2) 環境変数 (フォールバック)
+    token = os.environ.get("HUGGINGFACE_HUB_TOKEN")
+    if token:
+        return token.strip()
+
     return None
 
 def _format_prompt(tokenizer, prompt: str) -> str:
