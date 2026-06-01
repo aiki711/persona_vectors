@@ -62,7 +62,7 @@ def main():
 
     vals_str = " ".join(str(v) for v in VALS)
 
-    for mode in ["rank", "zscore"]:
+    for mode in ["rank"]:
         for trait in TRAITS:
             pbs_content = PBS_TEMPLATE.format(trait=trait, mode=mode, vals_list=vals_str)
             pbs_file = job_dir / f"run_dls_{mode}_prior_{trait}.sh"

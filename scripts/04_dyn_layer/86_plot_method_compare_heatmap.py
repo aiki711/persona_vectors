@@ -30,7 +30,6 @@ METHODS = [
     ("Fusion_Plateau",  "purple",     "soft_plateau"),
     ("DLS_proj_prior",  "darkcyan",   "proj_prior"),
     ("DLS_rank_prior",  "teal",       "rank_prior"),
-    ("DLS_zscore_prior","magenta",    "zscore_prior"),
 ]
 
 
@@ -110,7 +109,6 @@ def load_all_methods(all_layers_dir, fusion_dir, proj_prior_dir, axis):
         "soft_plateau":  load_fusion_summary(fusion_dir, axis, "soft_plateau"),
         "proj_prior":    load_proj_prior_summary(proj_prior_dir, axis, "proj_prior"),
         "rank_prior":    load_proj_prior_summary(proj_prior_dir, axis, "rank_prior"),
-        "zscore_prior":  load_proj_prior_summary(proj_prior_dir, axis, "zscore_prior"),
     }
 
 
@@ -177,7 +175,7 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir):
     # diagnostic
     pp_cols = list(p_score.columns) if not p_score.empty else []
     print(f"  Methods present: {pp_cols}")
-    for m in ["DLS_proj_prior", "DLS_rank_prior", "DLS_zscore_prior"]:
+    for m in ["DLS_proj_prior", "DLS_rank_prior"]:
         if m in pp_cols:
             safe_rows = p_ppl[m][p_ppl[m] <= 25.0]
             if not safe_rows.empty:
@@ -274,7 +272,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
 
     # Diagnostic
     print("  Methods in summary:", list(p_score.columns))
-    for m in ["DLS_proj_prior", "DLS_rank_prior", "DLS_zscore_prior"]:
+    for m in ["DLS_proj_prior", "DLS_rank_prior"]:
         if m in p_score.columns and m in p_ppl.columns:
             safe_mask = p_ppl[m] <= 25.0
             if safe_mask.any():

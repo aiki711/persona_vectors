@@ -86,7 +86,7 @@ def main():
     active_jobs = get_active_jobs()
     print("Detected active jobs:", active_jobs)
 
-    for mode in ["rank", "zscore"]:
+    for mode in ["rank"]:
         for trait in TRAITS:
             gen_job_name = f"dls_{mode}_prior_{trait}"
             dependency_line = ""

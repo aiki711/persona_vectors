@@ -133,7 +133,7 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
     for L, w_dev in layer_w_dev.items():
         h = saved_h[L]
         
-        if score_mode in ["rank", "zscore"]:
+        if score_mode == "rank":
             if h_pos_dict is None or sims_ref_dict is None:
                 # Fallback to cosine if calibration distribution is not available
                 h_unit = h / (torch.norm(h) + 1e-10)
@@ -148,17 +148,11 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                 
                 sims_pos = sims_ref_dict[L]
                 
-                if score_mode == "rank":
-                    sims_combined = np.concatenate([sims_pos, [sim_input]])
-                    ranking = np.argsort(sims_combined)
-                    rank_idx = np.where(ranking == len(sims_combined) - 1)[0][0]
-                    percentile = rank_idx / float(len(sims_pos))
-                    score = -percentile
-                else: # zscore
-                    mean_pos = np.mean(sims_pos)
-                    std_pos = np.std(sims_pos) + 1e-10
-                    z_val = (sim_input - mean_pos) / std_pos
-                    score = -z_val
+                sims_combined = np.concatenate([sims_pos, [sim_input]])
+                ranking = np.argsort(sims_combined)
+                rank_idx = np.where(ranking == len(sims_combined) - 1)[0][0]
+                percentile = rank_idx / float(len(sims_pos))
+                score = -percentile
         elif score_mode == "cosine":
             h_unit = h / (torch.norm(h) + 1e-10)
             w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
@@ -168,12 +162,12 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
             score = torch.dot(h, w_unit).item()
         
         if target_direction == "high":
-            if score_mode in ["rank", "zscore"]:
+            if score_mode == "rank":
                 raw_scores[L] = score
             else:
                 raw_scores[L] = -score
         else:
-            if score_mode in ["rank", "zscore"]:
+            if score_mode == "rank":
                 raw_scores[L] = -score
             else:
                 raw_scores[L] = score
@@ -231,7 +225,7 @@ def main():
     ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm",
                     help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
-    ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine", "rank", "zscore"], default="projection", help="layer selection score mode")
+    ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine", "rank"], default="projection", help="layer selection score mode")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -243,10 +237,8 @@ def main():
         method_name = "cos_only" if args.no_prior else "cos_prior"
     elif args.score_mode == "projection":
         method_name = "proj_only" if args.no_prior else "proj_prior"
-    elif args.score_mode == "rank":
+    else: # rank
         method_name = "rank_only" if args.no_prior else "rank_prior"
-    else:
-        method_name = "zscore_only" if args.no_prior else "zscore_prior"
     out_file = out_dir / f"{method_name}_Val{args.alpha}.jsonl"
     if out_file.exists():
         print(f"[SKIP] Already exists: {out_file}")
@@ -321,7 +313,7 @@ def main():
     # Load calibration distributions for rank/zscore modes
     h_pos_dict = None
     sims_ref_dict = None
-    if args.score_mode in ["rank", "zscore"]:
+    if args.score_mode == "rank":
         stats_file = Path(f"vectors/calibration_stats_{args.axis}.json")
         if not stats_file.exists():
             raise FileNotFoundError(f"Calibration stats file not found: {stats_file}. Please run scripts/01_vectors/35_calc_calibration_stats.py first.")
