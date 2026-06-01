@@ -29,6 +29,8 @@ METHODS = [
     ("Fusion_Sigmoid",  "darkorange", "sigmoid"),
     ("Fusion_Plateau",  "purple",     "soft_plateau"),
     ("DLS_proj_prior",  "darkcyan",   "proj_prior"),
+    ("DLS_rank_prior",  "teal",       "rank_prior"),
+    ("DLS_zscore_prior","magenta",    "zscore_prior"),
 ]
 
 
@@ -76,16 +78,16 @@ def load_fusion_summary(fusion_dir: Path, axis: str, mode: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def load_proj_prior_summary(proj_prior_dir: Path, axis: str) -> pd.DataFrame:
+def load_proj_prior_summary(proj_prior_dir: Path, axis: str, method: str = "proj_prior") -> pd.DataFrame:
     """Load Proj-Prior results evaluated by 62_eval_dyn_compare.py
     (dyn_score, dyn_ppl columns).
     """
     records = []
     trait_dir = proj_prior_dir / axis
     for val in VALS:
-        csv_path = trait_dir / f"scores_proj_prior_Val{float(val)}.csv"
+        csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
         if not csv_path.exists():
-            csv_path = trait_dir / f"scores_proj_prior_Val{val}.csv"
+            csv_path = trait_dir / f"scores_{method}_Val{val}.csv"
         if csv_path.exists():
             try:
                 df = pd.read_csv(csv_path)
@@ -106,7 +108,9 @@ def load_all_methods(all_layers_dir, fusion_dir, proj_prior_dir, axis):
         "anti_alignment": load_dyn_summary(all_layers_dir, axis, "anti_alignment"),
         "sigmoid":       load_fusion_summary(fusion_dir, axis, "sigmoid"),
         "soft_plateau":  load_fusion_summary(fusion_dir, axis, "soft_plateau"),
-        "proj_prior":    load_proj_prior_summary(proj_prior_dir, axis),
+        "proj_prior":    load_proj_prior_summary(proj_prior_dir, axis, "proj_prior"),
+        "rank_prior":    load_proj_prior_summary(proj_prior_dir, axis, "rank_prior"),
+        "zscore_prior":  load_proj_prior_summary(proj_prior_dir, axis, "zscore_prior"),
     }
 
 
@@ -173,12 +177,13 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir):
     # diagnostic
     pp_cols = list(p_score.columns) if not p_score.empty else []
     print(f"  Methods present: {pp_cols}")
-    if "DLS_proj_prior" in pp_cols:
-        safe_rows = p_ppl["DLS_proj_prior"][p_ppl["DLS_proj_prior"] <= 25.0]
-        if not safe_rows.empty:
-            best_alpha = p_score.loc[safe_rows.index, "DLS_proj_prior"].idxmax()
-            best_score = p_score.loc[best_alpha, "DLS_proj_prior"]
-            print(f"  DLS_proj_prior best safe alpha={best_alpha}, score={best_score:.3f}")
+    for m in ["DLS_proj_prior", "DLS_rank_prior", "DLS_zscore_prior"]:
+        if m in pp_cols:
+            safe_rows = p_ppl[m][p_ppl[m] <= 25.0]
+            if not safe_rows.empty:
+                best_alpha = p_score.loc[safe_rows.index, m].idxmax()
+                best_score = p_score.loc[best_alpha, m]
+                print(f"  {m} best safe alpha={best_alpha}, score={best_score:.3f}")
 
     n_methods = len(p_score.columns) if not p_score.empty else 1
     fig_w = max(8, n_methods * 1.5 + 2)
@@ -269,16 +274,17 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
 
     # Diagnostic
     print("  Methods in summary:", list(p_score.columns))
-    if "DLS_proj_prior" in p_score.columns and "DLS_proj_prior" in p_ppl.columns:
-        safe_mask = p_ppl["DLS_proj_prior"] <= 25.0
-        if safe_mask.any():
-            best_alpha = p_score.loc[safe_mask, "DLS_proj_prior"].idxmax()
-            print(f"  DLS_proj_prior best safe: alpha={best_alpha}, "
-                  f"score={p_score.loc[best_alpha, 'DLS_proj_prior']:.3f}, "
-                  f"ppl={p_ppl.loc[best_alpha, 'DLS_proj_prior']:.2f}")
-            safe_df = p_score[safe_mask]
-            print(f"  DLS_proj_prior all-trait avg (safe PPL): "
-                  f"{safe_df['DLS_proj_prior'].mean():.4f}")
+    for m in ["DLS_proj_prior", "DLS_rank_prior", "DLS_zscore_prior"]:
+        if m in p_score.columns and m in p_ppl.columns:
+            safe_mask = p_ppl[m] <= 25.0
+            if safe_mask.any():
+                best_alpha = p_score.loc[safe_mask, m].idxmax()
+                print(f"  {m} best safe: alpha={best_alpha}, "
+                      f"score={p_score.loc[best_alpha, m]:.3f}, "
+                      f"ppl={p_ppl.loc[best_alpha, m]:.2f}")
+                safe_df = p_score[safe_mask]
+                print(f"  {m} all-trait avg (safe PPL): "
+                      f"{safe_df[m].mean():.4f}")
 
     n_methods = len(p_score.columns) if not p_score.empty else 1
     fig_w = max(8, n_methods * 1.5 + 2)

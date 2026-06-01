@@ -19,6 +19,7 @@ import yaml
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
+from datasets import load_dataset
 
 from persona_vectors.live_axes import (
     load_model_and_tokenizer,
@@ -33,6 +34,25 @@ VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 4
 def format_and_tokenize(tokenizer, prompt, device):
     formatted = _format_prompt(tokenizer, prompt)
     return tokenizer(formatted, return_tensors="pt").to(device)
+
+def extract_positive_texts(axis, limit=30):
+    print("Loading Big5Chat dataset...")
+    ds_all = load_dataset("wenkai-li/big5_chat")
+    split_name = next(iter(ds_all.keys()))
+    ds = ds_all[split_name]
+    
+    texts = []
+    for ex in ds:
+        tr = (ex.get("trait") or "").strip().lower()
+        lv = (ex.get("level") or "").strip().lower()
+        if tr == axis and lv == "high":
+            to = (ex.get("train_output") or "").strip()
+            if to:
+                texts.append(to)
+                if len(texts) >= limit:
+                    break
+    print(f"Extracted {len(texts)} positive texts for {axis}.")
+    return texts
 
 def load_layer_priors(input_dir: Path, axis: str) -> dict:
     """
@@ -70,11 +90,16 @@ def load_layer_priors(input_dir: Path, axis: str) -> dict:
             priors[L] = max(0.0, max_safe_dev)
         else:
             # Fallback if no sweep data exists yet for this layer
-            if 10 <= L <= 22:
+            if 4 <= L <= 29:
                 priors[L] = 1.0
             else:
                 priors[L] = 0.0
                 
+    # Enforce layer range restriction (4-29)
+    for L in priors:
+        if not (4 <= L <= 29):
+            priors[L] = 0.0
+
     # Normalize priors so the max weight is 1.0
     max_w = max(priors.values())
     if max_w > 1e-8:
@@ -83,7 +108,7 @@ def load_layer_priors(input_dir: Path, axis: str) -> dict:
             
     return priors
 
-def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="projection"):
+def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="projection", h_pos_dict=None, sims_ref_dict=None):
     saved_h = {}
     handles = []
     stack, _, _ = get_layer_stack(model)
@@ -107,27 +132,56 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
     raw_scores = {}
     for L, w_dev in layer_w_dev.items():
         h = saved_h[L]
-        if score_mode == "cosine":
-            # Compute cosine similarity
+        
+        if score_mode in ["rank", "zscore"]:
+            if h_pos_dict is None or sims_ref_dict is None:
+                # Fallback to cosine if calibration distribution is not available
+                h_unit = h / (torch.norm(h) + 1e-10)
+                w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                score = torch.dot(h_unit, w_unit).item()
+            else:
+                h_unit = h.cpu().numpy()
+                h_unit = h_unit / (np.linalg.norm(h_unit) + 1e-10)
+                h_pos = h_pos_dict[L]
+                h_pos_norm = h_pos / (np.linalg.norm(h_pos) + 1e-10)
+                sim_input = np.dot(h_unit, h_pos_norm.T).item()
+                
+                sims_pos = sims_ref_dict[L]
+                
+                if score_mode == "rank":
+                    sims_combined = np.concatenate([sims_pos, [sim_input]])
+                    ranking = np.argsort(sims_combined)
+                    rank_idx = np.where(ranking == len(sims_combined) - 1)[0][0]
+                    percentile = rank_idx / float(len(sims_pos))
+                    score = -percentile
+                else: # zscore
+                    mean_pos = np.mean(sims_pos)
+                    std_pos = np.std(sims_pos) + 1e-10
+                    z_val = (sim_input - mean_pos) / std_pos
+                    score = -z_val
+        elif score_mode == "cosine":
             h_unit = h / (torch.norm(h) + 1e-10)
             w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
             score = torch.dot(h_unit, w_unit).item()
         else:
-            # Normalize w_dev to a unit vector and compute projection
             w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
             score = torch.dot(h, w_unit).item()
         
         if target_direction == "high":
-            raw_scores[L] = -score
+            if score_mode in ["rank", "zscore"]:
+                raw_scores[L] = score
+            else:
+                raw_scores[L] = -score
         else:
-            raw_scores[L] = score
+            if score_mode in ["rank", "zscore"]:
+                raw_scores[L] = -score
+            else:
+                raw_scores[L] = score
 
     final_scores = {}
     for L in layer_w_dev.keys():
         w_prior = layer_priors.get(L, 0.0)
         if w_prior > 1e-5:
-            # Shift low-prior layers downwards. Since raw_scores can be negative,
-            # subtraction is mathematically correct (multiplication would make negative scores closer to 0, which favors low priors).
             final_scores[L] = raw_scores[L] - (1.0 - w_prior) * 100.0
         else:
             final_scores[L] = -1e9  # Exclude masked layers completely
@@ -177,7 +231,7 @@ def main():
     ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm",
                     help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
-    ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine"], default="projection", help="layer selection score mode")
+    ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine", "rank", "zscore"], default="projection", help="layer selection score mode")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -187,8 +241,12 @@ def main():
 
     if args.score_mode == "cosine":
         method_name = "cos_only" if args.no_prior else "cos_prior"
-    else:
+    elif args.score_mode == "projection":
         method_name = "proj_only" if args.no_prior else "proj_prior"
+    elif args.score_mode == "rank":
+        method_name = "rank_only" if args.no_prior else "rank_prior"
+    else:
+        method_name = "zscore_only" if args.no_prior else "zscore_prior"
     out_file = out_dir / f"{method_name}_Val{args.alpha}.jsonl"
     if out_file.exists():
         print(f"[SKIP] Already exists: {out_file}")
@@ -260,6 +318,26 @@ def main():
     layer_w_dev = {L: w.to(device) for L, w in layer_w.items()}
     results = []
 
+    # Load calibration distributions for rank/zscore modes
+    h_pos_dict = None
+    sims_ref_dict = None
+    if args.score_mode in ["rank", "zscore"]:
+        stats_file = Path(f"vectors/calibration_stats_{args.axis}.json")
+        if not stats_file.exists():
+            raise FileNotFoundError(f"Calibration stats file not found: {stats_file}. Please run scripts/01_vectors/35_calc_calibration_stats.py first.")
+        
+        print(f"Loading calibration stats from {stats_file}...")
+        with open(stats_file, "r", encoding="utf-8") as f:
+            stats_data = json.load(f)
+            
+        h_pos_dict = {}
+        sims_ref_dict = {}
+        for L in LAYERS:
+            L_str = str(L)
+            if L_str in stats_data:
+                h_pos_dict[L] = np.array([stats_data[L_str]["h_pos"]]) # [1, n_dims]
+                sims_ref_dict[L] = np.array(stats_data[L_str]["sorted_similarities"]) # [N_CALIB_SAMPLES]
+
     # Generate baseline once for prompts
     baselines = []
     print("Generating baseline texts...")
@@ -281,7 +359,8 @@ def main():
 
         # Layer Selection
         best_layer, raw_scores, final_scores = select_layer_proj_prior(
-            model, inputs.input_ids, layer_w_dev, args.direction, layer_priors, args.score_mode
+            model, inputs.input_ids, layer_w_dev, args.direction, layer_priors, args.score_mode,
+            h_pos_dict=h_pos_dict, sims_ref_dict=sims_ref_dict
         )
 
         # Generate

@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# 91_submit_cos_prior.py
+# 97_submit_rank_prior.py
 #
-# Submits the Cosine Similarity & Safety Prior DLS method sweeps to the SLURM queue.
-# Generates batch files and submits them.
+# Submits the Rank/Z-score & Safety Prior DLS method sweeps to the SLURM queue.
 #
 
 import subprocess
@@ -14,14 +13,14 @@ TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agree
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
 PBS_TEMPLATE = """#!/bin/bash
-#SBATCH --job-name=dls_cos_prior_{trait}
+#SBATCH --job-name=dls_{mode}_prior_{trait}
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:nvidia_a40:1
 #SBATCH --time=04:00:00
-#SBATCH --output=log/dls_cos_prior_{trait}.out
-#SBATCH --error=log/dls_cos_prior_{trait}.err
+#SBATCH --output=log/dls_{mode}_prior_{trait}.out
+#SBATCH --error=log/dls_{mode}_prior_{trait}.err
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
@@ -36,9 +35,9 @@ PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
 INPUT_DIR="exp_steering_layer_analysis/results"
 OUT_DIR="exp_steering_dyn_layer_proj_prior/results"
 
-echo "Running Cos-Prior DLS sweep for {trait}..."
+echo "Running {mode}-Prior DLS sweep for {trait}..."
 
-# Loop over values and run the script with --score_mode cosine
+# Loop over values and run the script with --score_mode {mode}
 for val in {vals_list}; do
     echo "=== Running alpha=$val ==="
     "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_proj_prior.py \\
@@ -51,29 +50,30 @@ for val in {vals_list}; do
         --alpha "$val" \\
         --direction "high" \\
         --norm_mode "raw_norm" \\
-        --score_mode "cosine"
+        --score_mode "{mode}"
 done
 """
 
 def main():
-    job_dir = Path("jobs/dls_cos_prior")
+    job_dir = Path("jobs/dls_rank_zscore_prior")
     job_dir.mkdir(parents=True, exist_ok=True)
     log_dir = Path("log")
     log_dir.mkdir(parents=True, exist_ok=True)
 
     vals_str = " ".join(str(v) for v in VALS)
 
-    for trait in TRAITS:
-        pbs_content = PBS_TEMPLATE.format(trait=trait, vals_list=vals_str)
-        pbs_file = job_dir / f"run_dls_cos_prior_{trait}.sh"
-        with open(pbs_file, "w") as f:
-            f.write(pbs_content)
-        pbs_file.chmod(0o755)
+    for mode in ["rank", "zscore"]:
+        for trait in TRAITS:
+            pbs_content = PBS_TEMPLATE.format(trait=trait, mode=mode, vals_list=vals_str)
+            pbs_file = job_dir / f"run_dls_{mode}_prior_{trait}.sh"
+            with open(pbs_file, "w") as f:
+                f.write(pbs_content)
+            pbs_file.chmod(0o755)
 
-        cmd = ["sbatch", str(pbs_file)]
-        print(f"Submitting Cos-Prior DLS job for {trait}...")
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        print(f"  {res.stdout.strip()} {res.stderr.strip()}")
+            cmd = ["sbatch", str(pbs_file)]
+            print(f"Submitting {mode.capitalize()}-Prior DLS job for {trait}...")
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            print(f"  {res.stdout.strip()} {res.stderr.strip()}")
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,7 @@
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:nvidia_a40:1
+#SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
 #SBATCH --output=log/eval_cos_prior_extraversion.out
 #SBATCH --error=log/eval_cos_prior_extraversion.err

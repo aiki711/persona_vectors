@@ -3,7 +3,7 @@
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:nvidia_a40:1
+#SBATCH --gres=gpu:1
 #SBATCH --time=00:30:00
 #SBATCH --output=log/test_load_70b_4bit.out
 #SBATCH --error=log/test_load_70b_4bit.err
