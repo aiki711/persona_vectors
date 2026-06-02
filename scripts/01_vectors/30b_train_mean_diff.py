@@ -74,6 +74,12 @@ def main():
     with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
+    # Set random seeds for determinism
+    seed_val = cfg.get("seed", 42)
+    random.seed(seed_val)
+    np.random.seed(seed_val)
+    torch.manual_seed(seed_val)
+
     model_name = cfg.get("model_name")
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -159,6 +165,10 @@ def main():
             final_data[f"{L}|{ax}|b"] = np.array([b_norm], dtype=np.float32)
             final_data[f"{L}|{ax}|midpoint"] = midpoint.astype(np.float32)
             final_data[f"{L}|{ax}|raw_norm"] = np.array([norm], dtype=np.float32)
+            
+            # Save positive activations and their mean for rank-based selection
+            final_data[f"{L}|{ax}|H_pos_30"] = H[:30].astype(np.float32)
+            final_data[f"{L}|{ax}|h_pos_30"] = H[:30].mean(axis=0, keepdims=True).astype(np.float32)
             
         np.savez_compressed(bank_path, **final_data)
     print(f"\n[Done] Saved mean-diff vectors to {bank_path}.")

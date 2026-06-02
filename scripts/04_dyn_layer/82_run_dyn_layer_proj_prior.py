@@ -108,75 +108,98 @@ def load_layer_priors(input_dir: Path, axis: str) -> dict:
             
     return priors
 
-def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="projection", h_pos_dict=None, sims_ref_dict=None):
-    saved_h = {}
-    handles = []
+def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="cosine", h_pos_dict=None, sims_ref_dict=None, alpha=1.0):
     stack, _, _ = get_layer_stack(model)
 
-    def get_hook(L):
-        def hook(mod, inp, out):
-            hs = out[0] if isinstance(out, tuple) else out
-            saved_h[L] = hs[0, -1, :].detach().float()
-        return hook
-
-    for L in layer_w_dev.keys():
-        handles.append(stack[L].register_forward_hook(get_hook(L)))
-
-    try:
+    if score_mode == "logit_diff":
+        # Bhandari et al. Method: Maximize change in last-token logits.
         with torch.no_grad():
-            _ = model(input_ids)
-    finally:
-        for h in handles:
-            h.remove()
+            out = model(input_ids)
+        base_logits = out.logits[0, -1, :].float()
 
-    raw_scores = {}
-    for L, w_dev in layer_w_dev.items():
-        h = saved_h[L]
-        
-        if score_mode == "rank":
-            if h_pos_dict is None or sims_ref_dict is None:
-                # Fallback to cosine if calibration distribution is not available
+        raw_scores = {}
+        for L, w_dev in layer_w_dev.items():
+            def hook(mod, inp, out_val):
+                hs = out_val[0] if isinstance(out_val, tuple) else out_val
+                if not torch.isfinite(hs).all(): return out_val
+                hs_f32 = hs.to(torch.float32)
+                steered = hs_f32 + alpha * w_dev.view(1, 1, -1)
+                return (steered.to(hs.dtype), *out_val[1:]) if isinstance(out_val, tuple) else steered.to(hs.dtype)
+
+            handle = stack[L].register_forward_hook(hook)
+            try:
+                with torch.no_grad():
+                    out_steered = model(input_ids)
+                steered_logits = out_steered.logits[0, -1, :].float()
+                raw_scores[L] = (steered_logits - base_logits).norm().item()
+            finally:
+                handle.remove()
+    else:
+        saved_h = {}
+        handles = []
+        for L in layer_w_dev.keys():
+            def get_hook(L_idx):
+                def hook(mod, inp, out):
+                    hs = out[0] if isinstance(out, tuple) else out
+                    saved_h[L_idx] = hs[0, -1, :].detach().float()
+                return hook
+            handles.append(stack[L].register_forward_hook(get_hook(L)))
+
+        try:
+            with torch.no_grad():
+                _ = model(input_ids)
+        finally:
+            for h in handles:
+                h.remove()
+
+        raw_scores = {}
+        for L, w_dev in layer_w_dev.items():
+            h = saved_h[L]
+
+            if score_mode == "rank":
+                if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"]:
+                    H_pos = h_pos_dict["H_pos"][L]
+                    h_pos = h_pos_dict["h_pos"][L]
+                    Hh_pos = np.concatenate([H_pos, h_pos], axis=0) # [31, n_dims]
+                    
+                    h_np = h.cpu().numpy()
+                    h_unit = h_np / (np.linalg.norm(h_np) + 1e-10)
+                    
+                    Hh_pos_norm = Hh_pos / (np.linalg.norm(Hh_pos, axis=1, keepdims=True) + 1e-10)
+                    sims_combined = np.dot(Hh_pos_norm, h_unit.T) 
+                    
+                    sim_input = np.dot(h_unit, (h_pos / np.linalg.norm(h_pos)).T).item()
+                    sims_with_input = np.concatenate([sims_combined, [sim_input]])
+                    ranking_with_input = np.argsort(sims_with_input)
+                    
+                    rank_idx = np.where(ranking_with_input == len(sims_with_input) - 1)[0][0]
+                    percentile = rank_idx / float(len(sims_combined))
+                    score = -percentile
+                else:
+                    h_unit = h / (torch.norm(h) + 1e-10)
+                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    score = torch.dot(h_unit, w_unit).item()
+            else: # cosine
                 h_unit = h / (torch.norm(h) + 1e-10)
                 w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
                 score = torch.dot(h_unit, w_unit).item()
+
+            if target_direction == "high":
+                if score_mode == "rank":
+                    raw_scores[L] = score
+                else:
+                    raw_scores[L] = -score
             else:
-                h_unit = h.cpu().numpy()
-                h_unit = h_unit / (np.linalg.norm(h_unit) + 1e-10)
-                h_pos = h_pos_dict[L]
-                h_pos_norm = h_pos / (np.linalg.norm(h_pos) + 1e-10)
-                sim_input = np.dot(h_unit, h_pos_norm.T).item()
-                
-                sims_pos = sims_ref_dict[L]
-                
-                sims_combined = np.concatenate([sims_pos, [sim_input]])
-                ranking = np.argsort(sims_combined)
-                rank_idx = np.where(ranking == len(sims_combined) - 1)[0][0]
-                percentile = rank_idx / float(len(sims_pos))
-                score = -percentile
-        elif score_mode == "cosine":
-            h_unit = h / (torch.norm(h) + 1e-10)
-            w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
-            score = torch.dot(h_unit, w_unit).item()
-        else:
-            w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
-            score = torch.dot(h, w_unit).item()
-        
-        if target_direction == "high":
-            if score_mode == "rank":
-                raw_scores[L] = score
-            else:
-                raw_scores[L] = -score
-        else:
-            if score_mode == "rank":
-                raw_scores[L] = -score
-            else:
-                raw_scores[L] = score
+                if score_mode == "rank":
+                    raw_scores[L] = -score
+                else:
+                    raw_scores[L] = score
 
     final_scores = {}
     for L in layer_w_dev.keys():
         w_prior = layer_priors.get(L, 0.0)
         if w_prior > 1e-5:
-            final_scores[L] = raw_scores[L] - (1.0 - w_prior) * 100.0
+            final_scores[L] = raw_scores[L] - (1.0 - w_prior) * 10.0
         else:
             final_scores[L] = -1e9  # Exclude masked layers completely
 
@@ -225,7 +248,7 @@ def main():
     ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm",
                     help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
-    ap.add_argument("--score_mode",   type=str, choices=["projection", "cosine", "rank"], default="projection", help="layer selection score mode")
+    ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "logit_diff"], default="cosine", help="layer selection score mode")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -235,8 +258,8 @@ def main():
 
     if args.score_mode == "cosine":
         method_name = "cos_only" if args.no_prior else "cos_prior"
-    elif args.score_mode == "projection":
-        method_name = "proj_only" if args.no_prior else "proj_prior"
+    elif args.score_mode == "logit_diff":
+        method_name = "logit_diff" if args.no_prior else "logit_diff_prior"
     else: # rank
         method_name = "rank_only" if args.no_prior else "rank_prior"
     out_file = out_dir / f"{method_name}_Val{args.alpha}.jsonl"
@@ -246,8 +269,8 @@ def main():
 
     # Load layer priors
     if args.no_prior:
-        print("Bypassing layer priors (prior weights set to 1.0 for all layers)...")
-        layer_priors = {L: 1.0 for L in LAYERS}
+        print("Bypassing layer priors (enforcing 4-29 candidate layer hard mask)...")
+        layer_priors = {L: 1.0 if 4 <= L <= 29 else 0.0 for L in LAYERS}
     else:
         print(f"Loading layer priors for {args.axis} from {input_dir}...")
         layer_priors = load_layer_priors(input_dir, args.axis)
@@ -314,21 +337,13 @@ def main():
     h_pos_dict = None
     sims_ref_dict = None
     if args.score_mode == "rank":
-        stats_file = Path(f"vectors/calibration_stats_{args.axis}.json")
-        if not stats_file.exists():
-            raise FileNotFoundError(f"Calibration stats file not found: {stats_file}. Please run scripts/01_vectors/35_calc_calibration_stats.py first.")
-        
-        print(f"Loading calibration stats from {stats_file}...")
-        with open(stats_file, "r", encoding="utf-8") as f:
-            stats_data = json.load(f)
-            
-        h_pos_dict = {}
-        sims_ref_dict = {}
+        h_pos_dict = {"H_pos": {}, "h_pos": {}}
         for L in LAYERS:
-            L_str = str(L)
-            if L_str in stats_data:
-                h_pos_dict[L] = np.array([stats_data[L_str]["h_pos"]]) # [1, n_dims]
-                sims_ref_dict[L] = np.array(stats_data[L_str]["sorted_similarities"]) # [N_CALIB_SAMPLES]
+            H_pos_key = f"{L}|{args.axis}|H_pos_30"
+            h_pos_key = f"{L}|{args.axis}|h_pos_30"
+            if H_pos_key in v_data:
+                h_pos_dict["H_pos"][L] = v_data[H_pos_key]
+                h_pos_dict["h_pos"][L] = v_data[h_pos_key]
 
     # Generate baseline once for prompts
     baselines = []
@@ -352,7 +367,7 @@ def main():
         # Layer Selection
         best_layer, raw_scores, final_scores = select_layer_proj_prior(
             model, inputs.input_ids, layer_w_dev, args.direction, layer_priors, args.score_mode,
-            h_pos_dict=h_pos_dict, sims_ref_dict=sims_ref_dict
+            h_pos_dict=h_pos_dict, sims_ref_dict=sims_ref_dict, alpha=args.alpha
         )
 
         # Generate

@@ -9,7 +9,7 @@ from persona_vectors.live_axes import load_model_and_tokenizer, _infer_main_devi
 
 AXIS = "extraversion"
 N_SAMPLES = 30
-TEST_PROMPTS_LIMIT = 5
+TEST_PROMPTS_LIMIT = 10
 LAYERS = list(range(32))
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
@@ -57,13 +57,13 @@ def load_layer_priors(input_dir: Path, axis: str) -> dict:
         if has_any_data:
             priors[L] = max(0.0, max_safe_dev)
         else:
-            if 10 <= L <= 22:
+            if 4 <= L <= 29:
                 priors[L] = 1.0
             else:
                 priors[L] = 0.0
-    # Enforce mid-layer restriction (10-22)
+    # Enforce mid-layer restriction (4-29)
     for L in priors:
-        if not (10 <= L <= 22):
+        if not (4 <= L <= 29):
             priors[L] = 0.0
     max_w = max(priors.values())
     if max_w > 1e-8:
@@ -86,58 +86,11 @@ def main():
     device = _infer_main_device(model)
     model.eval()
     
-    # 1. Load layer priors (Prior mask)
-    input_dir = Path("exp_steering_layer_analysis/results")
-    print(f"Loading layer priors from {input_dir}...")
-    layer_priors = load_layer_priors(input_dir, AXIS)
+    # 1. Load evaluation prompts
+    prompts_path = Path("inputs/eval_prompts_10.jsonl")
+    if not prompts_path.exists():
+        prompts_path = Path("inputs/test_prompts_10.jsonl")
     
-    # 2. Extract positive texts
-    pos_texts = extract_positive_texts(AXIS, limit=N_SAMPLES)
-    
-    # 3. Extract hidden states for positive texts to compute h_pos
-    print("Extracting positive hidden states...")
-    h_pos_all = {L: [] for L in layer_indices}
-    
-    @torch.no_grad()
-    def get_hidden_states(texts):
-        msgs_prefix = [{"role": "user", "content": "Hello."}]
-        prefix_ids = tok.apply_chat_template(msgs_prefix, add_generation_prompt=True, tokenize=True)
-        len_prefix = len(prefix_ids)
-        
-        full_inputs = []
-        for t in texts:
-            msgs = [{"role": "user", "content": "Hello."}, {"role": "assistant", "content": t}]
-            full_ids = tok.apply_chat_template(msgs, add_generation_prompt=False, tokenize=True)
-            full_inputs.append(torch.tensor(full_ids))
-            
-        from torch.nn.utils.rnn import pad_sequence
-        input_ids = pad_sequence(full_inputs, batch_first=True, padding_value=tok.pad_token_id).to(device)
-        attn_mask = (input_ids != tok.pad_token_id).long()
-        out = model(input_ids, attention_mask=attn_mask, output_hidden_states=True)
-        
-        results = {L: [] for L in layer_indices}
-        for b in range(len(texts)):
-            s_idx, e_idx = len_prefix, attn_mask[b].sum().item()
-            if s_idx >= e_idx: s_idx = e_idx - 1
-            for L in layer_indices:
-                results[L].append(out.hidden_states[L][b][s_idx:e_idx].mean(dim=0))
-        return {L: torch.stack(v) for L, v in results.items()}
-
-    batch_size = 5
-    for i in range(0, len(pos_texts), batch_size):
-        batch = pos_texts[i:i+batch_size]
-        out_hs = get_hidden_states(batch)
-        for L in layer_indices:
-            h_pos_all[L].append(out_hs[L].cpu().numpy())
-            
-    h_pos_dict = {}
-    for L in layer_indices:
-        H_pos = np.concatenate(h_pos_all[L], axis=0) # [30, n_dims]
-        h_pos = np.mean(H_pos, axis=0, keepdims=True) # [1, n_dims]
-        h_pos_dict[L] = h_pos
-
-    # 4. Load test prompts and pre-compute their hidden states to build the reference distribution
-    prompts_path = Path("inputs/test_prompts_10.jsonl")
     all_prompts = []
     with open(prompts_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -151,53 +104,11 @@ def main():
             elif isinstance(item, str):
                 all_prompts.append(item)
     
-    print(f"Extracting hidden states for {len(all_prompts)} test prompts for distribution calibration...")
-    h_test_all = {L: [] for L in layer_indices}
-    for p_text in all_prompts:
-        formatted = tok.apply_chat_template([{"role": "user", "content": p_text}], add_generation_prompt=True, tokenize=True)
-        input_ids = torch.tensor([formatted]).to(device)
-        saved_h = {}
-        handles = []
-        def get_hook(L):
-            def hook(mod, inp, out):
-                hs = out[0] if isinstance(out, tuple) else out
-                saved_h[L] = hs[0, -1, :].detach().cpu().float().numpy()
-            return hook
-        for L in layer_indices:
-            handles.append(layers_stack[L].register_forward_hook(get_hook(L)))
-        try:
-            with torch.no_grad():
-                _ = model(input_ids)
-        finally:
-            for h in handles: h.remove()
-        for L in layer_indices:
-            h_test_all[L].append(saved_h[L])
-            
-    sims_test_dict = {}
-    for L in layer_indices:
-        H_test = np.stack(h_test_all[L], axis=0) # [N_PROMPTS, n_dims]
-        H_test_norm = H_test / (np.linalg.norm(H_test, axis=1, keepdims=True) + 1e-10)
-        h_norm = h_pos_dict[L] / (np.linalg.norm(h_pos_dict[L]) + 1e-10)
-        sims_test_dict[L] = np.dot(H_test_norm, h_norm.T).squeeze() # [N_PROMPTS]
-
     prompts = all_prompts[:TEST_PROMPTS_LIMIT]
-    
-    # Load vectors (for standard Cosine Sim comparison)
-    v_data = np.load("vectors/mean_diff_vectors.npz")
-    layer_w = {}
-    for L in layer_indices:
-        w_key = f"{L}|{AXIS}|w"
-        if w_key in v_data:
-            layer_w[L] = v_data[w_key]
 
-    print("\nRunning layer selection comparison on test prompts...")
-    
-    cosine_selections = []
-    rank_selections = []
-    
+    print(f"Pre-computing hidden states for {len(prompts)} test prompts...")
+    prompts_h = []
     for p_idx, p_text in enumerate(prompts):
-        print(f"\n--- Prompt {p_idx+1}: {p_text[:60]}... ---")
-        
         formatted = tok.apply_chat_template([{"role": "user", "content": p_text}], add_generation_prompt=True, tokenize=True)
         input_ids = torch.tensor([formatted]).to(device)
         
@@ -218,59 +129,167 @@ def main():
         finally:
             for h in handles:
                 h.remove()
-                
-            cos_scores = {}
-            rank_scores = {}
         
+        # Normalize to unit vectors
+        prompt_h_dict = {}
         for L in layer_indices:
             h_input = saved_h[L]
             h_unit = h_input / (np.linalg.norm(h_input) + 1e-10)
+            prompt_h_dict[L] = h_unit
+        prompts_h.append(prompt_h_dict)
+
+    input_dir = Path("exp_steering_layer_analysis/results")
+    v_data = np.load("vectors/mean_diff_vectors.npz")
+    TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
+
+    for axis in TRAITS:
+        print(f"\n======================================================================")
+        print(f"=== ANALYZING AXIS: {axis.upper()} ===")
+        print(f"======================================================================")
+
+        # 2. Load layer priors for this axis
+        layer_priors = load_layer_priors(input_dir, axis)
+        
+        # 3. Load vectors and pre-saved activations
+        layer_w = {}
+        h_pos_dict = {}
+        h_pos_all = {L: [] for L in layer_indices}
+        for L in layer_indices:
+            w_key = f"{L}|{axis}|w"
+            if w_key in v_data:
+                layer_w[L] = v_data[w_key]
             
-            # 1. Cosine similarity
-            if L in layer_w:
-                w_vec = layer_w[L]
-                cos_scores[L] = np.dot(h_unit, w_vec)
-            else:
-                cos_scores[L] = -1.0
+            # Load pre-saved positive activations and mean
+            H_pos_key = f"{L}|{axis}|H_pos_30"
+            h_pos_key = f"{L}|{axis}|h_pos_30"
+            if H_pos_key in v_data:
+                H_pos = v_data[H_pos_key]
+                h_pos_dict[L] = v_data[h_pos_key]
+                h_pos_all[L].append(H_pos)
+
+        cosine_selections = []
+        cosine_prior_selections = []
+        rank_selections = []
+        rank_unconstrained_selections = []
+        all_cos_similarities = {L: [] for L in layer_indices}
+        
+        # We will sweep over multiple penalty coefficients
+        PENALTIES = [10.0, 5.0, 2.0, 1.0, 0.5, 0.2, 0.0]
+        
+        # Structures to hold selections for each penalty
+        cosine_prior_selections_by_penalty = {p: [] for p in PENALTIES}
+        rank_selections_by_penalty = {p: [] for p in PENALTIES}
+        
+        cosine_selections = []
+        rank_unconstrained_selections = []
+        
+        for p_idx, p_text in enumerate(prompts):
+            h_dict = prompts_h[p_idx]
+            
+            cos_scores = {}
+            percentiles = {}
+            
+            for L in layer_indices:
+                h_unit = h_dict[L]
                 
-            # 2. Normalized Rank Score (Input vs Calibration distribution)
-            h_pos_norm = h_pos_dict[L] / (np.linalg.norm(h_pos_dict[L]) + 1e-10)
-            sim_input = np.dot(h_unit, h_pos_norm.T).item()
+                # 1. Standard Cosine similarity (normalized)
+                if L in layer_w:
+                    w_vec = layer_w[L]
+                    w_unit = w_vec / (np.linalg.norm(w_vec) + 1e-10)
+                    cos_scores[L] = np.dot(h_unit, w_unit)
+                else:
+                    cos_scores[L] = -1.0
+                
+                # 2. Rank-based percentile similarity against Hh_pos
+                if L in h_pos_dict:
+                    H_pos = np.concatenate(h_pos_all[L], axis=0)
+                    h_pos = h_pos_dict[L]
+                    Hh_pos = np.concatenate([H_pos, h_pos], axis=0)
+                    
+                    Hh_pos_norm = Hh_pos / (np.linalg.norm(Hh_pos, axis=1, keepdims=True) + 1e-10)
+                    sims_combined = np.dot(Hh_pos_norm, h_unit.T) 
+                    
+                    sim_input = np.dot(h_unit, (h_pos / np.linalg.norm(h_pos)).T).item()
+                    sims_with_input = np.concatenate([sims_combined, [sim_input]])
+                    ranking_with_input = np.argsort(sims_with_input)
+                    
+                    rank_idx = np.where(ranking_with_input == len(sims_with_input) - 1)[0][0]
+                    percentile = rank_idx / float(len(sims_combined))
+                    
+                    percentiles[L] = percentile
+                else:
+                    percentiles[L] = 999.0
             
-            sims_pos = sims_test_dict[L] # [N_PROMPTS]
-            sims_combined = np.concatenate([sims_pos, [sim_input]]) # [N_PROMPTS+1]
-            ranking = np.argsort(sims_combined)
+            # Unconstrained selections
+            best_cos_layer = max(cos_scores, key=lambda L: cos_scores[L])
+            cosine_selections.append(best_cos_layer)
             
-            # Index where input similarity lands (0 = lowest, N_PROMPTS = highest)
-            rank_idx = np.where(ranking == len(sims_combined) - 1)[0][0]
-            percentile = rank_idx / float(len(sims_pos))
+            best_rank_uncon_layer = min(percentiles, key=lambda L: percentiles[L])
+            rank_unconstrained_selections.append(best_rank_uncon_layer)
             
-            w_prior = layer_priors.get(L, 0.0)
-            if w_prior > 1e-5:
-                rank_scores[L] = percentile + (1.0 - w_prior) * 10.0
-            else:
-                rank_scores[L] = 999.0 # Completely exclude
+            # Save standard cos sims
+            for L in layer_indices:
+                all_cos_similarities[L].append(cos_scores[L])
+                
+            # Compute selections for each penalty coefficient
+            for penalty in PENALTIES:
+                cos_prior_scores = {}
+                rank_scores = {}
+                
+                for L in layer_indices:
+                    w_prior = layer_priors.get(L, 0.0)
+                    
+                    # Cosine-Prior
+                    if w_prior > 1e-5:
+                        cos_prior_scores[L] = cos_scores[L] - (1.0 - w_prior) * penalty
+                    else:
+                        cos_prior_scores[L] = -999.0
+                        
+                    # Rank-based
+                    if L in h_pos_dict and w_prior > 1e-5:
+                        rank_scores[L] = percentiles[L] + (1.0 - w_prior) * penalty
+                    else:
+                        rank_scores[L] = 999.0
+                
+                best_cos_prior = max(cos_prior_scores, key=lambda L: cos_prior_scores[L])
+                best_rank = min(rank_scores, key=lambda L: rank_scores[L])
+                
+                cosine_prior_selections_by_penalty[penalty].append(best_cos_prior)
+                rank_selections_by_penalty[penalty].append(best_rank)
+
+        print(f"\n=== Layer-wise Cosine Similarity Calibration Stats for {axis.upper()} ===")
+        print(f"{'Layer':<6} | {'Cos Mean':<10} | {'Cos Std':<8} | {'Prior Weight':<12}")
+        print("-" * 46)
+        for L in layer_indices:
+            cos_mean = np.mean(all_cos_similarities[L]) if all_cos_similarities[L] else 0.0
+            cos_std = np.std(all_cos_similarities[L]) if all_cos_similarities[L] else 0.0
+            prior_w = layer_priors.get(L, 0.0)
+            print(f"L{L:<4d} | {cos_mean:<10.4f} | {cos_std:<8.4f} | {prior_w:<12.4f}")
+
+        # Helper function to compute Shannon entropy of a distribution
+        def compute_entropy(selections):
+            counts = pd.Series(selections).value_counts()
+            probs = counts / len(selections)
+            return -np.sum(probs * np.log2(probs))
+
+        print(f"\n=== Selection Distribution Summary for {axis.upper()} ===")
+        print(f"Standard Cosine Selected Layers (Unconstrained) (Entropy={compute_entropy(cosine_selections):.4f}):")
+        print(f"  {cosine_selections}")
+        print(f"Rank-based Selected Layers (Unconstrained) (Entropy={compute_entropy(rank_unconstrained_selections):.4f}):")
+        print(f"  {rank_unconstrained_selections}")
+        
+        print("\n--- Sweeping Penalty Coefficients ---")
+        print(f"{'Penalty':<8} | {'Cosine-Prior Selections':<45} | {'Entropy':<8} | {'Rank-based Selections':<45} | {'Entropy':<8}")
+        print("-" * 125)
+        for penalty in PENALTIES:
+            cos_sel = cosine_prior_selections_by_penalty[penalty]
+            cos_ent = compute_entropy(cos_sel)
+            rank_sel = rank_selections_by_penalty[penalty]
+            rank_ent = compute_entropy(rank_sel)
             
-        # Select best layers
-        best_cos_layer = max(cos_scores, key=lambda L: cos_scores[L])
-        best_rank_layer = min(rank_scores, key=lambda L: rank_scores[L])
-        
-        cosine_selections.append(best_cos_layer)
-        rank_selections.append(best_rank_layer)
-        
-        print(f"  Standard Cosine Selection : Layer {best_cos_layer:2d} (Score={cos_scores[best_cos_layer]:.4f})")
-        print(f"  Rank-based Selection (Min): Layer {best_rank_layer:2d} (Percentile={rank_scores[best_rank_layer]:.4f})")
-        
-        # Print top 5 layers (sorted)
-        top_cos = sorted(cos_scores.keys(), key=lambda L: cos_scores[L], reverse=True)[:5]
-        top_rank = sorted(rank_scores.keys(), key=lambda L: rank_scores[L], reverse=False)[:5]
-        
-        print("  Top 5 Cosine Layers       : " + ", ".join(f"L{L}({cos_scores[L]:.3f})" for L in top_cos))
-        print("  Top 5 Rank Layers (Min)   : " + ", ".join(f"L{L}(rank={rank_scores[L]:.3f}, pct={rank_scores[L] - (1.0-layer_priors.get(L,0.0))*10.0:.3f})" for L in top_rank if rank_scores[L] < 5.0))
-        
-    print("\n=== Selection Distribution Summary ===")
-    print("Standard Cosine Selected Layers: ", cosine_selections)
-    print("Rank-based Selected Layers (Min):", rank_selections)
+            cos_str = str(cos_sel)
+            rank_str = str(rank_sel)
+            print(f"{penalty:<8.1f} | {cos_str:<45} | {cos_ent:<8.4f} | {rank_str:<45} | {rank_ent:<8.4f}")
 
 if __name__ == "__main__":
     main()
