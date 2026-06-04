@@ -124,6 +124,35 @@ for val in {vals_list}; do
             --model "$JUDGE_MODEL" \\
             --quant "4bit"
     fi
+
+    # 4. Rank-Only DLS (Ranking-based cosine, no prior)
+    echo "=== Running Rank-Only DLS alpha=$val ==="
+    JSONL_OUT="${{OUT_DIR}}/{trait}/rank_only_Val${{val}}.jsonl"
+    CSV_OUT="${{OUT_DIR}}/{trait}/scores_rank_only_Val${{val}}.csv"
+    
+    if [ ! -f "$JSONL_OUT" ]; then
+        "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_proj_prior.py \\
+            --config "$CONFIG" \\
+            --vector_bank "$VECTOR_BANK" \\
+            --prompts "$PROMPT_IN" \\
+            --input_dir "$INPUT_DIR" \\
+            --out_dir "$OUT_DIR" \\
+            --axis "{trait}" \\
+            --alpha "$val" \\
+            --direction "high" \\
+            --norm_mode "raw_norm" \\
+            --score_mode "rank" \\
+            --no_prior
+    fi
+    
+    if [ -f "$JSONL_OUT" ] && [ ! -f "$CSV_OUT" ]; then
+        "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \\
+            --input "$JSONL_OUT" \\
+            --output "$CSV_OUT" \\
+            --axis "{trait}" \\
+            --model "$JUDGE_MODEL" \\
+            --quant "4bit"
+    fi
 done
 
 echo "Evaluation completed on unseen test prompts for {trait}."
