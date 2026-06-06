@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# 105_plot_raw_layer_heatmap.py
+# 108_plot_online_norm_layer_heatmap.py
 #
-# Generates heatmaps (Score and PPL) for the raw (unnormalized) single-layer sweep.
-# Reads from exp_steering_layer_raw/results/{axis}/scores_layer_{L}_Val{alpha}.csv
+# Generates heatmaps (Score and PPL) for the midpoint-norm scaled single-layer sweep.
+# Reads from exp_steering_layer_midpoint_norm/results/{axis}/scores_layer_{L}_Val{alpha}.csv
 #
 # Outputs:
-#   exp_steering_layer_raw/figures/{axis}/heatmap_raw_{axis}.png   (per-trait)
-#   exp_steering_layer_raw/figures/summary_raw_layer.png          (all traits)
+#   exp_steering_layer_midpoint_norm/figures/{axis}/heatmap_midpoint_norm_{axis}.png   (per-trait)
+#   exp_steering_layer_midpoint_norm/figures/summary_midpoint_norm_layer.png          (all traits)
 #
 
 import argparse
@@ -60,10 +60,6 @@ def highlight_safe_cells(ax, p_ppl, threshold=25.0):
                 ax.add_patch(rect)
 
 
-def make_empty_pivot(vals, layers):
-    return pd.DataFrame(np.nan, index=layers, columns=vals)
-
-
 def plot_trait_heatmap(axis: str, input_dir: Path, out_dir: Path, artifact_dir: Path = None):
     """Plot Score & PPL heatmaps (layers × alpha) for a single trait."""
     df = load_summary(input_dir, axis)
@@ -88,7 +84,7 @@ def plot_trait_heatmap(axis: str, input_dir: Path, out_dir: Path, artifact_dir: 
             p_ppl.at[row["val"], row["layer"]] = row["const_ppl"]
 
     fig, axes = plt.subplots(2, 1, figsize=(16, 10))
-    fig.suptitle(f"Raw Single-Layer Steering (Unnormalized) — {axis.capitalize()}", fontsize=16, fontweight="bold")
+    fig.suptitle(f"Midpoint-Norm Single-Layer Steering (Pattern B) — {axis.capitalize()}", fontsize=16, fontweight="bold")
 
     # Score heatmap
     ax = axes[0]
@@ -122,7 +118,7 @@ def plot_trait_heatmap(axis: str, input_dir: Path, out_dir: Path, artifact_dir: 
     highlight_safe_cells(ax, p_ppl, threshold=25.0)
 
     plt.tight_layout()
-    out_path = fig_dir / f"heatmap_raw_{axis}.png"
+    out_path = fig_dir / f"heatmap_midpoint_norm_{axis}.png"
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out_path}")
@@ -130,7 +126,7 @@ def plot_trait_heatmap(axis: str, input_dir: Path, out_dir: Path, artifact_dir: 
     # Copy to artifact dir if provided
     if artifact_dir:
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        artifact_dest = artifact_dir / f"heatmap_{axis}_raw.png"
+        artifact_dest = artifact_dir / f"heatmap_{axis}_midpoint_norm.png"
         shutil.copy(out_path, artifact_dest)
         print(f"  Copied to artifact: {artifact_dest}")
 
@@ -170,14 +166,14 @@ def plot_summary_heatmap(input_dir: Path, out_dir: Path, artifact_dir: Path = No
         linewidths=0.3, linecolor="white",
         cbar_kws={"label": "Best Safe Personality Score"},
     )
-    ax.set_title("Raw Single-Layer Sweep (Unnormalized) — Best Safe Score per Layer & Trait", fontsize=14, fontweight="bold")
+    ax.set_title("Midpoint-Norm Single-Layer Steering (Pattern B) — Best Safe Score per Layer & Trait", fontsize=14, fontweight="bold")
     ax.set_xlabel("Layer", fontsize=12)
     ax.set_ylabel("Trait", fontsize=12)
     ax.tick_params(axis="x", labelrotation=45)
     ax.tick_params(axis="y", labelrotation=0)
 
     plt.tight_layout()
-    out_path = fig_dir / "summary_raw_layer.png"
+    out_path = fig_dir / "summary_midpoint_norm_layer.png"
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out_path}")
@@ -185,16 +181,16 @@ def plot_summary_heatmap(input_dir: Path, out_dir: Path, artifact_dir: Path = No
     # Copy to artifact dir if provided
     if artifact_dir:
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        artifact_dest = artifact_dir / "summary_raw_layer.png"
+        artifact_dest = artifact_dir / "summary_midpoint_norm_layer.png"
         shutil.copy(out_path, artifact_dest)
         print(f"  Copied to artifact: {artifact_dest}")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input_dir", default="exp_steering_layer_raw/results",
-                    help="Path to raw sweep results")
-    ap.add_argument("--out_dir", default="exp_steering_layer_raw",
+    ap.add_argument("--input_dir", default="exp_steering_layer_midpoint_norm/results",
+                    help="Path to midpoint-norm sweep results")
+    ap.add_argument("--out_dir", default="exp_steering_layer_midpoint_norm",
                     help="Output base directory for figures")
     ap.add_argument("--artifact_dir", default=None,
                     help="Conversation artifact figures directory to copy heatmaps to")
@@ -206,7 +202,7 @@ def main():
     out_dir = Path(args.out_dir)
     artifact_dir = Path(args.artifact_dir) if args.artifact_dir else None
 
-    print("=== Raw Single-Layer Sweep Heatmaps ===")
+    print("=== Midpoint-Norm Single-Layer Sweep Heatmaps ===")
     for axis in args.traits:
         print(f"\n[{axis}]")
         plot_trait_heatmap(axis, input_dir, out_dir, artifact_dir)
