@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
-JOB_IDS = ["196980", "196981", "196982", "196983", "196984"]
+JOB_IDS = ["198133", "198134", "198135", "196983", "196984"]
 RESULTS_DIR = Path("exp_steering_layer_midpoint_norm/results")
 FIGURES_DIR = Path("exp_steering_layer_midpoint_norm/figures")
 
