@@ -158,22 +158,28 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
 
             if score_mode == "rank":
                 if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"]:
-                    H_pos = h_pos_dict["H_pos"][L]
-                    h_pos = h_pos_dict["h_pos"][L]
-                    Hh_pos = np.concatenate([H_pos, h_pos], axis=0) # [31, n_dims]
+                    H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
+                    h_pos = h_pos_dict["h_pos"][L]  # [1, n_dims] (Mean vector)
                     
                     h_np = h.cpu().numpy()
-                    h_unit = h_np / (np.linalg.norm(h_np) + 1e-10)
+                    h_unit = h_np / (np.linalg.norm(h_np) + 1e-10)  # [n_dims]
                     
-                    Hh_pos_norm = Hh_pos / (np.linalg.norm(Hh_pos, axis=1, keepdims=True) + 1e-10)
-                    sims_combined = np.dot(Hh_pos_norm, h_unit.T) 
+                    # Compute similarities for the 1000 positive samples
+                    H_pos_norm = H_pos / (np.linalg.norm(H_pos, axis=1, keepdims=True) + 1e-10)
+                    sims_ref = np.dot(H_pos_norm, h_unit.T)  # [1000]
                     
-                    sim_input = np.dot(h_unit, (h_pos / np.linalg.norm(h_pos)).T).item()
-                    sims_with_input = np.concatenate([sims_combined, [sim_input]])
-                    ranking_with_input = np.argsort(sims_with_input)
+                    # Compute similarity for their mean vector
+                    h_pos_norm = h_pos / (np.linalg.norm(h_pos) + 1e-10)
+                    sim_mean = np.dot(h_pos_norm, h_unit.T).item()  # Scalar
                     
-                    rank_idx = np.where(ranking_with_input == len(sims_with_input) - 1)[0][0]
-                    percentile = rank_idx / float(len(sims_combined))
+                    # Combine into 1001 similarities (sim_mean at index 1000)
+                    sims_total = np.concatenate([sims_ref, [sim_mean]])  # [1001]
+                    
+                    # Find the rank of sim_mean
+                    ranking = np.argsort(sims_total)
+                    rank_idx = np.where(ranking == 1000)[0][0]
+                    
+                    percentile = rank_idx / float(len(sims_ref))  # percentile in [0, 1]
                     score = -percentile
                 else:
                     h_unit = h / (torch.norm(h) + 1e-10)
@@ -236,6 +242,14 @@ def calc_ppl(model, ids):
     return torch.exp(out.loss).item()
 
 def main():
+    # Login node execution guard to prevent server overload
+    import socket
+    import sys
+    hostname = socket.gethostname()
+    if "hakusan" in hostname:
+        print(f"\n[ERROR] This heavy DLS execution script cannot be run directly on the login node '{hostname}'.")
+        print("Please submit this script as a SLURM job using sbatch to run it on a compute node.")
+        sys.exit(1)
     ap = argparse.ArgumentParser()
     ap.add_argument("--config",       "-c", required=True)
     ap.add_argument("--vector_bank",  required=True)
@@ -339,11 +353,16 @@ def main():
     if args.score_mode == "rank":
         h_pos_dict = {"H_pos": {}, "h_pos": {}}
         for L in LAYERS:
-            H_pos_key = f"{L}|{args.axis}|H_pos_30"
-            h_pos_key = f"{L}|{args.axis}|h_pos_30"
+            H_pos_key = f"{L}|{args.axis}|H_pos_1000"
+            h_pos_key = f"{L}|{args.axis}|h_pos_1000"
+            if H_pos_key not in v_data:
+                # Fallback to older 30 sample arrays if 1000 samples are not generated
+                H_pos_key = f"{L}|{args.axis}|H_pos_30"
+                h_pos_key = f"{L}|{args.axis}|h_pos_30"
+                
             if H_pos_key in v_data:
-                h_pos_dict["H_pos"][L] = v_data[H_pos_key]
-                h_pos_dict["h_pos"][L] = v_data[h_pos_key]
+                h_pos_dict["H_pos"][L] = v_data[H_pos_key].astype(np.float32)
+                h_pos_dict["h_pos"][L] = v_data[h_pos_key].astype(np.float32)
 
     # Generate baseline once for prompts
     baselines = []

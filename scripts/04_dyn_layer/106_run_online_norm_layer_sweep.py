@@ -164,6 +164,14 @@ def load_prompts(path):
 
 
 def main():
+    # Login node execution guard to prevent server overload
+    import socket
+    import sys
+    hostname = socket.gethostname()
+    if "hakusan" in hostname:
+        print(f"\n[ERROR] This heavy sweep execution script cannot be run directly on the login node '{hostname}'.")
+        print("Please submit this script as a SLURM job using sbatch to run it on a compute node.")
+        sys.exit(1)
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", "-c", required=True)
     ap.add_argument("--vector_bank", required=True)

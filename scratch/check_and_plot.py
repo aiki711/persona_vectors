@@ -12,14 +12,21 @@ import sys
 from pathlib import Path
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
-JOB_IDS = ["198133", "198134", "198135", "196983", "196984"]
 RESULTS_DIR = Path("exp_steering_layer_midpoint_norm/results")
 FIGURES_DIR = Path("exp_steering_layer_midpoint_norm/figures")
 
 def get_active_jobs():
     try:
-        res = subprocess.run(["squeue", "-u", "s2550009", "-h", "-o", "%i"], capture_output=True, text=True)
-        jobs = [line.strip() for line in res.stdout.strip().split("\n") if line.strip()]
+        res = subprocess.run(["squeue", "-u", "s2550009", "-h", "-o", "%i %j"], capture_output=True, text=True)
+        jobs = []
+        for line in res.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                job_id, job_name = parts[0], parts[1]
+                if "midpoint_norm" in job_name:
+                    jobs.append(job_id)
         return jobs
     except Exception as e:
         print(f"Error calling squeue: {e}")
@@ -35,8 +42,7 @@ def main():
     print("=== SLURM Job Monitor & Plotter ===")
     
     # 1. Check active jobs
-    active_jobs = get_active_jobs()
-    our_active_jobs = [j for j in active_jobs if j in JOB_IDS]
+    our_active_jobs = get_active_jobs()
     
     print(f"Our monitored jobs in queue: {our_active_jobs}")
     
@@ -65,7 +71,7 @@ def main():
         elif csv_count > 0:
             print("STATUS: JOBS_FINISHED_PARTIAL_DATA")
             sys.exit(0)
-        else:
+        else:   
             print("STATUS: JOBS_NOT_STARTED_OR_FAILED")
             sys.exit(1)
     else:

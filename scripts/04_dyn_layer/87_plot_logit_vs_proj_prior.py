@@ -137,7 +137,7 @@ def make_all_traits_figure(all_layers_dir, proj_prior_dir, out_dir, artifact_dir
     fig = plt.figure(figsize=(16, 9.5))
     
     fig.suptitle(
-        "DLS Method Comparison: Logit-Diff vs. Proj-Prior (All Traits)",
+        "DLS Method Comparison: Logit-Diff vs. Proposed (All Traits)",
         fontsize=18, fontweight="bold", y=0.98
     )
     fig.text(

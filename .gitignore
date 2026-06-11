@@ -6,7 +6,7 @@ log
 
 # Directories
 analysis_results/
-exp/
+archive_exp/
 persona_steering/
 _backup_before_clone/
 
@@ -21,7 +21,7 @@ __pycache__/
 .DS_Store
 
 # Dynamic Experiment Directories
-exp_*/
+exp_*
 
 # PBS logs
 *.pbs.e*

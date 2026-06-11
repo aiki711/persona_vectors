@@ -65,6 +65,14 @@ def extract_big5_pairs_from_hf(per_axis: int = 1000) -> Dict[str, List[Tuple[str
     return PAIRS
 
 def main():
+    # Login node execution guard to prevent server overload
+    import socket
+    import sys
+    hostname = socket.gethostname()
+    if "hakusan" in hostname:
+        print(f"\n[ERROR] This heavy computation script cannot be run directly on the login node '{hostname}'.")
+        print("Please submit this script as a SLURM job using sbatch to run it on a compute node.")
+        sys.exit(1)
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", "-c", required=True)
     ap.add_argument("--out_dir", required=True)
@@ -169,6 +177,10 @@ def main():
             # Save positive activations and their mean for rank-based selection
             final_data[f"{L}|{ax}|H_pos_30"] = H[:30].astype(np.float32)
             final_data[f"{L}|{ax}|h_pos_30"] = H[:30].mean(axis=0, keepdims=True).astype(np.float32)
+            
+            # Save 1000 positive activations and their mean for the new rank selection logic (float16 to save space)
+            final_data[f"{L}|{ax}|H_pos_1000"] = H.astype(np.float16)
+            final_data[f"{L}|{ax}|h_pos_1000"] = H.mean(axis=0, keepdims=True).astype(np.float16)
             
         np.savez_compressed(bank_path, **final_data)
     print(f"\n[Done] Saved mean-diff vectors to {bank_path}.")
