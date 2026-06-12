@@ -15,14 +15,14 @@ TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agree
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
 PBS_TEMPLATE = """#!/bin/bash
-#SBATCH --job-name=eval_{mode}_prior_{trait}
+#SBATCH --job-name=eval_{mode}_only_{trait}
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:nvidia_a40:1
 #SBATCH --time=08:00:00
-#SBATCH --output=log/eval_{mode}_prior_{trait}.out
-#SBATCH --error=log/eval_{mode}_prior_{trait}.err
+#SBATCH --output=log/eval_{mode}_only_{trait}.out
+#SBATCH --error=log/eval_{mode}_only_{trait}.err
 {dependency_line}
 
 WORKDIR="/home/s2550009/persona_vectors"
@@ -32,11 +32,11 @@ source persona_steering/bin/activate 2>/dev/null || conda activate "$WORKDIR/per
 export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${{PYTHONPATH:-}}"
 PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
-echo "Starting evaluation for {mode}-Prior {trait}..."
+echo "Starting evaluation for {mode}-Only {trait}..."
 
 for val in {vals_list}; do
-    JSONL_OUT="exp_steering_dyn_layer_proj_prior/results/{trait}/{mode}_prior_Val${{val}}.jsonl"
-    CSV_OUT="exp_steering_dyn_layer_proj_prior/results/{trait}/scores_{mode}_prior_Val${{val}}.csv"
+    JSONL_OUT="exp_steering_dyn_layer_proj_prior/results/{trait}/{mode}_only_Val${{val}}.jsonl"
+    CSV_OUT="exp_steering_dyn_layer_proj_prior/results/{trait}/scores_{mode}_only_Val${{val}}.csv"
     
     if [ -f "$JSONL_OUT" ]; then
         if [ ! -f "$CSV_OUT" ]; then
@@ -55,7 +55,7 @@ for val in {vals_list}; do
     fi
 done
 
-echo "Evaluation completed for {mode}-Prior {trait}."
+echo "Evaluation completed for {mode}-Only {trait}."
 """
 
 def get_active_jobs():
@@ -88,12 +88,12 @@ def main():
 
     for mode in ["rank"]:
         for trait in TRAITS:
-            gen_job_name = f"dls_{mode}_prior_{trait}"
+            gen_job_name = f"dls_{mode}_only_{trait}"
             dependency_line = ""
             if gen_job_name in active_jobs:
                 job_id = active_jobs[gen_job_name]
                 dependency_line = f"#SBATCH --dependency=afterok:{job_id}"
-                print(f"Setting dependency for eval_{mode}_prior_{trait} on generation job {job_id} ({gen_job_name})")
+                print(f"Setting dependency for eval_{mode}_only_{trait} on generation job {job_id} ({gen_job_name})")
             else:
                 print(f"No active generation job found for {gen_job_name}, submitting evaluation without dependency.")
 
@@ -104,7 +104,7 @@ def main():
                 dependency_line=dependency_line,
                 model_name=JUDGE_MODEL
             )
-            pbs_file = job_dir / f"run_eval_{mode}_prior_{trait}.sh"
+            pbs_file = job_dir / f"run_eval_{mode}_only_{trait}.sh"
             with open(pbs_file, "w") as f:
                 f.write(pbs_content)
             pbs_file.chmod(0o755)

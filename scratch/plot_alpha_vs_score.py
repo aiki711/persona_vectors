@@ -16,20 +16,23 @@ from pathlib import Path
 # Data setup
 vals = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 traits = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
-results_base_dir = Path("exp_steering_dyn_layer_proj_prior/results_test_unseen")
+results_base_dir = Path("archive_exp/exp_steering_dyn_layer_proj_prior/results_test_unseen")
+new_results_dir = Path("exp_steering_dyn_layer_proj_prior/results")
 
 def load_method_data(method_name):
     y_scores = []
     y_ppls = []
     valid_vals = []
     
+    target_dir = new_results_dir if method_name == "rank_only" else results_base_dir
+    
     for val in vals:
         val_scores = []
         val_ppls = []
         for trait in traits:
-            csv_path = results_base_dir / trait / f"scores_{method_name}_Val{float(val)}.csv"
+            csv_path = target_dir / trait / f"scores_{method_name}_Val{float(val)}.csv"
             if not csv_path.exists():
-                csv_path = results_base_dir / trait / f"scores_{method_name}_Val{val}.csv"
+                csv_path = target_dir / trait / f"scores_{method_name}_Val{val}.csv"
                 
             if csv_path.exists():
                 try:

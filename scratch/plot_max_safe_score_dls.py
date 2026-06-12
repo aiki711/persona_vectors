@@ -35,7 +35,8 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
     best_alpha = np.nan
     best_ppl = np.nan
     
-    trait_dir = results_dir / trait
+    target_dir = Path("exp_steering_dyn_layer_proj_prior/results") if method == "rank_only" else results_dir
+    trait_dir = target_dir / trait
     for val in VALS:
         # Check both float format and normal format
         csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
@@ -65,7 +66,8 @@ def get_unsteered_baseline_score(results_dir: Path, trait: str, method: str) -> 
     """
     Returns the average unsteered baseline score (base_score) for a given trait and method.
     """
-    trait_dir = results_dir / trait
+    target_dir = Path("exp_steering_dyn_layer_proj_prior/results") if method == "rank_only" else results_dir
+    trait_dir = target_dir / trait
     for val in VALS:
         csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
         if not csv_path.exists():
@@ -81,7 +83,7 @@ def get_unsteered_baseline_score(results_dir: Path, trait: str, method: str) -> 
     return 3.0  # Fallback
 
 def main():
-    results_dir = Path("exp_steering_dyn_layer_proj_prior/results_test_unseen")
+    results_dir = Path("archive_exp/exp_steering_dyn_layer_proj_prior/results_test_unseen")
 
     # Load data for all traits
     data = []

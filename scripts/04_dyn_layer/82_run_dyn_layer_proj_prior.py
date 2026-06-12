@@ -172,12 +172,12 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     h_pos_norm = h_pos / (np.linalg.norm(h_pos) + 1e-10)
                     sim_mean = np.dot(h_pos_norm, h_unit.T).item()  # Scalar
                     
-                    # Combine into 1001 similarities (sim_mean at index 1000)
-                    sims_total = np.concatenate([sims_ref, [sim_mean]])  # [1001]
+                    # Combine into similarities with sim_mean at the end
+                    sims_total = np.concatenate([sims_ref, [sim_mean]])
                     
                     # Find the rank of sim_mean
                     ranking = np.argsort(sims_total)
-                    rank_idx = np.where(ranking == 1000)[0][0]
+                    rank_idx = np.where(ranking == len(sims_ref))[0][0]
                     
                     percentile = rank_idx / float(len(sims_ref))  # percentile in [0, 1]
                     score = -percentile

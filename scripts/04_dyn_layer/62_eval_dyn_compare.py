@@ -37,8 +37,13 @@ def get_score(model, tokenizer, text, trait, device):
     with torch.no_grad():
         outputs = model.generate(**inputs, max_new_tokens=256, temperature=0.1, do_sample=False, pad_token_id=tokenizer.eos_token_id)
     gen = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
-    m = re.search(r"[Ss]core:\s*([0-5])", gen)
-    return int(m.group(1)) if m else 3, gen
+    score_val = 3
+    idx = gen.lower().find("score:")
+    if idx != -1:
+        m = re.search(r"([0-5])", gen[idx + 6:])
+        if m:
+            score_val = int(m.group(1))
+    return score_val, gen
 
 def main():
     ap = argparse.ArgumentParser()
