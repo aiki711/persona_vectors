@@ -7,7 +7,7 @@
 #SBATCH --time=08:00:00
 #SBATCH --output=log/eval_rank_only_neuroticism.out
 #SBATCH --error=log/eval_rank_only_neuroticism.err
-#SBATCH --dependency=afterok:204638
+#SBATCH --dependency=afterok:204679
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"

@@ -7,7 +7,7 @@
 #SBATCH --time=08:00:00
 #SBATCH --output=log/eval_rank_only_agreeableness.out
 #SBATCH --error=log/eval_rank_only_agreeableness.err
-#SBATCH --dependency=afterok:204641
+#SBATCH --dependency=afterok:204682
 
 WORKDIR="/home/s2550009/persona_vectors"
 cd "$WORKDIR"
