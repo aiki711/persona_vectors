@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# scratch/submit_midpoint_dls_sweeps.py
+#
+# Submits the midpoint-based DLS sweeps for both cosine and rank modes (Interpretation B)
+# across all 5 traits and 14 scaling values to the SLURM queue.
+#
+
+import subprocess
+from pathlib import Path
+
+TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
+VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
+
+PBS_TEMPLATE = """#!/bin/bash
+#SBATCH --job-name=dls_{mode}_only_{trait}
+#SBATCH --partition=GPU-1
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:nvidia_a40:1
+#SBATCH --time=04:00:00
+#SBATCH --output=log/dls_{mode}_only_{trait}.out
+#SBATCH --error=log/dls_{mode}_only_{trait}.err
+
+WORKDIR="/home/s2550009/persona_vectors"
+cd "$WORKDIR"
+
+source persona_steering/bin/activate 2>/dev/null || conda activate "$WORKDIR/persona_steering" 2>/dev/null || true
+export PYTHONPATH="$WORKDIR/src:$WORKDIR:$WORKDIR/scripts:${{PYTHONPATH:-}}"
+PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
+
+CONFIG="config/mistral_7b.yaml"
+VECTOR_BANK="vectors/mean_diff_vectors.npz"
+PROMPT_IN="exp_steering_layer_analysis/test_prompts_10.jsonl"
+INPUT_DIR="exp_steering_layer_analysis/results"
+OUT_DIR="exp_steering_dyn_layer_proj_prior/results"
+
+echo "Running {mode}-Only DLS sweep (midpoint logic) for {trait}..."
+
+# Loop over values and run the script with --score_mode {mode} and --no_prior
+for val in {vals_list}; do
+    echo "=== Running alpha=$val ==="
+    "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_proj_prior.py \
+        --config "$CONFIG" \
+        --vector_bank "$VECTOR_BANK" \
+        --prompts "$PROMPT_IN" \
+        --input_dir "$INPUT_DIR" \
+        --out_dir "$OUT_DIR" \
+        --axis "{trait}" \
+        --alpha "$val" \
+        --direction "high" \
+        --norm_mode "raw_norm" \
+        --score_mode "{mode}" \
+        --no_prior
+done
+"""
+
+def main():
+    job_dir = Path("jobs/dls_midpoint_sweeps")
+    job_dir.mkdir(parents=True, exist_ok=True)
+    log_dir = Path("log")
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    vals_str = " ".join(str(v) for v in VALS)
+
+    # Modes: "cosine" (which gives cos_only) and "rank" (which gives rank_only)
+    for mode in ["cosine", "rank"]:
+        for trait in TRAITS:
+            # We map "cosine" to "cos" in job naming for brevity
+            name_mode = "cos" if mode == "cosine" else "rank"
+            
+            pbs_content = PBS_TEMPLATE.format(trait=trait, mode=name_mode, vals_list=vals_str)
+            
+            # Write to job script
+            # Use 'cosine' or 'rank' for target parameter
+            pbs_content = pbs_content.replace('--score_mode "' + name_mode + '"', '--score_mode "' + mode + '"')
+            pbs_content = pbs_content.replace('--score_mode ' + name_mode, '--score_mode ' + mode)
+            
+            pbs_file = job_dir / f"run_dls_{name_mode}_only_{trait}.sh"
+            with open(pbs_file, "w") as f:
+                f.write(pbs_content)
+            pbs_file.chmod(0o755)
+
+            cmd = ["sbatch", str(pbs_file)]
+            print(f"Submitting {name_mode.upper()}-Only DLS job for {trait}...")
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            print(f"  {res.stdout.strip()} {res.stderr.strip()}")
+
+if __name__ == "__main__":
+    main()

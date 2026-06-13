@@ -108,7 +108,7 @@ def load_layer_priors(input_dir: Path, axis: str) -> dict:
             
     return priors
 
-def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="cosine", h_pos_dict=None, sims_ref_dict=None, alpha=1.0):
+def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="cosine", h_pos_dict=None, sims_ref_dict=None, alpha=1.0, layer_midpoint_dev=None):
     stack, _, _ = get_layer_stack(model)
 
     if score_mode == "logit_diff":
@@ -155,11 +155,11 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
         raw_scores = {}
         for L, w_dev in layer_w_dev.items():
             h = saved_h[L]
+            m = layer_midpoint_dev.get(L, None) if layer_midpoint_dev is not None else None
 
             if score_mode == "rank":
-                if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"]:
+                if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
                     H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
-                    h_pos = h_pos_dict["h_pos"][L]  # [1, n_dims] (Mean vector)
                     
                     h_np = h.cpu().numpy()
                     h_unit = h_np / (np.linalg.norm(h_np) + 1e-10)  # [n_dims]
@@ -168,38 +168,44 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     H_pos_norm = H_pos / (np.linalg.norm(H_pos, axis=1, keepdims=True) + 1e-10)
                     sims_ref = np.dot(H_pos_norm, h_unit.T)  # [1000]
                     
-                    # Compute similarity for their mean vector
-                    h_pos_norm = h_pos / (np.linalg.norm(h_pos) + 1e-10)
-                    sim_mean = np.dot(h_pos_norm, h_unit.T).item()  # Scalar
+                    # Compute similarity with midpoint
+                    m_np = m.cpu().numpy()
+                    m_norm = m_np / (np.linalg.norm(m_np) + 1e-10)
+                    sim_mid = np.dot(m_norm, h_unit.T).item()  # Scalar
                     
-                    # Combine into similarities with sim_mean at the end
-                    sims_total = np.concatenate([sims_ref, [sim_mean]])
+                    # Combine into similarities with sim_mid at the end
+                    sims_total = np.concatenate([sims_ref, [sim_mid]])
                     
-                    # Find the rank of sim_mean
+                    # Find the rank of sim_mid
                     ranking = np.argsort(sims_total)
                     rank_idx = np.where(ranking == len(sims_ref))[0][0]
                     
                     percentile = rank_idx / float(len(sims_ref))  # percentile in [0, 1]
-                    score = -percentile
+                    score = percentile # Highest percentile = closest to midpoint (Interpretation B)
                 else:
                     h_unit = h / (torch.norm(h) + 1e-10)
                     w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
                     score = torch.dot(h_unit, w_unit).item()
             else: # cosine
-                h_unit = h / (torch.norm(h) + 1e-10)
-                w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
-                score = torch.dot(h_unit, w_unit).item()
+                if m is not None:
+                    h_unit = h / (torch.norm(h) + 1e-10)
+                    m_unit = m / (torch.norm(m) + 1e-10)
+                    score = torch.dot(h_unit, m_unit).item() # Cosine similarity with midpoint (highest similarity = closest to midpoint)
+                else:
+                    h_unit = h / (torch.norm(h) + 1e-10)
+                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    score = torch.dot(h_unit, w_unit).item()
 
             if target_direction == "high":
                 if score_mode == "rank":
                     raw_scores[L] = score
                 else:
-                    raw_scores[L] = -score
+                    raw_scores[L] = score # Maximize cosine similarity with midpoint
             else:
                 if score_mode == "rank":
                     raw_scores[L] = -score
                 else:
-                    raw_scores[L] = score
+                    raw_scores[L] = -score
 
     final_scores = {}
     for L in layer_w_dev.keys():
@@ -296,6 +302,7 @@ def main():
     # Load vectors
     v_data = np.load(args.vector_bank)
     layer_w = {}
+    layer_midpoint = {}
     for L in LAYERS:
         w_key = f"{L}|{args.axis}|w"
         raw_norm_key = f"{L}|{args.axis}|raw_norm"
@@ -316,6 +323,8 @@ def main():
                     m_norm = torch.norm(m_vec).item()
                     w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
             layer_w[L] = w_vec
+        if mp_key in v_data:
+            layer_midpoint[L] = torch.tensor(v_data[mp_key], dtype=torch.float32)
 
     if not layer_w:
         return print("[ERROR] No layer vectors found.")
@@ -345,6 +354,7 @@ def main():
     model.eval()
 
     layer_w_dev = {L: w.to(device) for L, w in layer_w.items()}
+    layer_midpoint_dev = {L: m.to(device) for L, m in layer_midpoint.items()}
     results = []
 
     # Load calibration distributions for rank/zscore modes
@@ -386,7 +396,8 @@ def main():
         # Layer Selection
         best_layer, raw_scores, final_scores = select_layer_proj_prior(
             model, inputs.input_ids, layer_w_dev, args.direction, layer_priors, args.score_mode,
-            h_pos_dict=h_pos_dict, sims_ref_dict=sims_ref_dict, alpha=args.alpha
+            h_pos_dict=h_pos_dict, sims_ref_dict=sims_ref_dict, alpha=args.alpha,
+            layer_midpoint_dev=layer_midpoint_dev
         )
 
         # Generate
