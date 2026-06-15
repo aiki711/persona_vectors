@@ -9,7 +9,7 @@ results_base_dir = Path("archive_exp/exp_steering_dyn_layer_proj_prior/results_t
 new_results_dir = Path("exp_steering_dyn_layer_proj_prior/results")
 
 def get_avg_metrics(method_name):
-    target_dir = new_results_dir if method_name == "rank_only" else results_base_dir
+    target_dir = results_base_dir if method_name == "logit_diff" else new_results_dir
     res = {}
     for val in vals:
         val_scores = []

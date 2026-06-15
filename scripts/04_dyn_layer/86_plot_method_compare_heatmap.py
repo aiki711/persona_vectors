@@ -28,8 +28,10 @@ METHODS = [
     ("DLS_anti_align",  "darkred",    "anti_alignment"),
     ("Fusion_Sigmoid",  "darkorange", "sigmoid"),
     ("Fusion_Plateau",  "purple",     "soft_plateau"),
-    ("DLS_proj_prior",  "darkcyan",   "proj_prior"),
-    ("DLS_rank_prior",  "teal",       "rank_prior"),
+    ("DLS_cos_only",    "coral",      "cos_only"),
+    ("DLS_rank_only",   "teal",       "rank_only"),
+    ("DLS_proj_cos",    "blueviolet", "proj_cos_only"),
+    ("DLS_proj_rank",   "forestgreen", "proj_rank_only"),
 ]
 
 
@@ -103,12 +105,14 @@ def load_proj_prior_summary(proj_prior_dir: Path, axis: str, method: str = "proj
 def load_all_methods(all_layers_dir, fusion_dir, proj_prior_dir, axis):
     """Return dict of {method_key: DataFrame} for a single trait."""
     return {
-        "logit_diff":    load_dyn_summary(all_layers_dir, axis, "logit_diff"),
+        "logit_diff":    load_proj_prior_summary(proj_prior_dir, axis, "logit_diff"),
         "anti_alignment": load_dyn_summary(all_layers_dir, axis, "anti_alignment"),
         "sigmoid":       load_fusion_summary(fusion_dir, axis, "sigmoid"),
         "soft_plateau":  load_fusion_summary(fusion_dir, axis, "soft_plateau"),
-        "proj_prior":    load_proj_prior_summary(proj_prior_dir, axis, "proj_prior"),
-        "rank_prior":    load_proj_prior_summary(proj_prior_dir, axis, "rank_prior"),
+        "cos_only":      load_proj_prior_summary(proj_prior_dir, axis, "cos_only"),
+        "rank_only":     load_proj_prior_summary(proj_prior_dir, axis, "rank_only"),
+        "proj_cos_only":  load_proj_prior_summary(proj_prior_dir, axis, "proj_cos_only"),
+        "proj_rank_only": load_proj_prior_summary(proj_prior_dir, axis, "proj_rank_only"),
     }
 
 
@@ -175,7 +179,7 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir):
     # diagnostic
     pp_cols = list(p_score.columns) if not p_score.empty else []
     print(f"  Methods present: {pp_cols}")
-    for m in ["DLS_proj_prior", "DLS_rank_prior"]:
+    for m in ["DLS_cos_only", "DLS_rank_only"]:
         if m in pp_cols:
             safe_rows = p_ppl[m][p_ppl[m] <= 25.0]
             if not safe_rows.empty:
@@ -207,7 +211,7 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir):
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title}"
-            f" (Black Border: PPL ≤ 25.0 | Navy/Red: DLS | Orange/Purple: Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL ≤ 25.0 | Navy/Red: DLS | Orange/Purple: Fusion | Coral: Cos-Only | Teal: Rank-Only)",
             fontsize=11, fontweight="bold")
         ax_obj.set_xlabel("Method", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity / Alpha)", fontsize=10)
@@ -272,7 +276,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
 
     # Diagnostic
     print("  Methods in summary:", list(p_score.columns))
-    for m in ["DLS_proj_prior", "DLS_rank_prior"]:
+    for m in ["DLS_cos_only", "DLS_rank_only"]:
         if m in p_score.columns and m in p_ppl.columns:
             safe_mask = p_ppl[m] <= 25.0
             if safe_mask.any():
@@ -308,7 +312,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title}"
-            f" (Black Border: PPL ≤ 25.0 | Navy/Red: DLS | Orange/Purple: Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL ≤ 25.0 | Navy/Red: DLS | Orange/Purple: Fusion | Coral: Cos-Only | Teal: Rank-Only)",
             fontsize=11, fontweight="bold")
         ax_obj.set_xlabel("Method", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity / Alpha)", fontsize=10)
@@ -334,13 +338,13 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
 def main():
     ap = argparse.ArgumentParser(
         description="Plot method-only comparison heatmaps (no single-layer steering).")
-    ap.add_argument("--all_layers_dir", default="exp_steering_dyn_layer_all_layers_midpoint/results")
-    ap.add_argument("--fusion_dir",     default="exp_steering_dyn_ic_fusion_midpoint/results")
+    ap.add_argument("--all_layers_dir", default="archive_exp/exp_steering_dyn_layer_proj_prior/results_test_unseen")
+    ap.add_argument("--fusion_dir",     default="archive_exp/exp_steering_dyn_ic_fusion_midpoint/results")
     ap.add_argument("--proj_prior_dir", default="exp_steering_dyn_layer_proj_prior/results")
     ap.add_argument("--out_dir",        default="exp_steering_dyn_layer_proj_prior/figures")
     ap.add_argument("--artifact_dir",
                     default="/home/s2550009/.gemini/antigravity-ide/brain/"
-                            "42af965e-7b98-48aa-bc1b-ea07d6f49983/images")
+                            "967cd169-1aa5-48db-a243-174e45692380/images")
     args = ap.parse_args()
 
     all_layers_dir = Path(args.all_layers_dir)

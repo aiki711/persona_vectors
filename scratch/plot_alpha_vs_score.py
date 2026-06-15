@@ -24,7 +24,7 @@ def load_method_data(method_name):
     y_ppls = []
     valid_vals = []
     
-    target_dir = new_results_dir if method_name == "rank_only" else results_base_dir
+    target_dir = new_results_dir if method_name in ["rank_only", "cos_only"] else results_base_dir
     
     for val in vals:
         val_scores = []

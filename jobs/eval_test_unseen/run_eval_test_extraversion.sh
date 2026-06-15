@@ -139,6 +139,64 @@ for val in 0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0; do
             --model "$JUDGE_MODEL" \
             --quant "4bit"
     fi
+
+    # 5. Proj-Rank-Only DLS (Projection ranking, no prior)
+    echo "=== Running Proj-Rank-Only DLS alpha=$val ==="
+    JSONL_OUT="${OUT_DIR}/extraversion/proj_rank_only_Val${val}.jsonl"
+    CSV_OUT="${OUT_DIR}/extraversion/scores_proj_rank_only_Val${val}.csv"
+    
+    if [ ! -f "$JSONL_OUT" ]; then
+        "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_proj_prior.py \
+            --config "$CONFIG" \
+            --vector_bank "$VECTOR_BANK" \
+            --prompts "$PROMPT_IN" \
+            --input_dir "$INPUT_DIR" \
+            --out_dir "$OUT_DIR" \
+            --axis "extraversion" \
+            --alpha "$val" \
+            --direction "high" \
+            --norm_mode "raw_norm" \
+            --score_mode "proj_rank" \
+            --no_prior
+    fi
+    
+    if [ -f "$JSONL_OUT" ] && [ ! -f "$CSV_OUT" ]; then
+        "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \
+            --input "$JSONL_OUT" \
+            --output "$CSV_OUT" \
+            --axis "extraversion" \
+            --model "$JUDGE_MODEL" \
+            --quant "4bit"
+    fi
+
+    # 6. Proj-Cos-Only DLS (Projection cosine alignment, no prior)
+    echo "=== Running Proj-Cos-Only DLS alpha=$val ==="
+    JSONL_OUT="${OUT_DIR}/extraversion/proj_cos_only_Val${val}.jsonl"
+    CSV_OUT="${OUT_DIR}/extraversion/scores_proj_cos_only_Val${val}.csv"
+    
+    if [ ! -f "$JSONL_OUT" ]; then
+        "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_proj_prior.py \
+            --config "$CONFIG" \
+            --vector_bank "$VECTOR_BANK" \
+            --prompts "$PROMPT_IN" \
+            --input_dir "$INPUT_DIR" \
+            --out_dir "$OUT_DIR" \
+            --axis "extraversion" \
+            --alpha "$val" \
+            --direction "high" \
+            --norm_mode "raw_norm" \
+            --score_mode "proj_cosine" \
+            --no_prior
+    fi
+    
+    if [ -f "$JSONL_OUT" ] && [ ! -f "$CSV_OUT" ]; then
+        "$PYTHON_BIN" scripts/04_dyn_layer/62_eval_dyn_compare.py \
+            --input "$JSONL_OUT" \
+            --output "$CSV_OUT" \
+            --axis "extraversion" \
+            --model "$JUDGE_MODEL" \
+            --quant "4bit"
+    fi
 done
 
 echo "Evaluation completed on unseen test prompts for extraversion."

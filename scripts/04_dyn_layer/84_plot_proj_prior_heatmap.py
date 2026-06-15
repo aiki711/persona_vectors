@@ -84,36 +84,14 @@ def load_fusion_summary(fusion_dir: Path, axis: str, mode: str) -> pd.DataFrame:
             pass
     return pd.DataFrame(records)
 
-def load_proj_prior_summary(proj_prior_dir: Path, axis: str) -> pd.DataFrame:
-    """Load proj-prior evaluated results.
-    62_eval_dyn_compare.py writes: dyn_score, dyn_ppl, base_score, base_ppl, ...
-    """
+def load_proj_prior_summary(proj_prior_dir: Path, axis: str, method: str) -> pd.DataFrame:
+    """Load proj-prior or cos/rank only evaluated results."""
     records = []
     trait_dir = proj_prior_dir / axis
     for val in VALS:
-        csv_path = trait_dir / f"scores_proj_prior_Val{float(val)}.csv"
+        csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
         if not csv_path.exists():
-            csv_path = trait_dir / f"scores_proj_prior_Val{val}.csv"
-        if csv_path.exists():
-            try:
-                df = pd.read_csv(csv_path)
-                records.append({
-                    "val":       val,
-                    "dyn_score": df["dyn_score"].mean(),
-                    "dyn_ppl":   df["dyn_ppl"].mean(),
-                })
-            except Exception:
-                pass
-    return pd.DataFrame(records)
-
-def load_cos_prior_summary(proj_prior_dir: Path, axis: str) -> pd.DataFrame:
-    """Load cos-prior evaluated results."""
-    records = []
-    trait_dir = proj_prior_dir / axis
-    for val in VALS:
-        csv_path = trait_dir / f"scores_cos_prior_Val{float(val)}.csv"
-        if not csv_path.exists():
-            csv_path = trait_dir / f"scores_cos_prior_Val{val}.csv"
+            csv_path = trait_dir / f"scores_{method}_Val{val}.csv"
         if csv_path.exists():
             try:
                 df = pd.read_csv(csv_path)
@@ -139,7 +117,7 @@ def highlight_safe_cells(ax, p_ppl, threshold=25.0):
 def make_empty_pivot(vals):
     return pd.DataFrame(index=pd.Index(vals, name="val"))
 
-def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, sig_df, plat_df, proj_prior_df, cos_prior_df):
+def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, sig_df, plat_df, cos_only_df, rank_only_df):
     result = pivot_df.copy()
     if not logit_df.empty and score_col in logit_df.columns:
         result["DLS_logit_diff"] = logit_df.set_index("val")[score_col]
@@ -149,10 +127,10 @@ def append_comparison_cols(pivot_df, score_col, logit_df, anti_df, sig_df, plat_
         result["Fusion_Sigmoid"] = sig_df.set_index("val")[score_col]
     if not plat_df.empty and score_col in plat_df.columns:
         result["Fusion_Plateau"] = plat_df.set_index("val")[score_col]
-    if not proj_prior_df.empty and score_col in proj_prior_df.columns:
-        result["DLS_proj_prior"] = proj_prior_df.set_index("val")[score_col]
-    if not cos_prior_df.empty and score_col in cos_prior_df.columns:
-        result["DLS_cos_prior"] = cos_prior_df.set_index("val")[score_col]
+    if not cos_only_df.empty and score_col in cos_only_df.columns:
+        result["DLS_cos_only"] = cos_only_df.set_index("val")[score_col]
+    if not rank_only_df.empty and score_col in rank_only_df.columns:
+        result["DLS_rank_only"] = rank_only_df.set_index("val")[score_col]
     return result
 
 def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, fusion_dir: Path, proj_prior_dir: Path, artifact_dir: Path | None):
@@ -160,12 +138,12 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    logit_df      = load_dyn_summary(all_layers_dir, axis, "logit_diff")
-    anti_df       = load_dyn_summary(all_layers_dir, axis, "anti_alignment")
-    sig_df        = load_fusion_summary(fusion_dir, axis, "sigmoid")
-    plat_df       = load_fusion_summary(fusion_dir, axis, "soft_plateau")
-    proj_prior_df = load_proj_prior_summary(proj_prior_dir, axis)
-    cos_prior_df  = load_cos_prior_summary(proj_prior_dir, axis)
+    logit_df     = load_dyn_summary(all_layers_dir, axis, "logit_diff")
+    anti_df      = load_dyn_summary(all_layers_dir, axis, "anti_alignment")
+    sig_df       = load_fusion_summary(fusion_dir, axis, "sigmoid")
+    plat_df      = load_fusion_summary(fusion_dir, axis, "soft_plateau")
+    cos_only_df  = load_proj_prior_summary(proj_prior_dir, axis, "cos_only")
+    rank_only_df = load_proj_prior_summary(proj_prior_dir, axis, "rank_only")
 
     has_layer_data = not df.empty
     if has_layer_data:
@@ -177,8 +155,8 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         p_score = make_empty_pivot(VALS)
         p_ppl   = make_empty_pivot(VALS)
 
-    p_score_comp = append_comparison_cols(p_score, "dyn_score", logit_df, anti_df, sig_df, plat_df, proj_prior_df, cos_prior_df)
-    p_ppl_comp   = append_comparison_cols(p_ppl,   "dyn_ppl",   logit_df, anti_df, sig_df, plat_df, proj_prior_df, cos_prior_df)
+    p_score_comp = append_comparison_cols(p_score, "dyn_score", logit_df, anti_df, sig_df, plat_df, cos_only_df, rank_only_df)
+    p_ppl_comp   = append_comparison_cols(p_ppl,   "dyn_ppl",   logit_df, anti_df, sig_df, plat_df, cos_only_df, rank_only_df)
 
     p_score_comp = p_score_comp.reindex(VALS)
     p_ppl_comp   = p_ppl_comp.reindex(VALS)
@@ -194,8 +172,8 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         ("DLS_anti_align", "darkred"),
         ("Fusion_Sigmoid", "darkorange"),
         ("Fusion_Plateau", "purple"),
-        ("DLS_proj_prior", "darkcyan"),
-        ("DLS_cos_prior", "coral"),
+        ("DLS_cos_only", "coral"),
+        ("DLS_rank_only", "teal"),
     ]
 
     for ax_obj, p_data, p_ppl_ref, title, cmap, vmin, vmax, fmt in configs:
@@ -212,12 +190,12 @@ def plot_axis(df: pd.DataFrame, axis: str, out_dir: Path, all_layers_dir: Path, 
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title} [{axis.capitalize()}]"
-            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Raw-Norm Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Raw-Norm Fusion | Coral: Cos-Only | Teal: Rank-Only)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer (0 to 31) / Evaluation Variants (rightmost)", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)
 
-    plt.suptitle(f"Unified 32-Layer Steering & DLS/Fusion Comparison (with Proj-Prior DLS): {axis.capitalize()}",
+    plt.suptitle(f"Unified 32-Layer Steering & DLS/Fusion Comparison (with Cos-Only/Rank-Only DLS): {axis.capitalize()}",
                  fontsize=16, fontweight="bold", y=0.99)
     plt.tight_layout()
 
@@ -276,8 +254,8 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
                           anti_all_df: pd.DataFrame,
                           sig_all_df: pd.DataFrame,
                           plat_all_df: pd.DataFrame,
-                          proj_prior_all_df: pd.DataFrame,
-                          cos_prior_all_df: pd.DataFrame,
+                          cos_only_all_df: pd.DataFrame,
+                          rank_only_all_df: pd.DataFrame,
                           out_dir: Path,
                           artifact_dir: Path | None):
     print("\n[Summary] plotting unified all-traits summary heatmap...")
@@ -287,12 +265,12 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
             return pd.DataFrame()
         return df.groupby("val")[["dyn_score", "dyn_ppl"]].mean().reset_index()
 
-    logit_avg      = avg_dyn(logit_all_df)
-    anti_avg       = avg_dyn(anti_all_df)
-    sig_avg        = avg_dyn(sig_all_df)
-    plat_avg       = avg_dyn(plat_all_df)
-    proj_prior_avg = avg_dyn(proj_prior_all_df)
-    cos_prior_avg  = avg_dyn(cos_prior_all_df)
+    logit_avg     = avg_dyn(logit_all_df)
+    anti_avg      = avg_dyn(anti_all_df)
+    sig_avg       = avg_dyn(sig_all_df)
+    plat_avg      = avg_dyn(plat_all_df)
+    cos_only_avg  = avg_dyn(cos_only_all_df)
+    rank_only_avg = avg_dyn(rank_only_all_df)
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -301,8 +279,8 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         ("DLS_anti_align", "darkred"),
         ("Fusion_Sigmoid", "darkorange"),
         ("Fusion_Plateau", "purple"),
-        ("DLS_proj_prior", "darkcyan"),
-        ("DLS_cos_prior", "coral"),
+        ("DLS_cos_only", "coral"),
+        ("DLS_rank_only", "teal"),
     ]
 
     method_dfs = [
@@ -310,8 +288,8 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         ("DLS_anti_align", anti_avg),
         ("Fusion_Sigmoid", sig_avg),
         ("Fusion_Plateau", plat_avg),
-        ("DLS_proj_prior", proj_prior_avg),
-        ("DLS_cos_prior", cos_prior_avg),
+        ("DLS_cos_only", cos_only_avg),
+        ("DLS_rank_only", rank_only_avg),
     ]
 
     has_layer_data = not all_df.empty
@@ -356,12 +334,12 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
         highlight_safe_cells(ax_obj, p_ppl_ref, threshold=25.0)
         ax_obj.set_title(
             f"{title}"
-            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Raw-Norm Fusion | Teal: Proj-Prior)",
+            f" (Black Border: PPL <= 25.0 | Navy/Red: DLS | Orange/Purple: Raw-Norm Fusion | Coral: Cos-Only | Teal: Rank-Only)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("Layer (0 to 31) / Evaluation Variants (rightmost)", fontsize=10)
         ax_obj.set_ylabel("Val (Steering Intensity)", fontsize=10)
 
-    plt.suptitle("Unified 32-Layer Steering & DLS/Fusion Summary (All Traits Average, with Proj-Prior)",
+    plt.suptitle("Unified 32-Layer Steering & DLS/Fusion Summary (All Traits Average, with Cos-Only/Rank-Only)",
                  fontsize=16, fontweight="bold", y=0.99)
     plt.tight_layout()
 
@@ -423,11 +401,11 @@ def make_summary_heatmaps(all_df: pd.DataFrame,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input_dir",      default="exp_steering_layer_analysis/results")
-    ap.add_argument("--all_layers_dir", default="exp_steering_dyn_layer_all_layers_midpoint/results")
-    ap.add_argument("--fusion_dir",     default="exp_steering_dyn_ic_fusion_midpoint/results")
+    ap.add_argument("--all_layers_dir", default="archive_exp/exp_steering_dyn_layer_proj_prior/results_test_unseen")
+    ap.add_argument("--fusion_dir",     default="archive_exp/exp_steering_dyn_ic_fusion_midpoint/results")
     ap.add_argument("--proj_prior_dir", default="exp_steering_dyn_layer_proj_prior/results")
     ap.add_argument("--out_dir",        default="exp_steering_dyn_layer_proj_prior/figures")
-    ap.add_argument("--artifact_dir",   default="/home/s2550009/.gemini/antigravity-ide/brain/42af965e-7b98-48aa-bc1b-ea07d6f49983/images")
+    ap.add_argument("--artifact_dir",   default="/home/s2550009/.gemini/antigravity-ide/brain/967cd169-1aa5-48db-a243-174e45692380/images")
     args = ap.parse_args()
 
     input_dir      = Path(args.input_dir)
@@ -437,13 +415,13 @@ def main():
     out_dir        = Path(args.out_dir)
     artifact_dir   = Path(args.artifact_dir) if args.artifact_dir else None
 
-    all_dfs            = []
-    all_logit_dfs      = []
-    all_anti_dfs       = []
-    all_sig_dfs        = []
-    all_plat_dfs       = []
-    all_proj_prior_dfs = []
-    all_cos_prior_dfs  = []
+    all_dfs           = []
+    all_logit_dfs     = []
+    all_anti_dfs      = []
+    all_sig_dfs       = []
+    all_plat_dfs      = []
+    all_cos_only_dfs  = []
+    all_rank_only_dfs = []
 
     for axis in TRAITS:
         df = load_summary(input_dir, axis)
@@ -466,25 +444,25 @@ def main():
         if not plat_df.empty:
             all_plat_dfs.append(plat_df)
 
-        proj_prior_df = load_proj_prior_summary(proj_prior_dir, axis)
-        if not proj_prior_df.empty:
-            all_proj_prior_dfs.append(proj_prior_df)
+        cos_only_df = load_proj_prior_summary(proj_prior_dir, axis, "cos_only")
+        if not cos_only_df.empty:
+            all_cos_only_dfs.append(cos_only_df)
 
-        cos_prior_df = load_cos_prior_summary(proj_prior_dir, axis)
-        if not cos_prior_df.empty:
-            all_cos_prior_dfs.append(cos_prior_df)
+        rank_only_df = load_proj_prior_summary(proj_prior_dir, axis, "rank_only")
+        if not rank_only_df.empty:
+            all_rank_only_dfs.append(rank_only_df)
 
         plot_axis(df, axis, out_dir / axis, all_layers_dir, fusion_dir, proj_prior_dir, artifact_dir)
 
-    all_df         = pd.concat(all_dfs,            ignore_index=True) if all_dfs            else pd.DataFrame()
-    logit_all_df   = pd.concat(all_logit_dfs,      ignore_index=True) if all_logit_dfs      else pd.DataFrame()
-    anti_all_df    = pd.concat(all_anti_dfs,       ignore_index=True) if all_anti_dfs       else pd.DataFrame()
-    sig_all_df     = pd.concat(all_sig_dfs,        ignore_index=True) if all_sig_dfs        else pd.DataFrame()
-    plat_all_df    = pd.concat(all_plat_dfs,       ignore_index=True) if all_plat_dfs       else pd.DataFrame()
-    proj_prior_all = pd.concat(all_proj_prior_dfs, ignore_index=True) if all_proj_prior_dfs else pd.DataFrame()
-    cos_prior_all  = pd.concat(all_cos_prior_dfs,  ignore_index=True) if all_cos_prior_dfs  else pd.DataFrame()
+    all_df        = pd.concat(all_dfs,           ignore_index=True) if all_dfs           else pd.DataFrame()
+    logit_all_df  = pd.concat(all_logit_dfs,     ignore_index=True) if all_logit_dfs     else pd.DataFrame()
+    anti_all_df   = pd.concat(all_anti_dfs,      ignore_index=True) if all_anti_dfs      else pd.DataFrame()
+    sig_all_df    = pd.concat(all_sig_dfs,       ignore_index=True) if all_sig_dfs       else pd.DataFrame()
+    plat_all_df   = pd.concat(all_plat_dfs,      ignore_index=True) if all_plat_dfs      else pd.DataFrame()
+    cos_only_all  = pd.concat(all_cos_only_dfs,  ignore_index=True) if all_cos_only_dfs  else pd.DataFrame()
+    rank_only_all = pd.concat(all_rank_only_dfs, ignore_index=True) if all_rank_only_dfs else pd.DataFrame()
 
-    make_summary_heatmaps(all_df, logit_all_df, anti_all_df, sig_all_df, plat_all_df, proj_prior_all, cos_prior_all, out_dir, artifact_dir)
+    make_summary_heatmaps(all_df, logit_all_df, anti_all_df, sig_all_df, plat_all_df, cos_only_all, rank_only_all, out_dir, artifact_dir)
     print("\nAll layers projection-prior unified heatmap generation finished.")
 
 if __name__ == "__main__":

@@ -157,7 +157,44 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
             h = saved_h[L]
             m = layer_midpoint_dev.get(L, None) if layer_midpoint_dev is not None else None
 
-            if score_mode == "rank":
+            if score_mode == "proj_rank":
+                if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
+                    H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
+                    m_np = m.cpu().numpy()
+                    w_np = w_dev.cpu().numpy()
+                    h_np = h.cpu().numpy()
+                    
+                    w_unit = w_np / (np.linalg.norm(w_np) + 1e-10)
+                    
+                    # Projections of positive calibration samples
+                    p_pos = np.dot(H_pos - m_np, w_unit)  # [1000]
+                    # Projection of current hidden state
+                    p_h = np.dot(h_np - m_np, w_unit).item()  # Scalar
+                    
+                    p_total = np.concatenate([p_pos, [p_h]])
+                    ranking = np.argsort(p_total)
+                    rank_idx = np.where(ranking == len(p_pos))[0][0]
+                    percentile = rank_idx / float(len(p_pos))
+                    
+                    # Lowest percentile = most negative = most room for improvement
+                    score = 1.0 - percentile
+                else:
+                    h_unit = h / (torch.norm(h) + 1e-10)
+                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    score = torch.dot(h_unit, w_unit).item()
+            elif score_mode == "proj_cosine":
+                if m is not None:
+                    h_dev = h - m
+                    h_dev_unit = h_dev / (torch.norm(h_dev) + 1e-10)
+                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    # We want to select the layer that is most negative (most opposite to w_dev)
+                    # So similarity close to -1.0 is the best (most negative).
+                    score = -torch.dot(h_dev_unit, w_unit).item()
+                else:
+                    h_unit = h / (torch.norm(h) + 1e-10)
+                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    score = torch.dot(h_unit, w_unit).item()
+            elif score_mode == "rank":
                 if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
                     H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
                     
@@ -197,12 +234,12 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     score = torch.dot(h_unit, w_unit).item()
 
             if target_direction == "high":
-                if score_mode == "rank":
+                if score_mode in ["rank", "proj_rank", "proj_cosine"]:
                     raw_scores[L] = score
                 else:
                     raw_scores[L] = score # Maximize cosine similarity with midpoint
             else:
-                if score_mode == "rank":
+                if score_mode in ["rank", "proj_rank", "proj_cosine"]:
                     raw_scores[L] = -score
                 else:
                     raw_scores[L] = -score
@@ -268,7 +305,7 @@ def main():
     ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm",
                     help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
-    ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "logit_diff"], default="cosine", help="layer selection score mode")
+    ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "logit_diff", "proj_rank", "proj_cosine"], default="cosine", help="layer selection score mode")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -280,6 +317,10 @@ def main():
         method_name = "cos_only" if args.no_prior else "cos_prior"
     elif args.score_mode == "logit_diff":
         method_name = "logit_diff" if args.no_prior else "logit_diff_prior"
+    elif args.score_mode == "proj_rank":
+        method_name = "proj_rank_only" if args.no_prior else "proj_rank_prior"
+    elif args.score_mode == "proj_cosine":
+        method_name = "proj_cos_only" if args.no_prior else "proj_cos_prior"
     else: # rank
         method_name = "rank_only" if args.no_prior else "rank_prior"
     out_file = out_dir / f"{method_name}_Val{args.alpha}.jsonl"
@@ -360,7 +401,7 @@ def main():
     # Load calibration distributions for rank/zscore modes
     h_pos_dict = None
     sims_ref_dict = None
-    if args.score_mode == "rank":
+    if args.score_mode in ["rank", "proj_rank"]:
         h_pos_dict = {"H_pos": {}, "h_pos": {}}
         for L in LAYERS:
             H_pos_key = f"{L}|{args.axis}|H_pos_1000"

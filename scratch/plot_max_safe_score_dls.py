@@ -35,7 +35,7 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
     best_alpha = np.nan
     best_ppl = np.nan
     
-    target_dir = Path("exp_steering_dyn_layer_proj_prior/results") if method == "rank_only" else results_dir
+    target_dir = Path("exp_steering_dyn_layer_proj_prior/results") if method in ["rank_only", "cos_only"] else results_dir
     trait_dir = target_dir / trait
     for val in VALS:
         # Check both float format and normal format
@@ -66,7 +66,7 @@ def get_unsteered_baseline_score(results_dir: Path, trait: str, method: str) -> 
     """
     Returns the average unsteered baseline score (base_score) for a given trait and method.
     """
-    target_dir = Path("exp_steering_dyn_layer_proj_prior/results") if method == "rank_only" else results_dir
+    target_dir = Path("exp_steering_dyn_layer_proj_prior/results") if method in ["rank_only", "cos_only"] else results_dir
     trait_dir = target_dir / trait
     for val in VALS:
         csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
