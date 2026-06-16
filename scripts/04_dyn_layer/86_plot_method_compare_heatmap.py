@@ -26,8 +26,6 @@ VALS   = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0,
 METHODS = [
     ("DLS_logit_diff",  "navy",       "logit_diff"),
     ("DLS_anti_align",  "darkred",    "anti_alignment"),
-    ("Fusion_Sigmoid",  "darkorange", "sigmoid"),
-    ("Fusion_Plateau",  "purple",     "soft_plateau"),
     ("DLS_cos_only",    "coral",      "cos_only"),
     ("DLS_rank_only",   "teal",       "rank_only"),
     ("DLS_proj_cos",    "blueviolet", "proj_cos_only"),
@@ -107,8 +105,6 @@ def load_all_methods(all_layers_dir, fusion_dir, proj_prior_dir, axis):
     return {
         "logit_diff":    load_proj_prior_summary(proj_prior_dir, axis, "logit_diff"),
         "anti_alignment": load_dyn_summary(all_layers_dir, axis, "anti_alignment"),
-        "sigmoid":       load_fusion_summary(fusion_dir, axis, "sigmoid"),
-        "soft_plateau":  load_fusion_summary(fusion_dir, axis, "soft_plateau"),
         "cos_only":      load_proj_prior_summary(proj_prior_dir, axis, "cos_only"),
         "rank_only":     load_proj_prior_summary(proj_prior_dir, axis, "rank_only"),
         "proj_cos_only":  load_proj_prior_summary(proj_prior_dir, axis, "proj_cos_only"),

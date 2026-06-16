@@ -108,7 +108,7 @@ def load_layer_priors(input_dir: Path, axis: str) -> dict:
             
     return priors
 
-def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="cosine", h_pos_dict=None, sims_ref_dict=None, alpha=1.0, layer_midpoint_dev=None):
+def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, layer_priors, score_mode="cosine", h_pos_dict=None, sims_ref_dict=None, alpha=1.0, layer_midpoint_dev=None, norm_mode="raw_norm", probe_masks=None):
     stack, _, _ = get_layer_stack(model)
 
     if score_mode == "logit_diff":
@@ -123,7 +123,11 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                 hs = out_val[0] if isinstance(out_val, tuple) else out_val
                 if not torch.isfinite(hs).all(): return out_val
                 hs_f32 = hs.to(torch.float32)
-                steered = hs_f32 + alpha * w_dev.view(1, 1, -1)
+                if norm_mode == "relative":
+                    h_norm = torch.norm(hs_f32, p=2, dim=-1, keepdim=True)
+                    steered = hs_f32 + alpha * w_dev.view(1, 1, -1) * h_norm
+                else:
+                    steered = hs_f32 + alpha * w_dev.view(1, 1, -1)
                 return (steered.to(hs.dtype), *out_val[1:]) if isinstance(out_val, tuple) else steered.to(hs.dtype)
 
             handle = stack[L].register_forward_hook(hook)
@@ -156,6 +160,7 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
         for L, w_dev in layer_w_dev.items():
             h = saved_h[L]
             m = layer_midpoint_dev.get(L, None) if layer_midpoint_dev is not None else None
+            mask = probe_masks.get(L, None) if probe_masks is not None else None
 
             if score_mode == "proj_rank":
                 if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
@@ -163,6 +168,13 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     m_np = m.cpu().numpy()
                     w_np = w_dev.cpu().numpy()
                     h_np = h.cpu().numpy()
+                    
+                    if mask is not None:
+                        mask_np = mask.cpu().numpy()
+                        H_pos = H_pos[:, mask_np]
+                        m_np = m_np[mask_np]
+                        w_np = w_np[mask_np]
+                        h_np = h_np[mask_np]
                     
                     w_unit = w_np / (np.linalg.norm(w_np) + 1e-10)
                     
@@ -179,58 +191,90 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     # Lowest percentile = most negative = most room for improvement
                     score = 1.0 - percentile
                 else:
-                    h_unit = h / (torch.norm(h) + 1e-10)
-                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    if mask is not None:
+                        h_masked = h * mask
+                        w_dev_masked = w_dev * mask
+                        h_unit = h_masked / (torch.norm(h_masked) + 1e-10)
+                        w_unit = w_dev_masked / (torch.norm(w_dev_masked) + 1e-10)
+                    else:
+                        h_unit = h / (torch.norm(h) + 1e-10)
+                        w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
                     score = torch.dot(h_unit, w_unit).item()
             elif score_mode == "proj_cosine":
                 if m is not None:
-                    h_dev = h - m
+                    if mask is not None:
+                        h_dev = (h - m) * mask
+                        w_unit = w_dev * mask
+                        w_unit = w_unit / (torch.norm(w_unit) + 1e-10)
+                    else:
+                        h_dev = h - m
+                        w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
                     h_dev_unit = h_dev / (torch.norm(h_dev) + 1e-10)
-                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
-                    # We want to select the layer that is most negative (most opposite to w_dev)
-                    # So similarity close to -1.0 is the best (most negative).
                     score = -torch.dot(h_dev_unit, w_unit).item()
                 else:
-                    h_unit = h / (torch.norm(h) + 1e-10)
-                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    if mask is not None:
+                        h_masked = h * mask
+                        w_dev_masked = w_dev * mask
+                        h_unit = h_masked / (torch.norm(h_masked) + 1e-10)
+                        w_unit = w_dev_masked / (torch.norm(w_dev_masked) + 1e-10)
+                    else:
+                        h_unit = h / (torch.norm(h) + 1e-10)
+                        w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
                     score = torch.dot(h_unit, w_unit).item()
             elif score_mode == "rank":
                 if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
                     H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
-                    
                     h_np = h.cpu().numpy()
-                    h_unit = h_np / (np.linalg.norm(h_np) + 1e-10)  # [n_dims]
+                    m_np = m.cpu().numpy()
                     
-                    # Compute similarities for the 1000 positive samples
+                    if mask is not None:
+                        mask_np = mask.cpu().numpy()
+                        H_pos = H_pos[:, mask_np]
+                        h_np = h_np[mask_np]
+                        m_np = m_np[mask_np]
+                        
+                    h_unit = h_np / (np.linalg.norm(h_np) + 1e-10)  # [n_dims]
                     H_pos_norm = H_pos / (np.linalg.norm(H_pos, axis=1, keepdims=True) + 1e-10)
                     sims_ref = np.dot(H_pos_norm, h_unit.T)  # [1000]
                     
-                    # Compute similarity with midpoint
-                    m_np = m.cpu().numpy()
                     m_norm = m_np / (np.linalg.norm(m_np) + 1e-10)
                     sim_mid = np.dot(m_norm, h_unit.T).item()  # Scalar
                     
-                    # Combine into similarities with sim_mid at the end
                     sims_total = np.concatenate([sims_ref, [sim_mid]])
-                    
-                    # Find the rank of sim_mid
                     ranking = np.argsort(sims_total)
                     rank_idx = np.where(ranking == len(sims_ref))[0][0]
-                    
-                    percentile = rank_idx / float(len(sims_ref))  # percentile in [0, 1]
-                    score = percentile # Highest percentile = closest to midpoint (Interpretation B)
+                    percentile = rank_idx / float(len(sims_ref))
+                    score = percentile
                 else:
-                    h_unit = h / (torch.norm(h) + 1e-10)
-                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    if mask is not None:
+                        h_masked = h * mask
+                        w_dev_masked = w_dev * mask
+                        h_unit = h_masked / (torch.norm(h_masked) + 1e-10)
+                        w_unit = w_dev_masked / (torch.norm(w_dev_masked) + 1e-10)
+                    else:
+                        h_unit = h / (torch.norm(h) + 1e-10)
+                        w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
                     score = torch.dot(h_unit, w_unit).item()
             else: # cosine
                 if m is not None:
-                    h_unit = h / (torch.norm(h) + 1e-10)
-                    m_unit = m / (torch.norm(m) + 1e-10)
-                    score = torch.dot(h_unit, m_unit).item() # Cosine similarity with midpoint (highest similarity = closest to midpoint)
+                    if mask is not None:
+                        h_masked = h * mask
+                        m_masked = m * mask
+                        h_unit = h_masked / (torch.norm(h_masked) + 1e-10)
+                        m_unit = m_masked / (torch.norm(m_masked) + 1e-10)
+                    else:
+                        h_unit = h / (torch.norm(h) + 1e-10)
+                        m_unit = m / (torch.norm(m) + 1e-10)
+                    score = torch.dot(h_unit, m_unit).item()
                 else:
-                    h_unit = h / (torch.norm(h) + 1e-10)
-                    w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    if mask is not None:
+                        h_masked = h * mask
+                        w_dev_masked = w_dev * mask
+                        h_unit = h_masked / (torch.norm(h_masked) + 1e-10)
+                        w_unit = w_dev_masked / (torch.norm(w_dev_masked) + 1e-10)
+                    else:
+                        h_unit = h / (torch.norm(h) + 1e-10)
+                        w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
                     score = torch.dot(h_unit, w_unit).item()
 
             if target_direction == "high":
@@ -255,7 +299,7 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
     best_layer = max(final_scores, key=lambda L: final_scores[L])
     return best_layer, raw_scores, final_scores
 
-def generate_with_steered_layer(model, tokenizer, prompt, w_dev, alpha, layer, max_new_tokens=150):
+def generate_with_steered_layer(model, tokenizer, prompt, w_dev, alpha, layer, max_new_tokens=150, norm_mode="raw_norm"):
     device = _infer_main_device(model)
     inputs = format_and_tokenize(tokenizer, prompt, device)
     stack, _, _ = get_layer_stack(model)
@@ -263,7 +307,12 @@ def generate_with_steered_layer(model, tokenizer, prompt, w_dev, alpha, layer, m
     def hook(mod, inp, out):
         hs = out[0] if isinstance(out, tuple) else out
         if not torch.isfinite(hs).all() or hs.size(1) != 1: return out
-        steered = hs.to(torch.float32) + alpha * w_dev.view(1, 1, -1)
+        hs_f32 = hs.to(torch.float32)
+        if norm_mode == "relative":
+            h_norm = torch.norm(hs_f32, p=2, dim=-1, keepdim=True)
+            steered = hs_f32 + alpha * w_dev.view(1, 1, -1) * h_norm
+        else:
+            steered = hs_f32 + alpha * w_dev.view(1, 1, -1)
         return (steered.to(hs.dtype), *out[1:]) if isinstance(out, tuple) else steered.to(hs.dtype)
 
     handle = stack[layer].register_forward_hook(hook)
@@ -302,10 +351,11 @@ def main():
     ap.add_argument("--axis",         type=str, default="extraversion")
     ap.add_argument("--alpha",        type=float, required=True)
     ap.add_argument("--direction",    type=str, choices=["high", "low"], default="high")
-    ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm"], default="raw_norm",
+    ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm", "relative"], default="raw_norm",
                     help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
     ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "logit_diff", "proj_rank", "proj_cosine"], default="cosine", help="layer selection score mode")
+    ap.add_argument("--mask_bank",    default="", help="Path to probe masks bank (.npz)")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -323,6 +373,10 @@ def main():
         method_name = "proj_cos_only" if args.no_prior else "proj_cos_prior"
     else: # rank
         method_name = "rank_only" if args.no_prior else "rank_prior"
+        
+    if args.mask_bank:
+        method_name = "masked_" + method_name
+
     out_file = out_dir / f"{method_name}_Val{args.alpha}.jsonl"
     if out_file.exists():
         print(f"[SKIP] Already exists: {out_file}")
@@ -363,6 +417,9 @@ def main():
                     w_norm = torch.norm(w_vec).item()
                     m_norm = torch.norm(m_vec).item()
                     w_vec = (w_vec / (w_norm + 1e-10)) * m_norm
+            elif args.norm_mode == "relative":
+                w_norm = torch.norm(w_vec).item()
+                w_vec = w_vec / (w_norm + 1e-10)
             layer_w[L] = w_vec
         if mp_key in v_data:
             layer_midpoint[L] = torch.tensor(v_data[mp_key], dtype=torch.float32)
@@ -396,6 +453,26 @@ def main():
 
     layer_w_dev = {L: w.to(device) for L, w in layer_w.items()}
     layer_midpoint_dev = {L: m.to(device) for L, m in layer_midpoint.items()}
+
+    # Load probe masks if they exist
+    probe_masks = None
+    if args.mask_bank:
+        mask_bank_path = Path(args.mask_bank)
+        if mask_bank_path.exists():
+            try:
+                m_data = np.load(mask_bank_path)
+                probe_masks = {}
+                for L in LAYERS:
+                    mask_key = f"{L}|{args.axis}|mask"
+                    if mask_key in m_data:
+                        probe_masks[L] = torch.tensor(m_data[mask_key], dtype=torch.bool).to(device)
+                print(f"Loaded {len(probe_masks)} probe masks from {args.mask_bank}.")
+            except Exception as e:
+                print(f"Warning: failed to load probe masks: {e}")
+                probe_masks = None
+        else:
+            print(f"Warning: probe mask bank not found at {args.mask_bank}.")
+
     results = []
 
     # Load calibration distributions for rank/zscore modes
@@ -438,12 +515,14 @@ def main():
         best_layer, raw_scores, final_scores = select_layer_proj_prior(
             model, inputs.input_ids, layer_w_dev, args.direction, layer_priors, args.score_mode,
             h_pos_dict=h_pos_dict, sims_ref_dict=sims_ref_dict, alpha=args.alpha,
-            layer_midpoint_dev=layer_midpoint_dev
+            layer_midpoint_dev=layer_midpoint_dev, norm_mode=args.norm_mode,
+            probe_masks=probe_masks
         )
 
         # Generate
         dyn_text, dyn_ids = generate_with_steered_layer(
-            model, tokenizer, p_text, layer_w_dev[best_layer], args.alpha, best_layer
+            model, tokenizer, p_text, layer_w_dev[best_layer], args.alpha, best_layer,
+            norm_mode=args.norm_mode
         )
         dyn_ppl = calc_ppl(model, dyn_ids)
 
