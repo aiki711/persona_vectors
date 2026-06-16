@@ -356,6 +356,7 @@ def main():
     ap.add_argument("--no_prior",     action="store_true", help="Bypass prior weights and use only raw score")
     ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "logit_diff", "proj_rank", "proj_cosine"], default="cosine", help="layer selection score mode")
     ap.add_argument("--mask_bank",    default="", help="Path to probe masks bank (.npz)")
+    ap.add_argument("--num_prompts",  type=int, default=10, help="Number of prompts to evaluate")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -439,7 +440,7 @@ def main():
                 prompts.append((item.get("orig_idx", ""), item["input"]))
             elif isinstance(item, str):
                 prompts.append(("", item))
-    prompts = prompts[:10]
+    prompts = prompts[:args.num_prompts]
 
     print(f"=== Proj & Prior DLS Execution ===")
     print(f"  Axis  : {args.axis}")

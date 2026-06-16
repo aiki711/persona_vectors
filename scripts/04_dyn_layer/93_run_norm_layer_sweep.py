@@ -145,7 +145,7 @@ Score: <0-5> (0: Too broken/repetitive to evaluate, 1-5: Trait level)"""
     return score, generated_text
 
 
-def load_prompts(path):
+def load_prompts(path, num_prompts=10):
     prompts = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
@@ -162,7 +162,7 @@ def load_prompts(path):
                 prompts.append((item.get("orig_idx", ""), item["input"]))
             elif isinstance(item, str):
                 prompts.append(("", item))
-    return prompts[:10]
+    return prompts[:num_prompts]
 
 
 def main():
@@ -175,6 +175,7 @@ def main():
     ap.add_argument("--direction", type=str, choices=["high", "low"], default="high")
     ap.add_argument("--judge_model", type=str, default="meta-llama/Meta-Llama-3-8B-Instruct")
     ap.add_argument("--judge_quant", type=str, choices=["auto", "8bit", "4bit", "none"], default="none")
+    ap.add_argument("--num_prompts", type=int, default=10, help="Number of prompts to evaluate")
     args = ap.parse_args()
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
@@ -185,7 +186,7 @@ def main():
         cfg = yaml.safe_load(f)
     model_name = cfg.get("model_name")
 
-    prompts = load_prompts(args.prompts)
+    prompts = load_prompts(args.prompts, num_prompts=args.num_prompts)
 
     # Load vector bank (contains 'w', 'raw_norm', and 'midpoint' keys per layer)
     v_data = np.load(args.vector_bank)

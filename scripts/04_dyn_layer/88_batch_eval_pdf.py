@@ -53,13 +53,13 @@ def get_score(model, tokenizer, text, trait, device):
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
-METHODS = ["masked_cos_only", "masked_rank_only", "masked_proj_cos_only", "masked_proj_rank_only", "masked_proj_cos_prior", "masked_proj_rank_prior"]
-RESULTS_DIR = Path("exp_steering_dyn_layer_pdf/results")
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--axis", required=True, help="Personality trait axis to evaluate")
     ap.add_argument("--model", default="meta-llama/Meta-Llama-3-70B-Instruct")
+    ap.add_argument("--results_dir", default="exp_steering_dyn_layer_pdf/results")
+    ap.add_argument("--methods", nargs="*", default=None)
     args = ap.parse_args()
     
     trait = args.axis.lower()
@@ -67,22 +67,28 @@ def main():
         print(f"Error: unknown axis '{trait}'")
         return
 
+    results_dir = Path(args.results_dir)
+    if args.methods:
+        methods_to_eval = args.methods
+    else:
+        methods_to_eval = ["masked_cos_only", "masked_rank_only", "masked_proj_cos_only", "masked_proj_rank_only", "masked_proj_cos_prior", "masked_proj_rank_prior"]
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Loading judge model {args.model} for axis {trait}...")
     model, tokenizer = load_model_and_tokenizer(args.model, quant="4bit")
     model.eval()
     
     for val in VALS:
-        for method in METHODS:
-            jsonl_in = RESULTS_DIR / trait / f"{method}_Val{val}.jsonl"
+        for method in methods_to_eval:
+            jsonl_in = results_dir / trait / f"{method}_Val{val}.jsonl"
             if not jsonl_in.exists():
-                jsonl_in = RESULTS_DIR / trait / f"{method}_Val{float(val)}.jsonl"
+                jsonl_in = results_dir / trait / f"{method}_Val{float(val)}.jsonl"
             
             if not jsonl_in.exists():
                 print(f"Warning: skipped missing input file {jsonl_in}")
                 continue
                 
-            csv_out = RESULTS_DIR / trait / f"scores_{method}_Val{val}.csv"
+            csv_out = results_dir / trait / f"scores_{method}_Val{val}.csv"
             if csv_out.exists():
                 print(f"Already evaluated: {csv_out}")
                 continue

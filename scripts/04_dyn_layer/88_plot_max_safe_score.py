@@ -80,8 +80,8 @@ def get_unsteered_baseline_score(results_dir: Path, trait: str, method: str) -> 
     return 3.0  # Fallback
 
 def main():
-    logit_diff_dir = Path("exp_steering_dyn_layer_all_layers_midpoint/results")
-    proj_prior_dir = Path("exp_steering_dyn_layer_proj_prior/results")
+    logit_diff_dir = Path("archive_exp/exp_steering_dyn_layer_proj_prior/results_test_unseen")
+    proj_prior_dir = Path("archive_exp/exp_steering_dyn_layer_proj_prior/results_test_unseen")
 
     # Load data for all traits
     data = []
@@ -230,7 +230,7 @@ def main():
     ax.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="#e0e0e0", framealpha=0.9, fontsize=9.5)
     
     # Save figure
-    out_dir = Path("exp_steering_dyn_layer_proj_prior/figures")
+    out_dir = Path("exp_steering_dyn_layer_pdf/figures")
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "max_safe_score_compare.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
@@ -238,7 +238,7 @@ def main():
     print(f"Saved comparison plot to: {out_path}")
     
     # Copy to artifacts
-    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/42af965e-7b98-48aa-bc1b-ea07d6f49983/images")
+    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/eb5ffadd-d5e7-40a3-a0b3-5e88bfefda49/images")
     if artifact_dir.exists():
         dest_path = artifact_dir / "max_safe_score_compare.png"
         shutil.copy(out_path, dest_path)
