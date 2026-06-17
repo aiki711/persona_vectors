@@ -1,12 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# scripts/04_dyn_layer/87_plot_pdf_method_compare.py
+# scripts/04_dyn_layer/109_plot_dyn_layer_norm_raw.py
 #
-# Generates comparison heatmaps for the new PDF (Probe Dimension Filtering) dynamic steering methods.
-# Compares: DLS_logit_diff (unmasked baseline), PDF_cos_only, PDF_rank_only,
-#          PDF_proj_cos_only, PDF_proj_rank_only, PDF_proj_cos_prior, PDF_proj_rank_prior.
+# Generates heatmaps (Score and PPL) comparing different DLS methods:
+#   - DLS_cos_only
+#   - DLS_rank_only
+#   - DLS_logit_diff
 # Rows = alpha (Val) values; Columns = methods.
+#
+# Outputs:
+#   - {out_dir}/{trait}/heatmap_dyn_{trait}.png
+#   - {out_dir}/summary_dyn_all_traits.png
 #
 
 import argparse
@@ -22,12 +27,11 @@ TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agree
 VALS   = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
 METHODS = [
-    ("DLS_logit_diff",         "navy",        "logit_diff",            True),  # From baseline dir (unmasked)
-    ("PDF_cos_only",           "orange",      "masked_cos_only",       False), # From PDF dir
-    ("PDF_rank_only",          "purple",      "masked_rank_only",      False),
-    ("PDF_proj_cos_only",      "coral",       "masked_proj_cos_only",  False),
-    ("PDF_proj_rank_only",     "teal",        "masked_proj_rank_only", False),
+    ("DLS_cos_only",    "coral",      "cos_only"),
+    ("DLS_rank_only",   "teal",       "rank_only"),
+    ("DLS_logit_diff",  "navy",       "logit_diff"),
 ]
+
 
 def load_summary(results_dir: Path, axis: str, method: str) -> pd.DataFrame:
     records = []
@@ -48,18 +52,19 @@ def load_summary(results_dir: Path, axis: str, method: str) -> pd.DataFrame:
                 pass
     return pd.DataFrame(records)
 
-def load_all_methods(baseline_dir: Path, pdf_dir: Path, axis: str):
+
+def load_all_methods(results_dir: Path, axis: str):
     data_dict = {}
-    for display_name, color, loader_key, is_baseline in METHODS:
-        dir_to_use = baseline_dir if is_baseline else pdf_dir
-        data_dict[loader_key] = load_summary(dir_to_use, axis, loader_key)
+    for display_name, color, loader_key in METHODS:
+        data_dict[loader_key] = load_summary(results_dir, axis, loader_key)
     return data_dict
+
 
 def build_pivot(method_data_dict):
     score_rows = {v: {} for v in VALS}
     ppl_rows   = {v: {} for v in VALS}
 
-    for display_name, color, loader_key, _ in METHODS:
+    for display_name, color, loader_key in METHODS:
         df = method_data_dict.get(loader_key, pd.DataFrame())
         if df.empty:
             continue
@@ -81,6 +86,7 @@ def build_pivot(method_data_dict):
 
     return p_score, p_ppl
 
+
 def highlight_safe_cells(ax, p_ppl, threshold=25.0):
     if p_ppl is None or p_ppl.empty:
         return
@@ -92,21 +98,23 @@ def highlight_safe_cells(ax, p_ppl, threshold=25.0):
                                   edgecolor="black", lw=2.5, clip_on=False)
                 ax.add_patch(rect)
 
+
 def draw_separators(ax, p_data):
     cols = list(p_data.columns)
-    for display_name, color, _, _ in METHODS:
+    for display_name, color, _ in METHODS:
         if display_name in cols:
             ax.axvline(x=cols.index(display_name), color=color, linewidth=3.0)
 
-def plot_trait(axis, method_data_dict, out_dir, artifact_dir):
-    print(f"\n[{axis}] plotting PDF comparison heatmap...")
+
+def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
+    print(f"\n[{axis}] plotting DLS comparison heatmap...")
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     p_score, p_ppl = build_pivot(method_data_dict)
     
     n_methods = len(p_score.columns) if not p_score.empty else 1
-    fig_w = max(8, n_methods * 1.6 + 2)
+    fig_w = max(8, n_methods * 2.0 + 2)
     fig, axes = plt.subplots(2, 1, figsize=(fig_w, 12))
 
     configs = [
@@ -134,30 +142,33 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir):
         ax_obj.set_ylabel("Val (Steering Intensity / Alpha)", fontsize=10)
 
     plt.suptitle(
-        f"PDF Dynamic Layer Steering Comparison: {axis.capitalize()}",
+        f"{title_prefix} DLS Comparison: {axis.capitalize()}",
         fontsize=14, fontweight="bold", y=1.01)
     plt.tight_layout()
 
-    out_path = out_dir / f"pdf_compare_{axis}.png"
+    file_name = f"heatmap_dyn_{axis}.png"
+    out_path = out_dir / file_name
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"  Saved: {out_path}")
 
-    if artifact_dir and artifact_dir.exists():
-        dest = artifact_dir / f"pdf_compare_{axis}.png"
+    if artifact_dir:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        dest = artifact_dir / f"{title_prefix.lower()}_{file_name}"
         shutil.copy(out_path, dest)
         print(f"  Copied to artifact: {dest}")
 
-def plot_summary(all_method_data, out_dir, artifact_dir):
-    print("\n[Summary] plotting PDF comparison summary heatmap (all traits avg)...")
+
+def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
+    print(f"\n[Summary] plotting DLS comparison summary heatmap (all traits avg)...")
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    score_acc = {k: {v: [] for v in VALS} for _, _, k, _ in METHODS}
-    ppl_acc   = {k: {v: [] for v in VALS} for _, _, k, _ in METHODS}
+    score_acc = {k: {v: [] for v in VALS} for _, _, k in METHODS}
+    ppl_acc   = {k: {v: [] for v in VALS} for _, _, k in METHODS}
 
     for method_data_dict in all_method_data:
-        for _, _, loader_key, _ in METHODS:
+        for _, _, loader_key in METHODS:
             df = method_data_dict.get(loader_key, pd.DataFrame())
             if df.empty:
                 continue
@@ -169,7 +180,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
 
     score_rows = {v: {} for v in VALS}
     ppl_rows   = {v: {} for v in VALS}
-    for display_name, _, loader_key, _ in METHODS:
+    for display_name, _, loader_key in METHODS:
         for val in VALS:
             scores = score_acc[loader_key][val]
             ppls   = ppl_acc[loader_key][val]
@@ -186,7 +197,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
     p_ppl = p_ppl.reindex(VALS)
 
     n_methods = len(p_score.columns) if not p_score.empty else 1
-    fig_w = max(8, n_methods * 1.6 + 2)
+    fig_w = max(8, n_methods * 2.0 + 2)
     fig, axes = plt.subplots(2, 1, figsize=(fig_w, 12))
 
     configs = [
@@ -214,43 +225,46 @@ def plot_summary(all_method_data, out_dir, artifact_dir):
         ax_obj.set_ylabel("Val (Steering Intensity / Alpha)", fontsize=10)
 
     plt.suptitle(
-        "PDF Dynamic Layer Steering Comparison Summary (All Traits Avg)",
+        f"{title_prefix} DLS Comparison Summary (All Traits Avg)",
         fontsize=14, fontweight="bold", y=1.01)
     plt.tight_layout()
 
-    out_path = out_dir / "pdf_compare_summary.png"
+    file_name = "summary_dyn_all_traits.png"
+    out_path = out_dir / file_name
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"  Saved: {out_path}")
 
-    if artifact_dir and artifact_dir.exists():
-        dest = artifact_dir / "pdf_compare_summary.png"
+    if artifact_dir:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        dest = artifact_dir / f"{title_prefix.lower()}_{file_name}"
         shutil.copy(out_path, dest)
         print(f"  Copied to artifact: {dest}")
 
+
 def main():
-    ap = argparse.ArgumentParser(
-        description="Plot PDF DLS method comparison heatmaps.")
-    ap.add_argument("--baseline_dir", default="exp_steering_dyn_layer_proj_prior/results")
-    ap.add_argument("--pdf_dir",        default="exp_steering_dyn_layer_pdf/results")
-    ap.add_argument("--out_dir",        default="exp_steering_dyn_layer_pdf/figures")
-    ap.add_argument("--artifact_dir",   default="/home/s2550009/.gemini/antigravity-ide/brain/eb5ffadd-d5e7-40a3-a0b3-5e88bfefda49/images")
+    ap = argparse.ArgumentParser(description="Plot dynamic steering method comparison heatmaps.")
+    ap.add_argument("--results_dir", required=True, help="Path to results directory")
+    ap.add_argument("--out_dir", required=True, help="Output folder for figures")
+    ap.add_argument("--artifact_dir", default=None, help="Folder to copy results for conversation viewing")
+    ap.add_argument("--title_prefix", required=True, help="Title prefix (e.g., Norm or Raw)")
     args = ap.parse_args()
 
-    baseline_dir = Path(args.baseline_dir)
-    pdf_dir      = Path(args.pdf_dir)
+    results_dir = Path(args.results_dir)
     out_dir      = Path(args.out_dir)
     artifact_dir = Path(args.artifact_dir) if args.artifact_dir else None
+    title_prefix = args.title_prefix
 
     all_method_data = []
 
     for axis in TRAITS:
-        method_data = load_all_methods(baseline_dir, pdf_dir, axis)
+        method_data = load_all_methods(results_dir, axis)
         all_method_data.append(method_data)
-        plot_trait(axis, method_data, out_dir / axis, artifact_dir)
+        plot_trait(axis, method_data, out_dir / axis, artifact_dir, title_prefix)
 
-    plot_summary(all_method_data, out_dir, artifact_dir)
-    print("\nPDF method-compare heatmap generation finished.")
+    plot_summary(all_method_data, out_dir, artifact_dir, title_prefix)
+    print(f"\nHeatmap generation for {title_prefix} finished.")
+
 
 if __name__ == "__main__":
     main()
