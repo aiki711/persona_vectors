@@ -40,7 +40,7 @@ echo "Running {mode}-Only DLS sweep for {trait}..."
 # Loop over values and run the script with --score_mode {mode} and --no_prior
 for val in {vals_list}; do
     echo "=== Running alpha=$val ==="
-    "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_proj_prior.py \
+    "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_steering.py \
         --config "$CONFIG" \
         --vector_bank "$VECTOR_BANK" \
         --prompts "$PROMPT_IN" \
@@ -50,8 +50,7 @@ for val in {vals_list}; do
         --alpha "$val" \
         --direction "high" \
         --norm_mode "raw_norm" \
-        --score_mode "{mode}" \
-        --no_prior
+        --score_mode "{mode}"
 done
 """
 

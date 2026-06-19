@@ -174,7 +174,16 @@ def main():
     ap.add_argument("--judge_model", type=str, default="meta-llama/Meta-Llama-3-8B-Instruct")
     ap.add_argument("--judge_quant", type=str, choices=["auto", "8bit", "4bit", "none"], default="none")
     ap.add_argument("--num_prompts", type=int, default=10, help="Number of prompts to evaluate")
+    ap.add_argument("--seed",        type=int, default=42, help="Random seed for generation reproducibility")
     args = ap.parse_args()
+
+    if args.seed is not None:
+        import random
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(args.seed)
 
     direction_mult = 1.0 if args.direction == "high" else -1.0
     out_dir = Path(args.out_dir) / args.axis

@@ -41,7 +41,7 @@ echo "Running Cos-Prior DLS sweep for {trait}..."
 # Loop over values and run the script with --score_mode cosine
 for val in {vals_list}; do
     echo "=== Running alpha=$val ==="
-    "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_proj_prior.py \\
+    "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_steering.py \\
         --config "$CONFIG" \\
         --vector_bank "$VECTOR_BANK" \\
         --prompts "$PROMPT_IN" \\
