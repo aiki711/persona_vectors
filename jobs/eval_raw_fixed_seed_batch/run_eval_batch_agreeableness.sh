@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:nvidia_a40:1
-#SBATCH --time=04:00:00
+#SBATCH --time=06:00:00
 #SBATCH --output=log/eval_raw_fixed_seed_batch_agreeableness.out
 #SBATCH --error=log/eval_raw_fixed_seed_batch_agreeableness.err
 

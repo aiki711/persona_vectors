@@ -111,12 +111,39 @@ def main():
     model, tokenizer = load_model_and_tokenizer(args.model, quant=quant_val)
     model.eval()
 
-    # Evaluate all unique texts
+    # Evaluate all unique texts with a persistent cache
+    cache_path = results_dir / "eval_cache.json"
     cache = {}
+    if cache_path.exists():
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cache = json.load(f)
+            print(f"Loaded {len(cache)} cached evaluations from {cache_path}")
+        except Exception as e:
+            print(f"Warning: failed to load cache: {e}")
+
     print("Evaluating unique texts...")
-    for text in tqdm(unique_list):
-        score, reason = get_score(model, tokenizer, text, args.axis, device)
-        cache[text] = (score, reason)
+    new_evals = 0
+    try:
+        for text in tqdm(unique_list):
+            if text in cache:
+                continue
+            score, reason = get_score(model, tokenizer, text, args.axis, device)
+            cache[text] = [score, reason]
+            new_evals += 1
+            # Periodically save cache to prevent data loss on timeout
+            if new_evals % 20 == 0:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump(cache, f, ensure_ascii=False, indent=2)
+    finally:
+        # Save cache on exit
+        if new_evals > 0:
+            try:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump(cache, f, ensure_ascii=False, indent=2)
+                print(f"Saved {len(cache)} evaluations to cache.")
+            except Exception as e:
+                print(f"Warning: failed to save cache on exit: {e}")
 
     # Save results to corresponding csv files
     print("Writing CSV files...")
