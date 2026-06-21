@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# scripts/04_dyn_layer/67_plot_dyn_layer_heatmaps.py
+# scripts/04_dyn_layer/123_plot_gen_time_results.py
 #
-# Unified plotting script for Dynamic Layer Steering (DLS) comparison:
-#   1. Individual heatmaps (Score & PPL) for all 5 traits across 9 methods.
-#   2. Summary heatmap (All Traits Avg Score & PPL) across 9 methods.
-#   3. Grouped bar chart comparing maximum safe steering scores (Strict Safety) of all 9 methods.
+# Unified plotting script for Generation-time Dynamic Layer Steering (DLS) comparison:
+#   1. Individual heatmaps (Score & PPL) for all 5 traits across 8 methods.
+#   2. Summary heatmap (All Traits Avg Score & PPL) across 8 methods.
+#   3. Grouped bar chart comparing maximum safe steering scores (Strict Safety) of all 8 methods.
+#   4. Dynamic layer transition history line plots for sample prompts.
 #
-# Inputs: exp_steering_dyn_layer_raw/results/{trait}/scores_{method}_Val{alpha}.csv
-# Outputs: exp_steering_dyn_layer_raw/figures/
+# Inputs: exp_steering_dyn_gen_time_raw/results/{trait}/scores_{method}_Val{alpha}.csv
+# Outputs: exp_steering_dyn_gen_time_raw/figures/
 #
 
 import argparse
@@ -32,9 +33,8 @@ TRAIT_LABELS = {
 }
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
-# Selected 9 methods for comparison
+# Selected 8 methods (excluding logit_diff)
 METHODS = [
-    ("DLS Logit-Diff",        "logit_diff",             "#1f4e79"),
     ("DLS Cos-Only",          "cos_only",               "#e67e22"),
     ("DLS Rank-Only",         "rank_only",              "#2c3e50"),
     ("DLS Proj Cos-Only",     "proj_cos_only",          "#3498db"),
@@ -83,20 +83,17 @@ def load_summary(results_dir: Path, axis: str, method: str) -> pd.DataFrame:
                         if "dyn_text" in data:
                             dyn_texts.append(data["dyn_text"])
                 
-                # Compute repetition rates for each prompt
                 rep_3gram_list = [calculate_repetition_rate(txt, 3) for txt in dyn_texts]
                 rep_4gram_list = [calculate_repetition_rate(txt, 4) for txt in dyn_texts]
                 
                 max_3gram = max(rep_3gram_list) if rep_3gram_list else 0.0
                 max_4gram = max(rep_4gram_list) if rep_4gram_list else 0.0
                 
-                # Coherence from CSV
                 if "dyn_reason" in df_csv.columns:
                     coherence_rate = df_csv["dyn_reason"].str.contains("Coherence: Yes", case=False, na=False).mean()
                 else:
                     coherence_rate = 1.0
                 
-                # Max PPL from CSV
                 max_ppl = df_csv["dyn_ppl"].max() if "dyn_ppl" in df_csv.columns else np.nan
                 
                 records.append({
@@ -108,8 +105,8 @@ def load_summary(results_dir: Path, axis: str, method: str) -> pd.DataFrame:
                     "dyn_max_3gram_rep": max_3gram,
                     "dyn_max_4gram_rep": max_4gram,
                 })
-            except Exception as e:
-                print(f"Error loading {csv_path} or {jsonl_path}: {e}")
+            except Exception:
+                pass
     return pd.DataFrame(records)
 
 def load_all_methods(results_dir: Path, axis: str):
@@ -147,7 +144,6 @@ def build_pivot(method_data_dict):
     p_rep3 = pd.DataFrame.from_dict(rep3_rows, orient="index").reindex(VALS)
     p_rep4 = pd.DataFrame.from_dict(rep4_rows, orient="index").reindex(VALS)
 
-    # Columns ordering
     cols = [m[0] for m in METHODS if m[0] in p_score.columns]
     p_score = p_score[cols]
     p_ppl = p_ppl[cols]
@@ -190,7 +186,7 @@ def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4,
                     ax.add_patch(rect)
 
 def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
-    print(f"[{axis}] plotting DLS comparison heatmap...")
+    print(f"[{axis}] plotting generation-time DLS comparison heatmap...")
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -220,11 +216,11 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
         ax_obj.set_title(
             f"{title} (Black Border: Strict Safety Criteria)",
             fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("DLS Layer Selection Method", fontsize=10)
+        ax_obj.set_xlabel("Generation-Time DLS Method", fontsize=10)
         ax_obj.set_ylabel("Steering Intensity (Alpha / Val)", fontsize=10)
 
     plt.suptitle(
-        f"{title_prefix} DLS 9-Method Comparison: {axis.capitalize()} (Strict Safety)",
+        f"{title_prefix} DLS 8-Method Comparison: {axis.capitalize()} (Generation-Time DLS)",
         fontsize=15, fontweight="bold", y=1.01)
     plt.tight_layout()
 
@@ -298,7 +294,6 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
     p_rep3 = pd.DataFrame.from_dict(rep3_rows, orient="index").reindex(VALS)
     p_rep4 = pd.DataFrame.from_dict(rep4_rows, orient="index").reindex(VALS)
 
-    # Columns ordering
     cols = [m[0] for m in METHODS if m[0] in p_score.columns]
     p_score = p_score[cols]
     p_ppl = p_ppl[cols]
@@ -331,11 +326,11 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
         ax_obj.set_title(
             f"{title} (Black Border: Strict Safety Criteria)",
             fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("DLS Layer Selection Method", fontsize=10)
+        ax_obj.set_xlabel("Generation-Time DLS Method", fontsize=10)
         ax_obj.set_ylabel("Steering Intensity (Alpha / Val)", fontsize=10)
 
     plt.suptitle(
-        f"{title_prefix} DLS 9-Method Comparison Summary (All Traits Avg) (Strict Safety)",
+        f"{title_prefix} DLS 8-Method Comparison Summary (All Traits Avg) (Generation-Time DLS)",
         fontsize=15, fontweight="bold", y=1.01)
     plt.tight_layout()
 
@@ -470,13 +465,11 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     categories = [d["trait"] for d in data]
     x = np.arange(len(categories))
     
-    # 10 bars: Unsteered + 9 methods
     num_bars = 1 + len(METHODS)
     width = 0.08
     
     fig, ax = plt.subplots(figsize=(24, 10))
     
-    # Define colors for methods
     colors = {
         "Unsteered Baseline": "#7f8c8d"
     }
@@ -492,15 +485,14 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     rects_list.append(ax.bar(x + (offset_start * width), [d["Unsteered Baseline"][0] for d in data], width, label="Unsteered Baseline", color=colors["Unsteered Baseline"], zorder=3))
     labels_list.append("Unsteered Baseline")
     
-    # Plot 9 methods
+    # Plot 8 methods
     for i, (display_name, _, _) in enumerate(METHODS):
         rects_list.append(ax.bar(x + ((offset_start + 1 + i) * width), [d[display_name][0] for d in data], width, label=display_name, color=colors[display_name], zorder=3))
         labels_list.append(display_name)
         
     ax.axhline(y=3.0, color="#cccccc", linestyle="--", linewidth=1.2, zorder=2)
     
-    # Title and labels
-    title_text = f"{title_prefix} DLS — Maximum Safe Steering Score Comparison (Strict Safety Filter)"
+    title_text = f"{title_prefix} DLS — Maximum Safe Steering Score Comparison (Generation-Time DLS)"
     ax.set_title(title_text, fontsize=16, fontweight="bold", pad=20)
     ax.set_ylabel("Steering Score (1.0 to 5.0)", fontsize=12, fontweight="bold")
     ax.set_xticks(x)
@@ -514,7 +506,6 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     
     ax.grid(axis="y", linestyle=":", alpha=0.6, color="#bbbbbb", zorder=0)
 
-    # Attach score annotations on top of the bars
     for r_idx, rects in enumerate(rects_list):
         data_key = labels_list[r_idx]
         for i, rect in enumerate(rects):
@@ -531,7 +522,6 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
                         fontsize=7, fontweight="bold",
                         color="#333333")
             
-            # Show alpha value inside the bar (if applicable)
             info = data[i][data_key]
             alpha_val = info[1]
             if not np.isnan(alpha_val):
@@ -557,12 +547,71 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
         shutil.copy(out_path, dest_path)
         print(f"Copied comparison bar chart to artifacts: {dest_path}")
 
+def plot_layer_history_samples(results_dir: Path, out_dir: Path, artifact_dir: Path):
+    """
+    Reads a sample JSONL file and plots the token-by-token selected layer transition
+    for the first two prompts to visually show how selection shifts during generation.
+    """
+    print("Plotting layer selection history samples...")
+    sample_trait = "agreeableness"
+    sample_file = results_dir / sample_trait / "masked_proj_cos_only_Val4.0.jsonl"
+    
+    # Fallback to any file if this specific one isn't finished yet
+    if not sample_file.exists():
+        jsonl_files = list(results_dir.glob("**/*.jsonl"))
+        if jsonl_files:
+            sample_file = jsonl_files[0]
+            print(f"  Fallback sample file: {sample_file}")
+        else:
+            print("  No JSONL files found yet to plot layer history.")
+            return
+
+    try:
+        histories = []
+        texts = []
+        with open(sample_file, "r", encoding="utf-8") as f:
+            for line in f:
+                data = json.loads(line)
+                if "layer_history" in data and data["layer_history"]:
+                    histories.append(data["layer_history"])
+                    texts.append(data["dyn_text"])
+                if len(histories) >= 2:
+                    break
+
+        if not histories:
+            return
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        for i, hist in enumerate(histories):
+            tokens_idx = np.arange(len(hist))
+            ax.plot(tokens_idx, hist, marker="o", markersize=3, alpha=0.8, linewidth=1.5, label=f"Prompt {i+1}")
+
+        ax.set_title(f"Generation-Time Layer Selection Transitions ({sample_file.stem})", fontsize=14, fontweight="bold")
+        ax.set_xlabel("Generated Token Index", fontsize=11)
+        ax.set_ylabel("Steered Layer (Candidate Range: 4 to 29)", fontsize=11)
+        ax.set_ylim(3.5, 30.5)
+        ax.set_yticks(range(4, 30, 2))
+        ax.grid(axis="both", linestyle=":", alpha=0.5)
+        ax.legend(frameon=True, facecolor="white")
+
+        out_path = out_dir / "layer_history_samples.png"
+        plt.savefig(out_path, dpi=200, bbox_inches="tight")
+        plt.close()
+        print(f"Saved layer history sample plot to: {out_path}")
+
+        if artifact_dir:
+            dest = artifact_dir / "layer_history_samples.png"
+            shutil.copy(out_path, dest)
+            print(f"Copied layer history sample plot to artifacts: {dest}")
+    except Exception as e:
+        print(f"Failed to plot layer history samples: {e}")
+
 def main():
-    ap = argparse.ArgumentParser(description="Plot dynamic steering method comparison heatmaps and bar chart.")
+    ap = argparse.ArgumentParser(description="Plot generation-time dynamic steering method comparison.")
     ap.add_argument("--results_dir", required=True, help="Path to results directory")
     ap.add_argument("--out_dir", required=True, help="Output folder for figures")
     ap.add_argument("--artifact_dir", default=None, help="Folder to copy results for conversation viewing")
-    ap.add_argument("--title_prefix", default="Raw", help="Title prefix (e.g., Norm or Raw)")
+    ap.add_argument("--title_prefix", default="Raw_GenTime", help="Title prefix")
     args = ap.parse_args()
 
     results_dir = Path(args.results_dir)
@@ -579,7 +628,8 @@ def main():
 
     plot_summary(all_method_data, out_dir, artifact_dir, title_prefix)
     plot_max_safe_bar(results_dir, out_dir, artifact_dir, title_prefix)
-    print(f"\nUnified DLS plotting finished successfully.")
+    plot_layer_history_samples(results_dir, out_dir, artifact_dir)
+    print(f"\nGeneration-time DLS plotting finished successfully.")
 
 if __name__ == "__main__":
     main()
