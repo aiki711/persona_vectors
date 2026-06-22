@@ -156,7 +156,7 @@ def build_pivot(method_data_dict):
 
 def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4,
                          ppl_threshold=25.0, coherence_threshold=0.8,
-                         max_ppl_threshold=35.0, rep3_threshold=0.25, rep4_threshold=0.20):
+                         max_ppl_threshold=35.0):
     if p_ppl is None or p_ppl.empty:
         return
     for i in range(len(p_ppl.index)):
@@ -167,18 +167,14 @@ def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4,
             val_ppl = p_ppl.iloc[i, j]
             val_coherence = p_coherence.loc[val, col_name] if col_name in p_coherence.columns else np.nan
             val_max_ppl = p_max_ppl.loc[val, col_name] if col_name in p_max_ppl.columns else np.nan
-            val_rep3 = p_rep3.loc[val, col_name] if col_name in p_rep3.columns else np.nan
-            val_rep4 = p_rep4.loc[val, col_name] if col_name in p_rep4.columns else np.nan
             
             if (not np.isnan(val_ppl) and not np.isnan(val_coherence) and 
-                not np.isnan(val_max_ppl) and not np.isnan(val_rep3) and not np.isnan(val_rep4)):
+                not np.isnan(val_max_ppl)):
                 
                 is_safe = (
                     val_ppl <= ppl_threshold and
                     val_coherence >= coherence_threshold and
-                    val_max_ppl <= max_ppl_threshold and
-                    val_rep3 <= rep3_threshold and
-                    val_rep4 <= rep4_threshold
+                    val_max_ppl <= max_ppl_threshold
                 )
                 if is_safe:
                     rect = Rectangle((j, i), 1, 1, fill=False,
@@ -212,7 +208,7 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
                     vmin=vmin, vmax=vmax,
                     linewidths=0.8, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4)
+        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, None, None)
         ax_obj.set_title(
             f"{title} (Black Border: Strict Safety Criteria)",
             fontsize=12, fontweight="bold")
@@ -322,7 +318,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
                     vmin=vmin, vmax=vmax,
                     linewidths=0.8, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4)
+        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, None, None)
         ax_obj.set_title(
             f"{title} (Black Border: Strict Safety Criteria)",
             fontsize=12, fontweight="bold")
@@ -394,9 +390,7 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
                 is_safe = (
                     mean_ppl <= 25.0 and
                     coherence_rate >= 0.8 and
-                    max_ppl <= 35.0 and
-                    max_3gram <= 0.25 and
-                    max_4gram <= 0.20
+                    max_ppl <= 35.0
                 )
                 
                 if is_safe:

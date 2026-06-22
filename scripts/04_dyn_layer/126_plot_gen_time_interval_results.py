@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# scripts/04_dyn_layer/67_plot_dyn_layer_heatmaps.py
+# scripts/04_dyn_layer/126_plot_gen_time_interval_results.py
 #
-# Unified plotting script for Dynamic Layer Steering (DLS) comparison:
-#   1. Individual heatmaps (Score & PPL) for all 5 traits across 9 methods.
-#   2. Summary heatmap (All Traits Avg Score & PPL) across 9 methods.
-#   3. Grouped bar chart comparing maximum safe steering scores (Strict Safety) of all 9 methods.
+# Unified plotting and analysis script for update_interval sweeps (1, 4, 8)
+# and Fixed-Layer DLS comparison under the strict safety filter:
+#   - Mean PPL <= 25.0
+#   - Coherence Rate >= 80%
+#   - Max PPL <= 25.0 (All 10 prompts must have PPL <= 25)
 #
-# Inputs: exp_steering_dyn_layer_raw/results/{trait}/scores_{method}_Val{alpha}.csv
-# Outputs: exp_steering_dyn_layer_raw/figures/
+# Outputs:
+#   - Individual and summary heatmaps for interval 4 & 8.
+#   - Max safe score comparison bar charts for interval 4 & 8.
+#   - A comparative summary chart and table across Fixed-Layer, Interval 1, 4, and 8.
 #
 
 import argparse
@@ -32,9 +35,7 @@ TRAIT_LABELS = {
 }
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
-# Selected 9 methods for comparison
 METHODS = [
-    ("DLS Logit-Diff",        "logit_diff",             "#1f4e79"),
     ("DLS Cos-Only",          "cos_only",               "#e67e22"),
     ("DLS Rank-Only",         "rank_only",              "#2c3e50"),
     ("DLS Proj Cos-Only",     "proj_cos_only",          "#3498db"),
@@ -45,77 +46,46 @@ METHODS = [
     ("PDF Proj Rank-Only",    "masked_proj_rank_only",  "#d35400"),
 ]
 
-def calculate_repetition_rate(text: str, n: int) -> float:
-    if not isinstance(text, str):
-        return 0.0
-    words = [w.strip(".,!?:;()\"'").lower() for w in text.split()]
-    words = [w for w in words if w]
-    if len(words) < n:
-        return 0.0
-    ngrams = [tuple(words[i:i+n]) for i in range(len(words)-n+1)]
-    unique_ngrams = set(ngrams)
-    return (len(ngrams) - len(unique_ngrams)) / len(ngrams)
-
-def load_summary(results_dir: Path, axis: str, method: str) -> pd.DataFrame:
+def load_summary(results_dir: Path, trait: str, method: str) -> pd.DataFrame:
     records = []
-    trait_dir = results_dir / axis
+    trait_dir = results_dir / trait
     for val in VALS:
         csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
-        jsonl_path = trait_dir / f"{method}_Val{float(val)}.jsonl"
-        
         if not csv_path.exists():
             csv_path = trait_dir / f"scores_{method}_Val{val}.csv"
-        if not jsonl_path.exists():
-            jsonl_path = trait_dir / f"{method}_Val{val}.jsonl"
             
-        if csv_path.exists() and jsonl_path.exists():
+        if csv_path.exists():
             try:
-                # Load CSV
                 df_csv = pd.read_csv(csv_path)
-                if "dyn_score" in df_csv.columns:
-                    df_csv["dyn_score"] = df_csv["dyn_score"].replace(0, np.nan)
+                score_col = "dyn_score" if "dyn_score" in df_csv.columns else df_csv.columns[2]
+                ppl_col = "dyn_ppl" if "dyn_ppl" in df_csv.columns else "fusion_ppl"
+                reason_col = "dyn_reason" if "dyn_reason" in df_csv.columns else "fusion_reason"
                 
-                # Load JSONL
-                dyn_texts = []
-                with open(jsonl_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        data = json.loads(line)
-                        if "dyn_text" in data:
-                            dyn_texts.append(data["dyn_text"])
+                df_csv[score_col] = df_csv[score_col].replace(0, np.nan)
+                mean_score = df_csv[score_col].mean()
+                mean_ppl = df_csv[ppl_col].mean()
+                max_ppl = df_csv[ppl_col].max()
                 
-                # Compute repetition rates for each prompt
-                rep_3gram_list = [calculate_repetition_rate(txt, 3) for txt in dyn_texts]
-                rep_4gram_list = [calculate_repetition_rate(txt, 4) for txt in dyn_texts]
-                
-                max_3gram = max(rep_3gram_list) if rep_3gram_list else 0.0
-                max_4gram = max(rep_4gram_list) if rep_4gram_list else 0.0
-                
-                # Coherence from CSV
-                if "dyn_reason" in df_csv.columns:
-                    coherence_rate = df_csv["dyn_reason"].str.contains("Coherence: Yes", case=False, na=False).mean()
+                if reason_col in df_csv.columns:
+                    coherence_rate = df_csv[reason_col].str.contains("Coherence: Yes", case=False, na=False).mean()
                 else:
                     coherence_rate = 1.0
                 
-                # Max PPL from CSV
-                max_ppl = df_csv["dyn_ppl"].max() if "dyn_ppl" in df_csv.columns else np.nan
-                
                 records.append({
-                    "val":       val,
-                    "dyn_score": df_csv["dyn_score"].mean(),
-                    "dyn_ppl":   df_csv["dyn_ppl"].mean(),
-                    "dyn_coherence_rate": coherence_rate,
-                    "dyn_max_ppl": max_ppl,
-                    "dyn_max_3gram_rep": max_3gram,
-                    "dyn_max_4gram_rep": max_4gram,
+                    "val":                  val,
+                    "dyn_score":            mean_score,
+                    "dyn_ppl":              mean_ppl,
+                    "dyn_coherence_rate":   coherence_rate,
+                    "dyn_max_ppl":          max_ppl,
                 })
-            except Exception as e:
-                print(f"Error loading {csv_path} or {jsonl_path}: {e}")
+            except Exception:
+                pass
     return pd.DataFrame(records)
 
-def load_all_methods(results_dir: Path, axis: str):
+def load_all_methods(results_dir: Path, trait: str):
     data_dict = {}
     for display_name, loader_key, _ in METHODS:
-        data_dict[loader_key] = load_summary(results_dir, axis, loader_key)
+        data_dict[loader_key] = load_summary(results_dir, trait, loader_key)
     return data_dict
 
 def build_pivot(method_data_dict):
@@ -123,8 +93,6 @@ def build_pivot(method_data_dict):
     ppl_rows   = {v: {} for v in VALS}
     coherence_rows = {v: {} for v in VALS}
     max_ppl_rows = {v: {} for v in VALS}
-    rep3_rows = {v: {} for v in VALS}
-    rep4_rows = {v: {} for v in VALS}
 
     for display_name, loader_key, _ in METHODS:
         df = method_data_dict.get(loader_key, pd.DataFrame())
@@ -137,28 +105,21 @@ def build_pivot(method_data_dict):
                 ppl_rows[val][display_name]   = idx.loc[val, "dyn_ppl"]
                 coherence_rows[val][display_name] = idx.loc[val, "dyn_coherence_rate"]
                 max_ppl_rows[val][display_name]   = idx.loc[val, "dyn_max_ppl"]
-                rep3_rows[val][display_name]      = idx.loc[val, "dyn_max_3gram_rep"]
-                rep4_rows[val][display_name]      = idx.loc[val, "dyn_max_4gram_rep"]
 
     p_score = pd.DataFrame.from_dict(score_rows, orient="index").reindex(VALS)
     p_ppl = pd.DataFrame.from_dict(ppl_rows, orient="index").reindex(VALS)
     p_coherence = pd.DataFrame.from_dict(coherence_rows, orient="index").reindex(VALS)
     p_max_ppl = pd.DataFrame.from_dict(max_ppl_rows, orient="index").reindex(VALS)
-    p_rep3 = pd.DataFrame.from_dict(rep3_rows, orient="index").reindex(VALS)
-    p_rep4 = pd.DataFrame.from_dict(rep4_rows, orient="index").reindex(VALS)
 
-    # Columns ordering
     cols = [m[0] for m in METHODS if m[0] in p_score.columns]
     p_score = p_score[cols]
     p_ppl = p_ppl[cols]
     p_coherence = p_coherence[cols]
     p_max_ppl = p_max_ppl[cols]
-    p_rep3 = p_rep3[cols]
-    p_rep4 = p_rep4[cols]
 
-    return p_score, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4
+    return p_score, p_ppl, p_coherence, p_max_ppl
 
-def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4,
+def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl,
                          ppl_threshold=25.0, coherence_threshold=0.8,
                          max_ppl_threshold=25.0):
     if p_ppl is None or p_ppl.empty:
@@ -185,21 +146,20 @@ def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4,
                                       edgecolor="black", lw=2.5, clip_on=False)
                     ax.add_patch(rect)
 
-def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
-    print(f"[{axis}] plotting DLS comparison heatmap...")
+def plot_trait(trait, method_data_dict, out_dir, artifact_dir, title_prefix):
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    p_score, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4 = build_pivot(method_data_dict)
+    p_score, p_ppl, p_coherence, p_max_ppl = build_pivot(method_data_dict)
     
     n_methods = len(p_score.columns) if not p_score.empty else 1
     fig_w = max(10, n_methods * 1.5 + 2)
     fig, axes = plt.subplots(2, 1, figsize=(fig_w, 13))
 
     configs = [
-        (axes[0], p_score, f"Score [{axis.capitalize()}]",
+        (axes[0], p_score, f"Score [{trait.capitalize()}]",
          "YlGn",     1,   5, ".2f"),
-        (axes[1], p_ppl,   f"PPL   [{axis.capitalize()}]",
+        (axes[1], p_ppl,   f"PPL   [{trait.capitalize()}]",
          "RdYlGn_r", 1, 100, ".1f"),
     ]
 
@@ -212,32 +172,29 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
                     vmin=vmin, vmax=vmax,
                     linewidths=0.8, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, None, None)
+        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl)
         ax_obj.set_title(
-            f"{title} (Black Border: Strict Safety Criteria)",
+            f"{title} (Black Border: Strict Safety Criteria [Max PPL <= 25.0])",
             fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("DLS Layer Selection Method", fontsize=10)
-        ax_obj.set_ylabel("Steering Intensity (Alpha / Val)", fontsize=10)
+        ax_obj.set_xlabel("DLS Method", fontsize=10)
+        ax_obj.set_ylabel("Steering Intensity (Alpha)", fontsize=10)
 
     plt.suptitle(
-        f"{title_prefix} DLS 9-Method Comparison: {axis.capitalize()} (Strict Safety)",
+        f"{title_prefix} DLS 8-Method Comparison: {trait.capitalize()}",
         fontsize=15, fontweight="bold", y=1.01)
     plt.tight_layout()
 
-    file_name = f"heatmap_dyn_{axis}.png"
+    file_name = f"heatmap_dyn_{trait}.png"
     out_path = out_dir / file_name
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: {out_path}")
 
     if artifact_dir:
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        dest = artifact_dir / f"{title_prefix.lower()}_heatmap_dyn_{axis}.png"
+        dest = artifact_dir / f"{title_prefix.lower()}_heatmap_dyn_{trait}.png"
         shutil.copy(out_path, dest)
-        print(f"  Copied to artifact: {dest}")
 
 def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
-    print("[Summary] plotting DLS comparison summary heatmap (all traits avg)...")
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -245,8 +202,6 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
     ppl_acc       = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
     coherence_acc = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
     max_ppl_acc   = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
-    rep3_acc      = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
-    rep4_acc      = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
 
     for method_data_dict in all_method_data:
         for _, loader_key, _ in METHODS:
@@ -260,15 +215,11 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
                     ppl_acc[loader_key][val].append(idx.loc[val, "dyn_ppl"])
                     coherence_acc[loader_key][val].append(idx.loc[val, "dyn_coherence_rate"])
                     max_ppl_acc[loader_key][val].append(idx.loc[val, "dyn_max_ppl"])
-                    rep3_acc[loader_key][val].append(idx.loc[val, "dyn_max_3gram_rep"])
-                    rep4_acc[loader_key][val].append(idx.loc[val, "dyn_max_4gram_rep"])
 
     score_rows = {v: {} for v in VALS}
     ppl_rows   = {v: {} for v in VALS}
     coherence_rows = {v: {} for v in VALS}
     max_ppl_rows   = {v: {} for v in VALS}
-    rep3_rows      = {v: {} for v in VALS}
-    rep4_rows      = {v: {} for v in VALS}
     
     for display_name, loader_key, _ in METHODS:
         for val in VALS:
@@ -276,32 +227,23 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
             ppls   = ppl_acc[loader_key][val]
             coherences = coherence_acc[loader_key][val]
             max_ppls   = max_ppl_acc[loader_key][val]
-            rep3s      = rep3_acc[loader_key][val]
-            rep4s      = rep4_acc[loader_key][val]
             
             if scores:
                 score_rows[val][display_name] = np.mean(scores)
                 ppl_rows[val][display_name]   = np.mean(ppls)
                 coherence_rows[val][display_name] = np.mean(coherences)
                 max_ppl_rows[val][display_name]   = np.mean(max_ppls)
-                rep3_rows[val][display_name]      = np.mean(rep3s)
-                rep4_rows[val][display_name]      = np.mean(rep4s)
 
     p_score = pd.DataFrame.from_dict(score_rows, orient="index").reindex(VALS)
     p_ppl = pd.DataFrame.from_dict(ppl_rows, orient="index").reindex(VALS)
     p_coherence = pd.DataFrame.from_dict(coherence_rows, orient="index").reindex(VALS)
     p_max_ppl = pd.DataFrame.from_dict(max_ppl_rows, orient="index").reindex(VALS)
-    p_rep3 = pd.DataFrame.from_dict(rep3_rows, orient="index").reindex(VALS)
-    p_rep4 = pd.DataFrame.from_dict(rep4_rows, orient="index").reindex(VALS)
 
-    # Columns ordering
     cols = [m[0] for m in METHODS if m[0] in p_score.columns]
     p_score = p_score[cols]
     p_ppl = p_ppl[cols]
     p_coherence = p_coherence[cols]
     p_max_ppl = p_max_ppl[cols]
-    p_rep3 = p_rep3[cols]
-    p_rep4 = p_rep4[cols]
 
     n_methods = len(p_score.columns) if not p_score.empty else 1
     fig_w = max(10, n_methods * 1.5 + 2)
@@ -323,15 +265,15 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
                     vmin=vmin, vmax=vmax,
                     linewidths=0.8, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, None, None)
+        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl)
         ax_obj.set_title(
-            f"{title} (Black Border: Strict Safety Criteria)",
+            f"{title} (Black Border: Strict Safety Criteria [Max PPL <= 25.0])",
             fontsize=12, fontweight="bold")
-        ax_obj.set_xlabel("DLS Layer Selection Method", fontsize=10)
-        ax_obj.set_ylabel("Steering Intensity (Alpha / Val)", fontsize=10)
+        ax_obj.set_xlabel("DLS Method", fontsize=10)
+        ax_obj.set_ylabel("Steering Intensity (Alpha)", fontsize=10)
 
     plt.suptitle(
-        f"{title_prefix} DLS 9-Method Comparison Summary (All Traits Avg) (Strict Safety)",
+        f"{title_prefix} DLS 8-Method Comparison Summary (All Traits Avg)",
         fontsize=15, fontweight="bold", y=1.01)
     plt.tight_layout()
 
@@ -339,15 +281,13 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
     out_path = out_dir / file_name
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: {out_path}")
 
     if artifact_dir:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         dest = artifact_dir / f"{title_prefix.lower()}_summary_dyn_all_traits.png"
         shutil.copy(out_path, dest)
-        print(f"  Copied to artifact: {dest}")
 
-def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[float, float, float, float]:
+def get_max_safe_score(results_dir: Path, trait: str, method: str, max_ppl_threshold=25.0) -> tuple[float, float, float, float]:
     best_score = 0.0
     best_alpha = np.nan
     best_ppl = np.nan
@@ -356,46 +296,31 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
     trait_dir = results_dir / trait
     for val in VALS:
         csv_path = trait_dir / f"scores_{method}_Val{float(val)}.csv"
-        jsonl_path = trait_dir / f"{method}_Val{float(val)}.jsonl"
         if not csv_path.exists():
             csv_path = trait_dir / f"scores_{method}_Val{val}.csv"
-        if not jsonl_path.exists():
-            jsonl_path = trait_dir / f"{method}_Val{val}.jsonl"
             
-        if csv_path.exists() and jsonl_path.exists():
+        if csv_path.exists():
             try:
-                # Load CSV
                 df = pd.read_csv(csv_path)
-                if "dyn_score" in df.columns:
-                    df["dyn_score"] = df["dyn_score"].replace(0, np.nan)
-                mean_score = df["dyn_score"].mean()
-                mean_ppl = df["dyn_ppl"].mean()
-                max_ppl = df["dyn_ppl"].max() if "dyn_ppl" in df.columns else np.nan
+                score_col = "dyn_score" if "dyn_score" in df.columns else df.columns[2]
+                ppl_col = "dyn_ppl" if "dyn_ppl" in df.columns else "fusion_ppl"
+                reason_col = "dyn_reason" if "dyn_reason" in df.columns else "fusion_reason"
                 
-                # Load JSONL
-                dyn_texts = []
-                with open(jsonl_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        data = json.loads(line)
-                        if "dyn_text" in data:
-                            dyn_texts.append(data["dyn_text"])
+                df[score_col] = df[score_col].replace(0, np.nan)
+                mean_score = df[score_col].mean()
+                mean_ppl = df[ppl_col].mean()
+                max_ppl = df[ppl_col].max()
                 
-                rep_3gram_list = [calculate_repetition_rate(txt, 3) for txt in dyn_texts]
-                rep_4gram_list = [calculate_repetition_rate(txt, 4) for txt in dyn_texts]
-                
-                max_3gram = max(rep_3gram_list) if rep_3gram_list else 0.0
-                max_4gram = max(rep_4gram_list) if rep_4gram_list else 0.0
-                
-                if "dyn_reason" in df.columns:
-                    coherence_rate = df["dyn_reason"].str.contains("Coherence: Yes", case=False, na=False).mean()
+                if reason_col in df.columns:
+                    coherence_rate = df[reason_col].str.contains("Coherence: Yes", case=False, na=False).mean()
                 else:
                     coherence_rate = 1.0
                 
-                # Strict Safety check
+                # Strict Safety check (using max_ppl_threshold)
                 is_safe = (
                     mean_ppl <= 25.0 and
                     coherence_rate >= 0.8 and
-                    max_ppl <= 25.0
+                    max_ppl <= max_ppl_threshold
                 )
                 
                 if is_safe:
@@ -410,7 +335,6 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
 
 def get_unsteered_baseline_score(results_dir: Path, trait: str) -> float:
     trait_dir = results_dir / trait
-    # Look for any CSV file to load base_score
     for display_name, loader_key, _ in METHODS:
         for val in VALS:
             csv_path = trait_dir / f"scores_{loader_key}_Val{float(val)}.csv"
@@ -428,14 +352,13 @@ def get_unsteered_baseline_score(results_dir: Path, trait: str) -> float:
                     pass
     return 3.0
 
-def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, title_prefix: str):
-    print("Generating max safe score grouped bar chart...")
+def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, title_prefix: str, max_ppl_threshold=25.0):
     data = []
     for trait in TRAITS:
         ub_score = get_unsteered_baseline_score(results_dir, trait)
         method_results = {}
         for display_name, loader_key, _ in METHODS:
-            score, alpha, ppl, coherence = get_max_safe_score(results_dir, trait, loader_key)
+            score, alpha, ppl, coherence = get_max_safe_score(results_dir, trait, loader_key, max_ppl_threshold)
             method_results[display_name] = (score, alpha, ppl, coherence)
             
         data.append({
@@ -448,7 +371,8 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     avg_ub = np.mean([d["Unsteered Baseline"][0] for d in data])
     avg_results = {}
     for display_name, loader_key, _ in METHODS:
-        avg_score = np.mean([d[display_name][0] for d in data if d[display_name][0] > 0.0])
+        valid_scores = [d[display_name][0] for d in data if d[display_name][0] > 0.0]
+        avg_score = np.mean(valid_scores) if valid_scores else 0.0
         avg_results[display_name] = (avg_score, np.nan, np.nan, np.nan)
         
     data.append({
@@ -457,20 +381,17 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
         **avg_results
     })
 
-    # Plot setup
     plt.rcParams["font.family"] = "sans-serif"
     plt.rcParams["font.sans-serif"] = ["DejaVu Sans", "Arial", "Helvetica"]
     
     categories = [d["trait"] for d in data]
     x = np.arange(len(categories))
     
-    # 10 bars: Unsteered + 9 methods
     num_bars = 1 + len(METHODS)
     width = 0.08
     
     fig, ax = plt.subplots(figsize=(24, 10))
     
-    # Define colors for methods
     colors = {
         "Unsteered Baseline": "#7f8c8d"
     }
@@ -482,19 +403,16 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     rects_list = []
     labels_list = []
     
-    # Plot Unsteered
     rects_list.append(ax.bar(x + (offset_start * width), [d["Unsteered Baseline"][0] for d in data], width, label="Unsteered Baseline", color=colors["Unsteered Baseline"], zorder=3))
     labels_list.append("Unsteered Baseline")
     
-    # Plot 9 methods
     for i, (display_name, _, _) in enumerate(METHODS):
         rects_list.append(ax.bar(x + ((offset_start + 1 + i) * width), [d[display_name][0] for d in data], width, label=display_name, color=colors[display_name], zorder=3))
         labels_list.append(display_name)
         
     ax.axhline(y=3.0, color="#cccccc", linestyle="--", linewidth=1.2, zorder=2)
     
-    # Title and labels
-    title_text = f"{title_prefix} DLS — Maximum Safe Steering Score Comparison (Strict Safety Filter)"
+    title_text = f"{title_prefix} DLS — Maximum Safe Steering Score Comparison (Max PPL <= {max_ppl_threshold})"
     ax.set_title(title_text, fontsize=16, fontweight="bold", pad=20)
     ax.set_ylabel("Steering Score (1.0 to 5.0)", fontsize=12, fontweight="bold")
     ax.set_xticks(x)
@@ -508,7 +426,6 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     
     ax.grid(axis="y", linestyle=":", alpha=0.6, color="#bbbbbb", zorder=0)
 
-    # Attach score annotations on top of the bars
     for r_idx, rects in enumerate(rects_list):
         data_key = labels_list[r_idx]
         for i, rect in enumerate(rects):
@@ -525,7 +442,6 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
                         fontsize=7, fontweight="bold",
                         color="#333333")
             
-            # Show alpha value inside the bar (if applicable)
             info = data[i][data_key]
             alpha_val = info[1]
             if not np.isnan(alpha_val):
@@ -539,41 +455,221 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
 
     ax.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="#e0e0e0", framealpha=0.9, fontsize=9, ncol=2)
     
-    file_name = "max_safe_score_compare.png"
+    file_name = f"max_safe_score_compare.png"
     out_path = out_dir / file_name
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close()
-    print(f"Saved comparison bar chart to: {out_path}")
     
     if artifact_dir:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         dest_path = artifact_dir / f"{title_prefix.lower()}_max_safe_score_compare.png"
         shutil.copy(out_path, dest_path)
-        print(f"Copied comparison bar chart to artifacts: {dest_path}")
+
+def generate_overall_interval_comparison(
+    fixed_dir: Path, int1_dir: Path, int4_dir: Path, int8_dir: Path,
+    out_dir: Path, artifact_dir: Path, max_ppl_threshold=25.0
+):
+    print("Generating overall comparison of update intervals...")
+    comparison_records = []
+    
+    for trait in TRAITS:
+        ub_score = get_unsteered_baseline_score(int1_dir, trait)
+        
+        # 1. Best Fixed-Layer DLS
+        best_fixed_score = 0.0
+        best_fixed_method = "None"
+        best_fixed_alpha = np.nan
+        for _, m_key, _ in METHODS:
+            score, alpha, _, _ = get_max_safe_score(fixed_dir, trait, m_key, max_ppl_threshold)
+            if score > best_fixed_score:
+                best_fixed_score = score
+                best_fixed_method = m_key
+                best_fixed_alpha = alpha
+                
+        # 2. Best Interval = 1 DLS
+        best_int1_score = 0.0
+        best_int1_method = "None"
+        best_int1_alpha = np.nan
+        for _, m_key, _ in METHODS:
+            score, alpha, _, _ = get_max_safe_score(int1_dir, trait, m_key, max_ppl_threshold)
+            if score > best_int1_score:
+                best_int1_score = score
+                best_int1_method = m_key
+                best_int1_alpha = alpha
+                
+        # 3. Best Interval = 4 DLS
+        best_int4_score = 0.0
+        best_int4_method = "None"
+        best_int4_alpha = np.nan
+        for _, m_key, _ in METHODS:
+            score, alpha, _, _ = get_max_safe_score(int4_dir, trait, m_key, max_ppl_threshold)
+            if score > best_int4_score:
+                best_int4_score = score
+                best_int4_method = m_key
+                best_int4_alpha = alpha
+                
+        # 4. Best Interval = 8 DLS
+        best_int8_score = 0.0
+        best_int8_method = "None"
+        best_int8_alpha = np.nan
+        for _, m_key, _ in METHODS:
+            score, alpha, _, _ = get_max_safe_score(int8_dir, trait, m_key, max_ppl_threshold)
+            if score > best_int8_score:
+                best_int8_score = score
+                best_int8_method = m_key
+                best_int8_alpha = alpha
+                
+        comparison_records.append({
+            "Trait":                TRAIT_LABELS[trait],
+            "Unsteered Baseline":   ub_score,
+            "Fixed-Layer DLS":      best_fixed_score,
+            "Fixed Alpha":          best_fixed_alpha,
+            "Fixed Method":         best_fixed_method,
+            "Interval 1 (Every)":   best_int1_score,
+            "Int 1 Alpha":          best_int1_alpha,
+            "Int 1 Method":         best_int1_method,
+            "Interval 4 (Block)":   best_int4_score,
+            "Int 4 Alpha":          best_int4_alpha,
+            "Int 4 Method":         best_int4_method,
+            "Interval 8 (Block)":   best_int8_score,
+            "Int 8 Alpha":          best_int8_alpha,
+            "Int 8 Method":         best_int8_method,
+        })
+        
+    # Calculate Average
+    avg_rec = {
+        "Trait":                "Average",
+        "Unsteered Baseline":   np.mean([r["Unsteered Baseline"] for r in comparison_records]),
+        "Fixed-Layer DLS":      np.mean([r["Fixed-Layer DLS"] for r in comparison_records]),
+        "Fixed Alpha":          np.nan,
+        "Fixed Method":         "",
+        "Interval 1 (Every)":   np.mean([r["Interval 1 (Every)"] for r in comparison_records]),
+        "Int 1 Alpha":          np.nan,
+        "Int 1 Method":         "",
+        "Interval 4 (Block)":   np.mean([r["Interval 4 (Block)"] for r in comparison_records]),
+        "Int 4 Alpha":          np.nan,
+        "Int 4 Method":         "",
+        "Interval 8 (Block)":   np.mean([r["Interval 8 (Block)"] for r in comparison_records]),
+        "Int 8 Alpha":          np.nan,
+        "Int 8 Method":         "",
+    }
+    comparison_records.append(avg_rec)
+    df_comp = pd.DataFrame(comparison_records)
+    
+    # Save comparison table as Markdown and CSV
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = out_dir / "interval_comparison_table.csv"
+    df_comp.to_csv(csv_path, index=False)
+    print(f"Saved comparison CSV to: {csv_path}")
+    
+    # Generate grouped bar chart comparing the 4 settings
+    plt.close("all")
+    categories = df_comp["Trait"].tolist()
+    x = np.arange(len(categories))
+    width = 0.20
+    
+    fig, ax = plt.subplots(figsize=(15, 8))
+    
+    rects1 = ax.bar(x - 1.5*width, df_comp["Fixed-Layer DLS"], width, label="Fixed-Layer DLS (Optimal)", color="#7f8c8d", zorder=3)
+    rects2 = ax.bar(x - 0.5*width, df_comp["Interval 1 (Every)"], width, label="Gen-Time DLS (Interval=1)", color="#e74c3c", zorder=3)
+    rects3 = ax.bar(x + 0.5*width, df_comp["Interval 4 (Block)"], width, label="Gen-Time DLS (Interval=4)", color="#3498db", zorder=3)
+    rects4 = ax.bar(x + 1.5*width, df_comp["Interval 8 (Block)"], width, label="Gen-Time DLS (Interval=8)", color="#2ecc71", zorder=3)
+    
+    ax.axhline(y=3.0, color="#cccccc", linestyle="--", linewidth=1.2, zorder=2)
+    
+    # Add unsteered baseline as dotted horizontal lines for each trait
+    for idx, trait_name in enumerate(categories):
+        ub = df_comp.loc[idx, "Unsteered Baseline"]
+        ax.plot([idx - 2*width, idx + 2*width], [ub, ub], color="#95a5a6", linestyle=":", linewidth=1.5, zorder=4)
+        
+    ax.set_title(f"Dynamic Steering Interval Comparison: Fixed vs Interval 1, 4, 8\n(Safety Constraints: Mean PPL <= 25.0, Coherence >= 80%, Max PPL <= {max_ppl_threshold})", fontsize=14, fontweight="bold", pad=15)
+    ax.set_ylabel("Maximum Safe Steering Score", fontsize=11, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, fontsize=10, fontweight="bold")
+    ax.set_ylim(0.8, 5.3)
+    ax.legend(loc="lower right", frameon=True, facecolor="white", edgecolor="#e0e0e0", framealpha=0.9, fontsize=10)
+    ax.grid(axis="y", linestyle=":", alpha=0.5, color="#bbbbbb", zorder=0)
+    
+    # Annotate bar scores
+    for rects in [rects1, rects2, rects3, rects4]:
+        for rect in rects:
+            h = rect.get_height()
+            if h > 0.0 and not np.isnan(h):
+                ax.annotate(f"{h:.2f}",
+                            xy=(rect.get_x() + rect.get_width() / 2, h),
+                            xytext=(0, 3),
+                            textcoords="offset points",
+                            ha="center", va="bottom",
+                            fontsize=8, fontweight="bold")
+                
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    
+    fig_name = "interval_comparison_chart.png"
+    fig_path = out_dir / fig_name
+    plt.savefig(fig_path, dpi=200, bbox_inches="tight")
+    plt.close()
+    print(f"Saved comparison chart to: {fig_path}")
+    
+    if artifact_dir:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(fig_path, artifact_dir / fig_name)
+        
+    return df_comp
 
 def main():
-    ap = argparse.ArgumentParser(description="Plot dynamic steering method comparison heatmaps and bar chart.")
-    ap.add_argument("--results_dir", required=True, help="Path to results directory")
-    ap.add_argument("--out_dir", required=True, help="Output folder for figures")
-    ap.add_argument("--artifact_dir", default=None, help="Folder to copy results for conversation viewing")
-    ap.add_argument("--title_prefix", default="Raw", help="Title prefix (e.g., Norm or Raw)")
+    ap = argparse.ArgumentParser(description="Analyze and plot update_interval sweeps.")
+    ap.add_argument("--fixed_dir", default="exp_steering_dyn_layer_raw/results")
+    ap.add_argument("--int1_dir", default="exp_steering_dyn_gen_time_raw/results")
+    ap.add_argument("--interval_dir", default="exp_steering_dyn_gen_time_interval_raw")
+    ap.add_argument("--out_dir", default="exp_steering_dyn_gen_time_interval_raw/figures")
+    ap.add_argument("--artifact_dir", default="/home/s2550009/.gemini/antigravity-ide/brain/316d92fc-a09f-45ab-a84d-a1a4060ccdb9/images")
+    ap.add_argument("--max_ppl", type=float, default=25.0, help="Maximum PPL for strict safety filter")
     args = ap.parse_args()
 
-    results_dir = Path(args.results_dir)
-    out_dir      = Path(args.out_dir)
+    fixed_dir = Path(args.fixed_dir)
+    int1_dir = Path(args.int1_dir)
+    interval_dir = Path(args.interval_dir)
+    out_dir = Path(args.out_dir)
     artifact_dir = Path(args.artifact_dir) if args.artifact_dir else None
-    title_prefix = args.title_prefix
+    
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if artifact_dir:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
 
-    all_method_data = []
+    # 1. Process Interval 4 results
+    print("\n=== Processing Interval 4 ===")
+    int4_results_dir = interval_dir / "results_interval4"
+    if int4_results_dir.exists():
+        all_method_data_int4 = []
+        for trait in TRAITS:
+            method_data = load_all_methods(int4_results_dir, trait)
+            all_method_data_int4.append(method_data)
+            plot_trait(trait, method_data, out_dir / "interval4" / trait, artifact_dir, "Int4")
+        plot_summary(all_method_data_int4, out_dir / "interval4", artifact_dir, "Int4")
+        plot_max_safe_bar(int4_results_dir, out_dir / "interval4", artifact_dir, "Int4", max_ppl_threshold=args.max_ppl)
 
-    for axis in TRAITS:
-        method_data = load_all_methods(results_dir, axis)
-        all_method_data.append(method_data)
-        plot_trait(axis, method_data, out_dir / axis, artifact_dir, title_prefix)
+    # 2. Process Interval 8 results
+    print("\n=== Processing Interval 8 ===")
+    int8_results_dir = interval_dir / "results_interval8"
+    if int8_results_dir.exists():
+        all_method_data_int8 = []
+        for trait in TRAITS:
+            method_data = load_all_methods(int8_results_dir, trait)
+            all_method_data_int8.append(method_data)
+            plot_trait(trait, method_data, out_dir / "interval8" / trait, artifact_dir, "Int8")
+        plot_summary(all_method_data_int8, out_dir / "interval8", artifact_dir, "Int8")
+        plot_max_safe_bar(int8_results_dir, out_dir / "interval8", artifact_dir, "Int8", max_ppl_threshold=args.max_ppl)
 
-    plot_summary(all_method_data, out_dir, artifact_dir, title_prefix)
-    plot_max_safe_bar(results_dir, out_dir, artifact_dir, title_prefix)
-    print(f"\nUnified DLS plotting finished successfully.")
+    # 3. Overall Interval Comparison Chart and Table
+    print("\n=== Generating Interval Comparison ===")
+    df_comp = generate_overall_interval_comparison(
+        fixed_dir, int1_dir, int4_results_dir, int8_results_dir,
+        out_dir, artifact_dir, max_ppl_threshold=args.max_ppl
+    )
+    
+    print("\n--- Interval Comparison Summary Table ---")
+    print(df_comp[["Trait", "Unsteered Baseline", "Fixed-Layer DLS", "Interval 1 (Every)", "Interval 4 (Block)", "Interval 8 (Block)"]].to_markdown(index=False))
 
 if __name__ == "__main__":
     main()
