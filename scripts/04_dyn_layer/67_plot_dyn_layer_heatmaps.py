@@ -6,7 +6,7 @@
 # Unified plotting script for Dynamic Layer Steering (DLS) comparison:
 #   1. Individual heatmaps (Score & PPL) for all 5 traits across 9 methods.
 #   2. Summary heatmap (All Traits Avg Score & PPL) across 9 methods.
-#   3. Grouped bar chart comparing maximum safe steering scores (Strict Safety) of all 9 methods.
+#   3. Grouped bar chart comparing maximum safe steering scores (Practical Safety) of all 9 methods.
 #
 # Inputs: exp_steering_dyn_layer_raw/results/{trait}/scores_{method}_Val{alpha}.csv
 # Outputs: exp_steering_dyn_layer_raw/figures/
@@ -32,17 +32,13 @@ TRAIT_LABELS = {
 }
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
-# Selected 9 methods for comparison
+# Selected 5 non-proj methods for comparison
 METHODS = [
     ("DLS Logit-Diff",        "logit_diff",             "#1f4e79"),
     ("DLS Cos-Only",          "cos_only",               "#e67e22"),
     ("DLS Rank-Only",         "rank_only",              "#2c3e50"),
-    ("DLS Proj Cos-Only",     "proj_cos_only",          "#3498db"),
-    ("DLS Proj Rank-Only",    "proj_rank_only",         "#1abc9c"),
     ("PDF Cos-Only",          "masked_cos_only",        "#f1c40f"),
     ("PDF Rank-Only",         "masked_rank_only",       "#8e44ad"),
-    ("PDF Proj Cos-Only",     "masked_proj_cos_only",   "#e74c3c"),
-    ("PDF Proj Rank-Only",    "masked_proj_rank_only",  "#d35400"),
 ]
 
 def calculate_repetition_rate(text: str, n: int) -> float:
@@ -96,8 +92,9 @@ def load_summary(results_dir: Path, axis: str, method: str) -> pd.DataFrame:
                 else:
                     coherence_rate = 1.0
                 
-                # Max PPL from CSV
+                # Max PPL and Safe PPL Rate from CSV
                 max_ppl = df_csv["dyn_ppl"].max() if "dyn_ppl" in df_csv.columns else np.nan
+                safe_ppl_rate = (df_csv["dyn_ppl"] <= 25.0).mean() if "dyn_ppl" in df_csv.columns else 1.0
                 
                 records.append({
                     "val":       val,
@@ -105,6 +102,7 @@ def load_summary(results_dir: Path, axis: str, method: str) -> pd.DataFrame:
                     "dyn_ppl":   df_csv["dyn_ppl"].mean(),
                     "dyn_coherence_rate": coherence_rate,
                     "dyn_max_ppl": max_ppl,
+                    "dyn_safe_ppl_rate": safe_ppl_rate,
                     "dyn_max_3gram_rep": max_3gram,
                     "dyn_max_4gram_rep": max_4gram,
                 })
@@ -123,6 +121,7 @@ def build_pivot(method_data_dict):
     ppl_rows   = {v: {} for v in VALS}
     coherence_rows = {v: {} for v in VALS}
     max_ppl_rows = {v: {} for v in VALS}
+    safe_ppl_rate_rows = {v: {} for v in VALS}
     rep3_rows = {v: {} for v in VALS}
     rep4_rows = {v: {} for v in VALS}
 
@@ -137,6 +136,10 @@ def build_pivot(method_data_dict):
                 ppl_rows[val][display_name]   = idx.loc[val, "dyn_ppl"]
                 coherence_rows[val][display_name] = idx.loc[val, "dyn_coherence_rate"]
                 max_ppl_rows[val][display_name]   = idx.loc[val, "dyn_max_ppl"]
+                if "dyn_safe_ppl_rate" in idx.columns:
+                    safe_ppl_rate_rows[val][display_name] = idx.loc[val, "dyn_safe_ppl_rate"]
+                else:
+                    safe_ppl_rate_rows[val][display_name] = 1.0
                 rep3_rows[val][display_name]      = idx.loc[val, "dyn_max_3gram_rep"]
                 rep4_rows[val][display_name]      = idx.loc[val, "dyn_max_4gram_rep"]
 
@@ -144,6 +147,7 @@ def build_pivot(method_data_dict):
     p_ppl = pd.DataFrame.from_dict(ppl_rows, orient="index").reindex(VALS)
     p_coherence = pd.DataFrame.from_dict(coherence_rows, orient="index").reindex(VALS)
     p_max_ppl = pd.DataFrame.from_dict(max_ppl_rows, orient="index").reindex(VALS)
+    p_safe_ppl_rate = pd.DataFrame.from_dict(safe_ppl_rate_rows, orient="index").reindex(VALS)
     p_rep3 = pd.DataFrame.from_dict(rep3_rows, orient="index").reindex(VALS)
     p_rep4 = pd.DataFrame.from_dict(rep4_rows, orient="index").reindex(VALS)
 
@@ -153,14 +157,15 @@ def build_pivot(method_data_dict):
     p_ppl = p_ppl[cols]
     p_coherence = p_coherence[cols]
     p_max_ppl = p_max_ppl[cols]
+    p_safe_ppl_rate = p_safe_ppl_rate[cols]
     p_rep3 = p_rep3[cols]
     p_rep4 = p_rep4[cols]
 
-    return p_score, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4
+    return p_score, p_ppl, p_coherence, p_max_ppl, p_safe_ppl_rate, p_rep3, p_rep4
 
-def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4,
-                         ppl_threshold=25.0, coherence_threshold=0.8,
-                         max_ppl_threshold=25.0):
+def highlight_safe_cells(ax, p_ppl, p_coherence, p_safe_ppl_rate,
+                         mean_ppl_threshold=20.0, coherence_threshold=0.8,
+                         safe_rate_threshold=0.9):
     if p_ppl is None or p_ppl.empty:
         return
     for i in range(len(p_ppl.index)):
@@ -170,15 +175,16 @@ def highlight_safe_cells(ax, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4,
             
             val_ppl = p_ppl.iloc[i, j]
             val_coherence = p_coherence.loc[val, col_name] if col_name in p_coherence.columns else np.nan
-            val_max_ppl = p_max_ppl.loc[val, col_name] if col_name in p_max_ppl.columns else np.nan
+            val_safe_rate = p_safe_ppl_rate.loc[val, col_name] if col_name in p_safe_ppl_rate.columns else np.nan
             
             if (not np.isnan(val_ppl) and not np.isnan(val_coherence) and 
-                not np.isnan(val_max_ppl)):
+                not np.isnan(val_safe_rate)):
                 
+                # Practical Safe (Balanced) check
                 is_safe = (
-                    val_ppl <= ppl_threshold and
+                    val_ppl <= mean_ppl_threshold and
                     val_coherence >= coherence_threshold and
-                    val_max_ppl <= max_ppl_threshold
+                    val_safe_rate >= safe_rate_threshold
                 )
                 if is_safe:
                     rect = Rectangle((j, i), 1, 1, fill=False,
@@ -190,7 +196,7 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
     plt.close("all")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    p_score, p_ppl, p_coherence, p_max_ppl, p_rep3, p_rep4 = build_pivot(method_data_dict)
+    p_score, p_ppl, p_coherence, p_max_ppl, p_safe_ppl_rate, p_rep3, p_rep4 = build_pivot(method_data_dict)
     
     n_methods = len(p_score.columns) if not p_score.empty else 1
     fig_w = max(10, n_methods * 1.5 + 2)
@@ -212,15 +218,15 @@ def plot_trait(axis, method_data_dict, out_dir, artifact_dir, title_prefix):
                     vmin=vmin, vmax=vmax,
                     linewidths=0.8, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, None, None)
+        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_safe_ppl_rate)
         ax_obj.set_title(
-            f"{title} (Black Border: Strict Safety Criteria)",
+            f"{title} (Black Border: Practical Safety Criteria)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("DLS Layer Selection Method", fontsize=10)
         ax_obj.set_ylabel("Steering Intensity (Alpha / Val)", fontsize=10)
 
     plt.suptitle(
-        f"{title_prefix} DLS 9-Method Comparison: {axis.capitalize()} (Strict Safety)",
+        f"{title_prefix} DLS 9-Method Comparison: {axis.capitalize()} (Practical Safety)",
         fontsize=15, fontweight="bold", y=1.01)
     plt.tight_layout()
 
@@ -245,6 +251,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
     ppl_acc       = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
     coherence_acc = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
     max_ppl_acc   = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
+    safe_rate_acc = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
     rep3_acc      = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
     rep4_acc      = {k: {v: [] for v in VALS} for _, k, _ in METHODS}
 
@@ -260,6 +267,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
                     ppl_acc[loader_key][val].append(idx.loc[val, "dyn_ppl"])
                     coherence_acc[loader_key][val].append(idx.loc[val, "dyn_coherence_rate"])
                     max_ppl_acc[loader_key][val].append(idx.loc[val, "dyn_max_ppl"])
+                    safe_rate_acc[loader_key][val].append(idx.loc[val, "dyn_safe_ppl_rate"] if "dyn_safe_ppl_rate" in idx.columns else 1.0)
                     rep3_acc[loader_key][val].append(idx.loc[val, "dyn_max_3gram_rep"])
                     rep4_acc[loader_key][val].append(idx.loc[val, "dyn_max_4gram_rep"])
 
@@ -267,6 +275,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
     ppl_rows   = {v: {} for v in VALS}
     coherence_rows = {v: {} for v in VALS}
     max_ppl_rows   = {v: {} for v in VALS}
+    safe_rate_rows = {v: {} for v in VALS}
     rep3_rows      = {v: {} for v in VALS}
     rep4_rows      = {v: {} for v in VALS}
     
@@ -276,6 +285,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
             ppls   = ppl_acc[loader_key][val]
             coherences = coherence_acc[loader_key][val]
             max_ppls   = max_ppl_acc[loader_key][val]
+            safe_rates = safe_rate_acc[loader_key][val]
             rep3s      = rep3_acc[loader_key][val]
             rep4s      = rep4_acc[loader_key][val]
             
@@ -284,6 +294,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
                 ppl_rows[val][display_name]   = np.mean(ppls)
                 coherence_rows[val][display_name] = np.mean(coherences)
                 max_ppl_rows[val][display_name]   = np.mean(max_ppls)
+                safe_rate_rows[val][display_name] = np.mean(safe_rates)
                 rep3_rows[val][display_name]      = np.mean(rep3s)
                 rep4_rows[val][display_name]      = np.mean(rep4s)
 
@@ -291,6 +302,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
     p_ppl = pd.DataFrame.from_dict(ppl_rows, orient="index").reindex(VALS)
     p_coherence = pd.DataFrame.from_dict(coherence_rows, orient="index").reindex(VALS)
     p_max_ppl = pd.DataFrame.from_dict(max_ppl_rows, orient="index").reindex(VALS)
+    p_safe_ppl_rate = pd.DataFrame.from_dict(safe_rate_rows, orient="index").reindex(VALS)
     p_rep3 = pd.DataFrame.from_dict(rep3_rows, orient="index").reindex(VALS)
     p_rep4 = pd.DataFrame.from_dict(rep4_rows, orient="index").reindex(VALS)
 
@@ -300,6 +312,7 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
     p_ppl = p_ppl[cols]
     p_coherence = p_coherence[cols]
     p_max_ppl = p_max_ppl[cols]
+    p_safe_ppl_rate = p_safe_ppl_rate[cols]
     p_rep3 = p_rep3[cols]
     p_rep4 = p_rep4[cols]
 
@@ -323,15 +336,15 @@ def plot_summary(all_method_data, out_dir, artifact_dir, title_prefix):
                     vmin=vmin, vmax=vmax,
                     linewidths=0.8, linecolor="gray",
                     ax=ax_obj, annot_kws={"size": 9})
-        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_max_ppl, None, None)
+        highlight_safe_cells(ax_obj, p_ppl, p_coherence, p_safe_ppl_rate)
         ax_obj.set_title(
-            f"{title} (Black Border: Strict Safety Criteria)",
+            f"{title} (Black Border: Practical Safety Criteria)",
             fontsize=12, fontweight="bold")
         ax_obj.set_xlabel("DLS Layer Selection Method", fontsize=10)
         ax_obj.set_ylabel("Steering Intensity (Alpha / Val)", fontsize=10)
 
     plt.suptitle(
-        f"{title_prefix} DLS 9-Method Comparison Summary (All Traits Avg) (Strict Safety)",
+        f"{title_prefix} DLS 9-Method Comparison Summary (All Traits Avg) (Practical Safety)",
         fontsize=15, fontweight="bold", y=1.01)
     plt.tight_layout()
 
@@ -370,32 +383,19 @@ def get_max_safe_score(results_dir: Path, trait: str, method: str) -> tuple[floa
                     df["dyn_score"] = df["dyn_score"].replace(0, np.nan)
                 mean_score = df["dyn_score"].mean()
                 mean_ppl = df["dyn_ppl"].mean()
-                max_ppl = df["dyn_ppl"].max() if "dyn_ppl" in df.columns else np.nan
-                
-                # Load JSONL
-                dyn_texts = []
-                with open(jsonl_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        data = json.loads(line)
-                        if "dyn_text" in data:
-                            dyn_texts.append(data["dyn_text"])
-                
-                rep_3gram_list = [calculate_repetition_rate(txt, 3) for txt in dyn_texts]
-                rep_4gram_list = [calculate_repetition_rate(txt, 4) for txt in dyn_texts]
-                
-                max_3gram = max(rep_3gram_list) if rep_3gram_list else 0.0
-                max_4gram = max(rep_4gram_list) if rep_4gram_list else 0.0
                 
                 if "dyn_reason" in df.columns:
                     coherence_rate = df["dyn_reason"].str.contains("Coherence: Yes", case=False, na=False).mean()
                 else:
                     coherence_rate = 1.0
                 
-                # Strict Safety check
+                safe_ppl_rate = (df["dyn_ppl"] <= 25.0).mean() if "dyn_ppl" in df.columns else 1.0
+                
+                # Practical Safe (Balanced) check
                 is_safe = (
-                    mean_ppl <= 25.0 and
+                    mean_ppl <= 20.0 and
                     coherence_rate >= 0.8 and
-                    max_ppl <= 25.0
+                    safe_ppl_rate >= 0.9
                 )
                 
                 if is_safe:
@@ -464,13 +464,12 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     categories = [d["trait"] for d in data]
     x = np.arange(len(categories))
     
-    # 10 bars: Unsteered + 9 methods
+    # 10 bars: Unsteered Baseline + 9 methods
     num_bars = 1 + len(METHODS)
     width = 0.08
     
     fig, ax = plt.subplots(figsize=(24, 10))
     
-    # Define colors for methods
     colors = {
         "Unsteered Baseline": "#7f8c8d"
     }
@@ -493,8 +492,7 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
         
     ax.axhline(y=3.0, color="#cccccc", linestyle="--", linewidth=1.2, zorder=2)
     
-    # Title and labels
-    title_text = f"{title_prefix} DLS — Maximum Safe Steering Score Comparison (Strict Safety Filter)"
+    title_text = f"{title_prefix} DLS — Maximum Safe Steering Score Comparison (Practical Safety Filter)"
     ax.set_title(title_text, fontsize=16, fontweight="bold", pad=20)
     ax.set_ylabel("Steering Score (1.0 to 5.0)", fontsize=12, fontweight="bold")
     ax.set_xticks(x)
@@ -508,7 +506,7 @@ def plot_max_safe_bar(results_dir: Path, out_dir: Path, artifact_dir: Path, titl
     
     ax.grid(axis="y", linestyle=":", alpha=0.6, color="#bbbbbb", zorder=0)
 
-    # Attach score annotations on top of the bars
+    # Attach values on top of the bars
     for r_idx, rects in enumerate(rects_list):
         data_key = labels_list[r_idx]
         for i, rect in enumerate(rects):

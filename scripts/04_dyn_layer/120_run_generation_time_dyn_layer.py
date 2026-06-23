@@ -112,7 +112,40 @@ class DynamicSteeringController:
                 m = m.to(torch.float32)
             mask = self.probe_masks.get(L, None) if self.probe_masks else None
 
-            if self.score_mode == "proj_rank":
+            if self.score_mode == "local_proj_rank":
+                if self.h_pos_dict and L in self.h_pos_dict and m is not None:
+                    H_pos = self.h_pos_dict[L].to(torch.float32) # [1000, dim]
+                    if mask is not None:
+                        H_pos = H_pos[:, mask]
+                        m_val = m[mask]
+                        h_val = h[mask]
+                    else:
+                        m_val = m
+                        h_val = h
+                        
+                    # Calculate individual steering vectors and normalize them
+                    W_dir = H_pos - m_val.unsqueeze(0) # [1000, dim]
+                    W_norm = torch.norm(W_dir, p=2, dim=-1, keepdim=True) # [1000, 1]
+                    W_unit = W_dir / (W_norm + 1e-10) # [1000, dim]
+                    p_pos = W_norm.squeeze(-1) # [1000]
+                    
+                    # Calculate p_h
+                    h_dev = h_val - m_val # [dim]
+                    p_h = torch.matmul(W_unit, h_dev) # [1000]
+                    
+                    # Calculate score
+                    score = 1.0 - (p_h >= p_pos).float().mean().item()
+                else:
+                    if mask is not None:
+                        h_m = h * mask
+                        w_m = w_dev * mask
+                    else:
+                        h_m = h
+                        w_m = w_dev
+                    h_unit = h_m / (torch.norm(h_m) + 1e-10)
+                    w_unit = w_m / (torch.norm(w_m) + 1e-10)
+                    score = torch.dot(h_unit, w_unit).item()
+            elif self.score_mode == "proj_rank":
                 if self.h_pos_dict and L in self.h_pos_dict and m is not None:
                     H_pos = self.h_pos_dict[L].to(torch.float32) # [1000, dim]
                     if mask is not None:
@@ -260,7 +293,7 @@ def main():
     ap.add_argument("--alpha",        type=float, default=1.0)
     ap.add_argument("--direction",    type=str, choices=["high", "low"], default="high")
     ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm", "relative"], default="raw_norm")
-    ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "proj_rank", "proj_cosine"], default="cosine")
+    ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "proj_rank", "proj_cosine", "local_proj_rank"], default="cosine")
     ap.add_argument("--mask_bank",    default="")
     ap.add_argument("--num_prompts",  type=int, default=10)
     ap.add_argument("--update_interval", type=int, default=1)
@@ -339,6 +372,10 @@ def main():
                 tasks.append(("masked_rank_only", "rank", args.mask_bank, val))
                 tasks.append(("masked_proj_cos_only", "proj_cosine", args.mask_bank, val))
                 tasks.append(("masked_proj_rank_only", "proj_rank", args.mask_bank, val))
+            # New Local Proj-Rank
+            tasks.append(("local_proj_rank_only", "local_proj_rank", "", val))
+            if args.mask_bank:
+                tasks.append(("masked_local_proj_rank_only", "local_proj_rank", args.mask_bank, val))
     else:
         method_name = args.score_mode + "_only" if "cosine" not in args.score_mode else args.score_mode
         if method_name == "cosine":
@@ -409,7 +446,7 @@ def main():
 
         # Setup controller components
         probe_masks = probe_masks_all if m_bank else None
-        h_pos_dict = h_pos_dict_all if s_mode in ["rank", "proj_rank"] else None
+        h_pos_dict = h_pos_dict_all if s_mode in ["rank", "proj_rank", "local_proj_rank"] else None
 
         results = []
         for idx, (orig_idx, p_text) in enumerate(prompts):

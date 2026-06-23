@@ -1,10 +1,6 @@
 Method,Extraversion,Neuroticism,Openness,Conscientiousness,Agreeableness
-Logit Diff,6.0,5.0,5.0,8.0,2.0
+Logit Diff,6.0,5.0,5.0,5.0,2.0
 Cos-Only,4.0,5.0,6.0,4.0,6.0
 Rank-Only,5.0,10.0,10.0,4.0,6.0
-Proj Cos-Only,5.0,6.0,6.0,5.0,1.0
-Proj Rank-Only,5.0,5.0,8.0,5.0,1.0
 PDF Cos-Only,5.0,5.0,5.0,5.0,5.0
 PDF Rank-Only,4.0,5.0,5.0,6.0,1.0
-PDF Proj Cos,5.0,4.0,10.0,6.0,2.0
-PDF Proj Rank,6.0,5.0,10.0,6.0,0.5

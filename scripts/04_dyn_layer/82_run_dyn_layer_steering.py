@@ -109,7 +109,42 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
             m = layer_midpoint_dev.get(L, None) if layer_midpoint_dev is not None else None
             mask = probe_masks.get(L, None) if probe_masks is not None else None
 
-            if score_mode == "proj_rank":
+            if score_mode == "local_proj_rank":
+                if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
+                    # Keep variables on GPU device of h
+                    H_pos = torch.tensor(h_pos_dict["H_pos"][L], dtype=torch.float32, device=h.device) # [1000, dim]
+                    
+                    if mask is not None:
+                        H_pos = H_pos[:, mask]
+                        m_val = m[mask]
+                        h_val = h[mask]
+                    else:
+                        m_val = m
+                        h_val = h
+                        
+                    # Calculate individual steering vectors and normalize them
+                    W_dir = H_pos - m_val.unsqueeze(0) # [1000, dim]
+                    W_norm = torch.norm(W_dir, p=2, dim=-1, keepdim=True) # [1000, 1]
+                    W_unit = W_dir / (W_norm + 1e-10) # [1000, dim]
+                    p_pos = W_norm.squeeze(-1) # [1000]
+                    
+                    # Calculate p_h
+                    h_dev = h_val - m_val # [dim]
+                    p_h = torch.matmul(W_unit, h_dev) # [1000]
+                    
+                    # Calculate score
+                    score = 1.0 - (p_h >= p_pos).float().mean().item()
+                else:
+                    if mask is not None:
+                        h_masked = h * mask
+                        w_dev_masked = w_dev * mask
+                        h_unit = h_masked / (torch.norm(h_masked) + 1e-10)
+                        w_unit = w_dev_masked / (torch.norm(w_dev_masked) + 1e-10)
+                    else:
+                        h_unit = h / (torch.norm(h) + 1e-10)
+                        w_unit = w_dev / (torch.norm(w_dev) + 1e-10)
+                    score = torch.dot(h_unit, w_unit).item()
+            elif score_mode == "proj_rank":
                 if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
                     H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
                     m_np = m.cpu().numpy()
@@ -225,12 +260,12 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     score = torch.dot(h_unit, w_unit).item()
 
             if target_direction == "high":
-                if score_mode in ["rank", "proj_rank", "proj_cosine"]:
+                if score_mode in ["rank", "proj_rank", "proj_cosine", "local_proj_rank"]:
                     raw_scores[L] = score
                 else:
                     raw_scores[L] = score # Maximize cosine similarity with midpoint
             else:
-                if score_mode in ["rank", "proj_rank", "proj_cosine"]:
+                if score_mode in ["rank", "proj_rank", "proj_cosine", "local_proj_rank"]:
                     raw_scores[L] = -score
                 else:
                     raw_scores[L] = -score
@@ -300,7 +335,7 @@ def main():
     ap.add_argument("--direction",    type=str, choices=["high", "low"], default="high")
     ap.add_argument("--norm_mode",    type=str, choices=["none", "midpoint", "raw_norm", "relative"], default="raw_norm",
                     help="Scaling mode for steering vectors. raw_norm scales by the original difference vector's norm.")
-    ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "logit_diff", "proj_rank", "proj_cosine"], default="cosine", help="layer selection score mode")
+    ap.add_argument("--score_mode",   type=str, choices=["cosine", "rank", "logit_diff", "proj_rank", "proj_cosine", "local_proj_rank"], default="cosine", help="layer selection score mode")
     ap.add_argument("--mask_bank",    default="", help="Path to probe masks bank (.npz)")
     ap.add_argument("--num_prompts",  type=int, default=10, help="Number of prompts to evaluate")
     ap.add_argument("--seed",         type=int, default=42, help="Random seed for generation reproducibility")
@@ -327,6 +362,8 @@ def main():
         method_name = "proj_rank_only"
     elif args.score_mode == "proj_cosine":
         method_name = "proj_cos_only"
+    elif args.score_mode == "local_proj_rank":
+        method_name = "local_proj_rank_only"
     else: # rank
         method_name = "rank_only"
         
@@ -426,7 +463,7 @@ def main():
     # Load calibration distributions for rank/zscore modes
     h_pos_dict = None
     sims_ref_dict = None
-    if args.score_mode in ["rank", "proj_rank"]:
+    if args.score_mode in ["rank", "proj_rank", "local_proj_rank"]:
         h_pos_dict = {"H_pos": {}, "h_pos": {}}
         for L in LAYERS:
             H_pos_key = f"{L}|{args.axis}|H_pos_1000"
