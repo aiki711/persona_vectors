@@ -186,14 +186,14 @@ def main():
     plt.tight_layout()
     
     # Save figures
-    out_dir = Path("exp_steering_dyn_layer_raw/figures")
+    out_dir = Path("exp_steering_dyn_layer_raw/figures/layey_selection_diversity")
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "fixed_layer_diversity.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
     print(f"\nSaved diversity plot to: {out_path}")
     
     # Copy to artifact folder for user viewing
-    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/316d92fc-a09f-45ab-a84d-a1a4060ccdb9/images")
+    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/6611299f-19cb-4461-bbfe-1854feeb8fae")
     artifact_dir.mkdir(parents=True, exist_ok=True)
     dest_path = artifact_dir / "fixed_layer_diversity.png"
     import shutil

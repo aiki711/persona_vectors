@@ -22,16 +22,24 @@ METHODS = [
     "logit_diff",
     "cos_only",
     "rank_only",
+    "proj_cos_only",
+    "proj_rank_only",
     "masked_cos_only",
-    "masked_rank_only"
+    "masked_rank_only",
+    "masked_proj_cos_only",
+    "masked_proj_rank_only"
 ]
 
 METHOD_LABELS = {
     "logit_diff": "Logit Diff",
     "cos_only": "Cos-Only",
     "rank_only": "Rank-Only",
+    "proj_cos_only": "Proj Cos-Only",
+    "proj_rank_only": "Proj Rank-Only",
     "masked_cos_only": "PDF Cos-Only",
-    "masked_rank_only": "PDF Rank-Only"
+    "masked_rank_only": "PDF Rank-Only",
+    "masked_proj_cos_only": "PDF Proj Cos",
+    "masked_proj_rank_only": "PDF Proj Rank"
 }
 
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
@@ -210,9 +218,9 @@ def main():
     
     # Plotting
     method_order = [METHOD_LABELS[m] for m in METHODS]
-    out_dir = Path("exp_steering_dyn_layer_raw/figures")
+    out_dir = Path("exp_steering_dyn_layer_raw/figures/layey_selection_diversity")
     out_dir.mkdir(parents=True, exist_ok=True)
-    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/316d92fc-a09f-45ab-a84d-a1a4060ccdb9/images")
+    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/6611299f-19cb-4461-bbfe-1854feeb8fae")
     artifact_dir.mkdir(parents=True, exist_ok=True)
     
     import shutil

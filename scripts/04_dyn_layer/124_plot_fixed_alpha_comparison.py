@@ -183,12 +183,12 @@ def plot_for_alpha(results_dir: Path, out_dir: Path, artifact_dir: Path, alpha: 
             # Annotate score value
             if scores[idx] > 0.0:
                 ax.annotate(f"{scores[idx]:.2f}",
-                            xy=(x_offsets[idx], scores[idx]),
-                            xytext=(0, 4),
-                            textcoords="offset points",
-                            ha="center", va="bottom",
-                            fontsize=7, fontweight="bold",
-                            color="#333333")
+                     xy=(x_offsets[idx], scores[idx]),
+                     xytext=(0, 4),
+                     textcoords="offset points",
+                     ha="center", va="bottom",
+                     fontsize=7, fontweight="bold",
+                     color="#333333")
                 
     ax.axhline(y=3.0, color="#cccccc", linestyle="--", linewidth=1.2, zorder=2)
     
@@ -224,8 +224,8 @@ def plot_for_alpha(results_dir: Path, out_dir: Path, artifact_dir: Path, alpha: 
 def main():
     ap = argparse.ArgumentParser(description="Plot DLS score comparisons at fixed alpha values.")
     ap.add_argument("--results_dir", default="exp_steering_dyn_layer_raw/results")
-    ap.add_argument("--out_dir", default="exp_steering_dyn_layer_raw/figures")
-    ap.add_argument("--artifact_dir", default="/home/s2550009/.gemini/antigravity-ide/brain/316d92fc-a09f-45ab-a84d-a1a4060ccdb9/images")
+    ap.add_argument("--out_dir", default="exp_steering_dyn_layer_raw/figures/fixed_alpha")
+    ap.add_argument("--artifact_dir", default="/home/s2550009/.gemini/antigravity-ide/brain/6611299f-19cb-4461-bbfe-1854feeb8fae")
     args = ap.parse_args()
     
     results_dir = Path(args.results_dir)

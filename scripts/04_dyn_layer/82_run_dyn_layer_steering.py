@@ -146,31 +146,33 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     score = torch.dot(h_unit, w_unit).item()
             elif score_mode == "proj_rank":
                 if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
-                    H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
-                    m_np = m.cpu().numpy()
-                    w_np = w_dev.cpu().numpy()
-                    h_np = h.cpu().numpy()
+                    # Keep variables on GPU device of h
+                    H_pos = torch.tensor(h_pos_dict["H_pos"][L], dtype=torch.float32, device=h.device) # [1000, dim]
                     
                     if mask is not None:
-                        mask_np = mask.cpu().numpy()
-                        H_pos = H_pos[:, mask_np]
-                        m_np = m_np[mask_np]
-                        w_np = w_np[mask_np]
-                        h_np = h_np[mask_np]
+                        H_pos = H_pos[:, mask]
+                        m_val = m[mask]
+                        h_val = h[mask]
+                    else:
+                        m_val = m
+                        h_val = h
+                        
+                    # Deviations from midpoint
+                    d_pos = H_pos - m_val.unsqueeze(0) # [1000, dim]
+                    w_avg = d_pos.mean(dim=0) # [dim]
+                    d_h = h_val - m_val # [dim]
                     
-                    w_unit = w_np / (np.linalg.norm(w_np) + 1e-10)
+                    # Normalize
+                    d_pos_norm = d_pos / (torch.norm(d_pos, p=2, dim=-1, keepdim=True) + 1e-10) # [1000, dim]
+                    w_avg_norm = w_avg / (torch.norm(w_avg, p=2, dim=-1) + 1e-10) # [dim]
+                    d_h_norm = d_h / (torch.norm(d_h, p=2, dim=-1) + 1e-10) # [dim]
                     
-                    # Projections of positive calibration samples
-                    p_pos = np.dot(H_pos - m_np, w_unit)  # [1000]
-                    # Projection of current hidden state
-                    p_h = np.dot(h_np - m_np, w_unit).item()  # Scalar
+                    # Calculate similarities
+                    S_i = torch.matmul(d_pos_norm, d_h_norm) # [1000]
+                    S_center = torch.dot(w_avg_norm, d_h_norm).item() # scalar
                     
-                    p_total = np.concatenate([p_pos, [p_h]])
-                    ranking = np.argsort(p_total)
-                    rank_idx = np.where(ranking == len(p_pos))[0][0]
-                    percentile = rank_idx / float(len(p_pos))
-                    
-                    # Lowest percentile = most negative = most room for improvement
+                    # Calculate score
+                    percentile = (S_center >= S_i).float().mean().item()
                     score = 1.0 - percentile
                 else:
                     if mask is not None:
@@ -205,28 +207,29 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     score = torch.dot(h_unit, w_unit).item()
             elif score_mode == "rank":
                 if h_pos_dict is not None and "H_pos" in h_pos_dict and L in h_pos_dict["H_pos"] and m is not None:
-                    H_pos = h_pos_dict["H_pos"][L]  # [1000, n_dims]
-                    h_np = h.cpu().numpy()
-                    m_np = m.cpu().numpy()
+                    # Keep variables on GPU device of h
+                    H_pos = torch.tensor(h_pos_dict["H_pos"][L], dtype=torch.float32, device=h.device) # [1000, dim]
+                    c = H_pos.mean(dim=0) # [dim]
                     
                     if mask is not None:
-                        mask_np = mask.cpu().numpy()
-                        H_pos = H_pos[:, mask_np]
-                        h_np = h_np[mask_np]
-                        m_np = m_np[mask_np]
+                        H_pos = H_pos[:, mask]
+                        c = c[mask]
+                        h_val = h[mask]
+                    else:
+                        h_val = h
                         
-                    h_unit = h_np / (np.linalg.norm(h_np) + 1e-10)  # [n_dims]
-                    H_pos_norm = H_pos / (np.linalg.norm(H_pos, axis=1, keepdims=True) + 1e-10)
-                    sims_ref = np.dot(H_pos_norm, h_unit.T)  # [1000]
+                    # Normalize
+                    H_pos_norm = H_pos / (torch.norm(H_pos, p=2, dim=-1, keepdim=True) + 1e-10) # [1000, dim]
+                    c_norm = c / (torch.norm(c, p=2, dim=-1) + 1e-10) # [dim]
+                    h_norm = h_val / (torch.norm(h_val, p=2, dim=-1) + 1e-10) # [dim]
                     
-                    m_norm = m_np / (np.linalg.norm(m_np) + 1e-10)
-                    sim_mid = np.dot(m_norm, h_unit.T).item()  # Scalar
+                    # Calculate similarities
+                    S_i = torch.matmul(H_pos_norm, h_norm) # [1000]
+                    S_center = torch.dot(c_norm, h_norm).item() # scalar
                     
-                    sims_total = np.concatenate([sims_ref, [sim_mid]])
-                    ranking = np.argsort(sims_total)
-                    rank_idx = np.where(ranking == len(sims_ref))[0][0]
-                    percentile = rank_idx / float(len(sims_ref))
-                    score = percentile
+                    # Calculate score
+                    percentile = (S_center >= S_i).float().mean().item()
+                    score = 1.0 - percentile
                 else:
                     if mask is not None:
                         h_masked = h * mask
