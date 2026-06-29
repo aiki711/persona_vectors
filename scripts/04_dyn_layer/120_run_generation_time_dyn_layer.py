@@ -149,24 +149,29 @@ class DynamicSteeringController:
                 if self.h_pos_dict and L in self.h_pos_dict and m is not None:
                     H_pos = self.h_pos_dict[L].to(torch.float32) # [1000, dim]
                     if mask is not None:
-                        H_pos_m = H_pos[:, mask]
-                        m_m = m[mask]
-                        w_m = w_dev[mask]
-                        h_m = h[mask]
+                        H_pos = H_pos[:, mask]
+                        m_val = m[mask]
+                        h_val = h[mask]
                     else:
-                        H_pos_m = H_pos
-                        m_m = m
-                        w_m = w_dev
-                        h_m = h
+                        m_val = m
+                        h_val = h
+                        
+                    # Deviations from midpoint
+                    d_pos = H_pos - m_val.unsqueeze(0) # [1000, dim]
+                    w_avg = d_pos.mean(dim=0) # [dim]
+                    d_h = h_val - m_val # [dim]
                     
-                    w_unit = w_m / (torch.norm(w_m) + 1e-10)
-                    p_pos = torch.matmul(H_pos_m - m_m, w_unit) # [1000]
-                    p_h = torch.dot(h_m - m_m, w_unit)
+                    # Normalize
+                    d_pos_norm = d_pos / (torch.norm(d_pos, p=2, dim=-1, keepdim=True) + 1e-10) # [1000, dim]
+                    w_avg_norm = w_avg / (torch.norm(w_avg, p=2, dim=-1) + 1e-10) # [dim]
+                    d_h_norm = d_h / (torch.norm(d_h, p=2, dim=-1) + 1e-10) # [dim]
                     
-                    p_total = torch.cat([p_pos, p_h.unsqueeze(0)])
-                    ranking = torch.argsort(p_total)
-                    rank_idx = (ranking == len(p_pos)).nonzero()[0][0].item()
-                    percentile = rank_idx / float(len(p_pos))
+                    # Calculate similarities
+                    S_i = torch.matmul(d_pos_norm, d_h_norm) # [1000]
+                    S_center = torch.dot(w_avg_norm, d_h_norm).item() # scalar
+                    
+                    # Calculate score
+                    percentile = (S_center >= S_i).float().mean().item()
                     score = 1.0 - percentile
                 else:
                     if mask is not None:
@@ -203,27 +208,27 @@ class DynamicSteeringController:
                     
             elif self.score_mode == "rank":
                 if self.h_pos_dict and L in self.h_pos_dict and m is not None:
-                    H_pos = self.h_pos_dict[L].to(torch.float32)
+                    H_pos = self.h_pos_dict[L].to(torch.float32) # [1000, dim]
+                    c = H_pos.mean(dim=0) # [dim]
                     if mask is not None:
-                        H_pos_m = H_pos[:, mask]
-                        h_m = h[mask]
-                        m_m = m[mask]
+                        H_pos = H_pos[:, mask]
+                        c = c[mask]
+                        h_val = h[mask]
                     else:
-                        H_pos_m = H_pos
-                        h_m = h
-                        m_m = m
+                        h_val = h
                         
-                    h_unit = h_m / (torch.norm(h_m) + 1e-10)
-                    H_pos_norm = H_pos_m / (torch.norm(H_pos_m, p=2, dim=1, keepdim=True) + 1e-10)
-                    sims_ref = torch.matmul(H_pos_norm, h_unit) # [1000]
+                    # Normalize
+                    H_pos_norm = H_pos / (torch.norm(H_pos, p=2, dim=-1, keepdim=True) + 1e-10) # [1000, dim]
+                    c_norm = c / (torch.norm(c, p=2, dim=-1) + 1e-10) # [dim]
+                    h_norm = h_val / (torch.norm(h_val, p=2, dim=-1) + 1e-10) # [dim]
                     
-                    m_norm = m_m / (torch.norm(m_m) + 1e-10)
-                    sim_mid = torch.dot(m_norm, h_unit)
+                    # Calculate similarities
+                    S_i = torch.matmul(H_pos_norm, h_norm) # [1000]
+                    S_center = torch.dot(c_norm, h_norm).item() # scalar
                     
-                    sims_total = torch.cat([sims_ref, sim_mid.unsqueeze(0)])
-                    ranking = torch.argsort(sims_total)
-                    rank_idx = (ranking == len(sims_ref)).nonzero()[0][0].item()
-                    score = rank_idx / float(len(sims_ref))
+                    # Calculate score
+                    percentile = (S_center >= S_i).float().mean().item()
+                    score = 1.0 - percentile
                 else:
                     if mask is not None:
                         h_m = h * mask
@@ -299,6 +304,7 @@ def main():
     ap.add_argument("--update_interval", type=int, default=1)
     ap.add_argument("--seed",         type=int, default=42)
     ap.add_argument("--sweep",        action="store_true", help="Run full sweep of 8 methods and 14 alphas internally")
+    ap.add_argument("--alphas",       type=str, default=None, help="Comma-separated list of alphas to run (overrides VALS)")
     args = ap.parse_args()
 
     if args.seed is not None:
@@ -359,8 +365,11 @@ def main():
 
     # Define tasks to run
     if args.sweep:
+        run_vals = VALS
+        if args.alphas:
+            run_vals = [float(v) for v in args.alphas.split(",")]
         tasks = []
-        for val in VALS:
+        for val in run_vals:
             # Unmasked methods
             tasks.append(("cos_only", "cosine", "", val))
             tasks.append(("rank_only", "rank", "", val))

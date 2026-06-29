@@ -34,16 +34,13 @@ def get_score(model, tokenizer, text, trait, device):
         f"Trait: **{trait.capitalize()}**\n"
         f"Definition: {definition}\n\n"
         f"Evaluate the level of {trait.capitalize()} expressed in the text.\n"
-        f"First, analyze the text for behavioral evidence and emotional tone.\n"
-        f"Second, determine if the text is coherent enough to evaluate.\n"
-        f"Finally, provide a score.\n\n"
-        f"Format:\nAnalysis: <brief explanation>\nCoherence: <Yes/No>\nScore: <0-5>"
+        f"Format:\nCoherence: <Yes/No>\nScore: <0-5>"
     )
     messages = [{"role": "system", "content": system_msg}, {"role": "user", "content": f'Text: "{text}"'}]
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
     with torch.no_grad():
-        outputs = model.generate(**inputs, max_new_tokens=256, temperature=0.1, do_sample=False, pad_token_id=tokenizer.eos_token_id)
+        outputs = model.generate(**inputs, max_new_tokens=32, temperature=0.1, do_sample=False, pad_token_id=tokenizer.eos_token_id)
     gen = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
     score_val = 3
     idx = gen.lower().find("score:")
@@ -66,10 +63,16 @@ def main():
         print(f"[ERROR] Directory not found: {results_dir}")
         return
 
-    # Find all jsonl files that do not have completed csv files
+    # Find all jsonl files that do not have completed csv files (only for alpha <= 20)
     jsonl_files = sorted(list(results_dir.glob("*.jsonl")))
     pending_files = []
     for f in jsonl_files:
+        m = re.search(r"_Val([0-9.]+)", f.stem)
+        if m:
+            val = float(m.group(1))
+            if val > 20.0:
+                # print(f"Skipping {f.name} because alpha {val} > 20.0")
+                continue
         csv_file = f.with_name(f"scores_{f.stem}.csv")
         if not csv_file.exists():
             pending_files.append(f)

@@ -27,3 +27,8 @@ vectors/
 # PBS logs
 *.pbs.e*
 *.pbs.o*
+
+# Archived scripts and jobs
+scratch/archive/
+jobs/archive/
+scripts/archive/

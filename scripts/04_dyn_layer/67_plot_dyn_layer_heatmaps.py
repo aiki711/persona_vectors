@@ -32,13 +32,16 @@ TRAIT_LABELS = {
 }
 VALS = [0.5, 1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 
-# Selected 5 non-proj methods for comparison
 METHODS = [
-    ("DLS Logit-Diff",        "logit_diff",             "#1f4e79"),
-    ("DLS Cos-Only",          "cos_only",               "#e67e22"),
-    ("DLS Rank-Only",         "rank_only",              "#2c3e50"),
-    ("PDF Cos-Only",          "masked_cos_only",        "#f1c40f"),
-    ("PDF Rank-Only",         "masked_rank_only",       "#8e44ad"),
+    ("DLS Logit-Diff",        "logit_diff",             "#1abc9c"),  # Teal
+    ("DLS Cos-Only",          "cos_only",               "#e67e22"),  # Orange
+    ("DLS Rank-Only",         "rank_only",              "#2c3e50"),  # Midnight Navy
+    ("DLS Proj Cos-Only",     "proj_cos_only",          "#3498db"),  # Light Blue
+    ("DLS Proj Rank-Only",    "proj_rank_only",         "#2ecc71"),  # Emerald Green
+    ("PDF Cos-Only",          "masked_cos_only",        "#f1c40f"),  # Yellow
+    ("PDF Rank-Only",         "masked_rank_only",       "#9b59b6"),  # Purple
+    ("PDF Proj Cos-Only",     "masked_proj_cos_only",   "#e74c3c"),  # Red
+    ("PDF Proj Rank-Only",    "masked_proj_rank_only",  "#e84393"),  # Pink / Magenta
 ]
 
 def calculate_repetition_rate(text: str, n: int) -> float:
