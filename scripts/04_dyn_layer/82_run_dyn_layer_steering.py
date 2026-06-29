@@ -115,9 +115,14 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     H_pos = torch.tensor(h_pos_dict["H_pos"][L], dtype=torch.float32, device=h.device) # [1000, dim]
                     
                     if mask is not None:
-                        H_pos = H_pos[:, mask]
-                        m_val = m[mask]
-                        h_val = h[mask]
+                        if mask.dtype == torch.bool:
+                            H_pos = H_pos[:, mask]
+                            m_val = m[mask]
+                            h_val = h[mask]
+                        else:
+                            H_pos = H_pos * mask.unsqueeze(0)
+                            m_val = m * mask
+                            h_val = h * mask
                     else:
                         m_val = m
                         h_val = h
@@ -150,9 +155,14 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     H_pos = torch.tensor(h_pos_dict["H_pos"][L], dtype=torch.float32, device=h.device) # [1000, dim]
                     
                     if mask is not None:
-                        H_pos = H_pos[:, mask]
-                        m_val = m[mask]
-                        h_val = h[mask]
+                        if mask.dtype == torch.bool:
+                            H_pos = H_pos[:, mask]
+                            m_val = m[mask]
+                            h_val = h[mask]
+                        else:
+                            H_pos = H_pos * mask.unsqueeze(0)
+                            m_val = m * mask
+                            h_val = h * mask
                     else:
                         m_val = m
                         h_val = h
@@ -212,9 +222,14 @@ def select_layer_proj_prior(model, input_ids, layer_w_dev, target_direction, lay
                     c = H_pos.mean(dim=0) # [dim]
                     
                     if mask is not None:
-                        H_pos = H_pos[:, mask]
-                        c = c[mask]
-                        h_val = h[mask]
+                        if mask.dtype == torch.bool:
+                            H_pos = H_pos[:, mask]
+                            c = c[mask]
+                            h_val = h[mask]
+                        else:
+                            H_pos = H_pos * mask.unsqueeze(0)
+                            c = c * mask
+                            h_val = h * mask
                     else:
                         h_val = h
                         
@@ -453,7 +468,11 @@ def main():
                 for L in LAYERS:
                     mask_key = f"{L}|{args.axis}|mask"
                     if mask_key in m_data:
-                        probe_masks[L] = torch.tensor(m_data[mask_key], dtype=torch.bool).to(device)
+                        raw_mask = m_data[mask_key]
+                        if raw_mask.dtype == bool:
+                            probe_masks[L] = torch.tensor(raw_mask, dtype=torch.bool).to(device)
+                        else:
+                            probe_masks[L] = torch.tensor(raw_mask, dtype=torch.float32).to(device)
                 print(f"Loaded {len(probe_masks)} probe masks from {args.mask_bank}.")
             except Exception as e:
                 print(f"Warning: failed to load probe masks: {e}")

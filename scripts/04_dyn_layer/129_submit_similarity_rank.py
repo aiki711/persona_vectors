@@ -35,7 +35,7 @@ PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 CONFIG="config/mistral_7b.yaml"
 VECTOR_BANK="vectors/mean_diff_vectors.npz"
-MASK_BANK="vectors/probe_masks.npz"
+MASK_BANK="vectors/soft_probe_masks.npz"
 PROMPT_IN="inputs/eval_prompts_10.jsonl"
 INPUT_DIR="exp_steering_layer_analysis/results"
 OUT_DIR="exp_steering_dyn_layer_raw/results"
@@ -116,6 +116,44 @@ for val in {vals_list}; do
             --mask_bank "$MASK_BANK" \\
             --seed 42
     fi
+
+    # 5. PDF Cos-Only (masked)
+    JSONL_OUT="${{OUT_DIR}}/{trait}/masked_cos_only_Val${{val}}.jsonl"
+    if [ ! -f "$JSONL_OUT" ]; then
+        echo "=== Running PDF Cos-Only alpha=$val ==="
+        "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_steering.py \\
+            --config "$CONFIG" \\
+            --vector_bank "$VECTOR_BANK" \\
+            --prompts "$PROMPT_IN" \\
+            --input_dir "$INPUT_DIR" \\
+            --out_dir "$OUT_DIR" \\
+            --axis "{trait}" \\
+            --alpha "$val" \\
+            --direction "high" \\
+            --norm_mode "raw_norm" \\
+            --score_mode "cosine" \\
+            --mask_bank "$MASK_BANK" \\
+            --seed 42
+    fi
+
+    # 6. PDF Proj Cos-Only (masked)
+    JSONL_OUT="${{OUT_DIR}}/{trait}/masked_proj_cos_only_Val${{val}}.jsonl"
+    if [ ! -f "$JSONL_OUT" ]; then
+        echo "=== Running PDF Proj Cos-Only alpha=$val ==="
+        "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_steering.py \\
+            --config "$CONFIG" \\
+            --vector_bank "$VECTOR_BANK" \\
+            --prompts "$PROMPT_IN" \\
+            --input_dir "$INPUT_DIR" \\
+            --out_dir "$OUT_DIR" \\
+            --axis "{trait}" \\
+            --alpha "$val" \\
+            --direction "high" \\
+            --norm_mode "raw_norm" \\
+            --score_mode "proj_cosine" \\
+            --mask_bank "$MASK_BANK" \\
+            --seed 42
+    fi
 done
 
 echo "Similarity-based Rank/Proj-Rank sweeps completed for {trait}."
@@ -127,7 +165,7 @@ EVAL_TEMPLATE = """#!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:nvidia_a40:1
-#SBATCH --time=04:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=log/eval_sim_rank_{trait}.out
 #SBATCH --error=log/eval_sim_rank_{trait}.err
 
@@ -178,7 +216,7 @@ def clean_old_files(results_dir: Path, trait: str):
     trait_dir = results_dir / trait
     if not trait_dir.exists():
         return
-    print(f"Cleaning old rank/proj_rank files in {trait_dir}...")
+    print(f"Cleaning old rank/proj_rank/masked files in {trait_dir}...")
     patterns = [
         "rank_only_Val*",
         "scores_rank_only_Val*",
@@ -187,7 +225,11 @@ def clean_old_files(results_dir: Path, trait: str):
         "proj_rank_only_Val*",
         "scores_proj_rank_only_Val*",
         "masked_proj_rank_only_Val*",
-        "scores_masked_proj_rank_only_Val*"
+        "scores_masked_proj_rank_only_Val*",
+        "masked_cos_only_Val*",
+        "scores_masked_cos_only_Val*",
+        "masked_proj_cos_only_Val*",
+        "scores_masked_proj_cos_only_Val*"
     ]
     for pattern in patterns:
         for f in trait_dir.glob(pattern):

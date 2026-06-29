@@ -116,9 +116,14 @@ class DynamicSteeringController:
                 if self.h_pos_dict and L in self.h_pos_dict and m is not None:
                     H_pos = self.h_pos_dict[L].to(torch.float32) # [1000, dim]
                     if mask is not None:
-                        H_pos = H_pos[:, mask]
-                        m_val = m[mask]
-                        h_val = h[mask]
+                        if mask.dtype == torch.bool:
+                            H_pos = H_pos[:, mask]
+                            m_val = m[mask]
+                            h_val = h[mask]
+                        else:
+                            H_pos = H_pos * mask.unsqueeze(0)
+                            m_val = m * mask
+                            h_val = h * mask
                     else:
                         m_val = m
                         h_val = h
@@ -149,9 +154,14 @@ class DynamicSteeringController:
                 if self.h_pos_dict and L in self.h_pos_dict and m is not None:
                     H_pos = self.h_pos_dict[L].to(torch.float32) # [1000, dim]
                     if mask is not None:
-                        H_pos = H_pos[:, mask]
-                        m_val = m[mask]
-                        h_val = h[mask]
+                        if mask.dtype == torch.bool:
+                            H_pos = H_pos[:, mask]
+                            m_val = m[mask]
+                            h_val = h[mask]
+                        else:
+                            H_pos = H_pos * mask.unsqueeze(0)
+                            m_val = m * mask
+                            h_val = h * mask
                     else:
                         m_val = m
                         h_val = h
@@ -211,9 +221,14 @@ class DynamicSteeringController:
                     H_pos = self.h_pos_dict[L].to(torch.float32) # [1000, dim]
                     c = H_pos.mean(dim=0) # [dim]
                     if mask is not None:
-                        H_pos = H_pos[:, mask]
-                        c = c[mask]
-                        h_val = h[mask]
+                        if mask.dtype == torch.bool:
+                            H_pos = H_pos[:, mask]
+                            c = c[mask]
+                            h_val = h[mask]
+                        else:
+                            H_pos = H_pos * mask.unsqueeze(0)
+                            c = c * mask
+                            h_val = h * mask
                     else:
                         h_val = h
                         
@@ -433,7 +448,11 @@ def main():
             for L in LAYERS:
                 mask_key = f"{L}|{args.axis}|mask"
                 if mask_key in m_data:
-                    probe_masks_all[L] = torch.tensor(m_data[mask_key], dtype=torch.bool, device=device)
+                    raw_mask = m_data[mask_key]
+                    if raw_mask.dtype == bool:
+                        probe_masks_all[L] = torch.tensor(raw_mask, dtype=torch.bool, device=device)
+                    else:
+                        probe_masks_all[L] = torch.tensor(raw_mask, dtype=torch.float32, device=device)
 
     # Pre-load calibration matrices
     h_pos_dict_all = {}

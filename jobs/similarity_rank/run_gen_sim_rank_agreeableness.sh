@@ -17,14 +17,14 @@ PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 CONFIG="config/mistral_7b.yaml"
 VECTOR_BANK="vectors/mean_diff_vectors.npz"
-MASK_BANK="vectors/probe_masks.npz"
+MASK_BANK="vectors/soft_probe_masks.npz"
 PROMPT_IN="inputs/eval_prompts_10.jsonl"
 INPUT_DIR="exp_steering_layer_analysis/results"
 OUT_DIR="exp_steering_dyn_layer_raw/results"
 
 echo "Starting Similarity-based Rank/Proj-Rank sweeps for agreeableness..."
 
-for val in 0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0; do
+for val in 0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0; do
     # 1. Rank-Only (unmasked)
     JSONL_OUT="${OUT_DIR}/agreeableness/rank_only_Val${val}.jsonl"
     if [ ! -f "$JSONL_OUT" ]; then
@@ -95,6 +95,44 @@ for val in 0.5 1.0 2.0 4.0 5.0 6.0 8.0 10.0 15.0 20.0 25.0 30.0 35.0 40.0; do
             --direction "high" \
             --norm_mode "raw_norm" \
             --score_mode "proj_rank" \
+            --mask_bank "$MASK_BANK" \
+            --seed 42
+    fi
+
+    # 5. PDF Cos-Only (masked)
+    JSONL_OUT="${OUT_DIR}/agreeableness/masked_cos_only_Val${val}.jsonl"
+    if [ ! -f "$JSONL_OUT" ]; then
+        echo "=== Running PDF Cos-Only alpha=$val ==="
+        "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_steering.py \
+            --config "$CONFIG" \
+            --vector_bank "$VECTOR_BANK" \
+            --prompts "$PROMPT_IN" \
+            --input_dir "$INPUT_DIR" \
+            --out_dir "$OUT_DIR" \
+            --axis "agreeableness" \
+            --alpha "$val" \
+            --direction "high" \
+            --norm_mode "raw_norm" \
+            --score_mode "cosine" \
+            --mask_bank "$MASK_BANK" \
+            --seed 42
+    fi
+
+    # 6. PDF Proj Cos-Only (masked)
+    JSONL_OUT="${OUT_DIR}/agreeableness/masked_proj_cos_only_Val${val}.jsonl"
+    if [ ! -f "$JSONL_OUT" ]; then
+        echo "=== Running PDF Proj Cos-Only alpha=$val ==="
+        "$PYTHON_BIN" scripts/04_dyn_layer/82_run_dyn_layer_steering.py \
+            --config "$CONFIG" \
+            --vector_bank "$VECTOR_BANK" \
+            --prompts "$PROMPT_IN" \
+            --input_dir "$INPUT_DIR" \
+            --out_dir "$OUT_DIR" \
+            --axis "agreeableness" \
+            --alpha "$val" \
+            --direction "high" \
+            --norm_mode "raw_norm" \
+            --score_mode "proj_cosine" \
             --mask_bank "$MASK_BANK" \
             --seed 42
     fi

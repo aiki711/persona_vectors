@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:nvidia_a40:1
-#SBATCH --time=04:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=log/eval_sim_rank_neuroticism.out
 #SBATCH --error=log/eval_sim_rank_neuroticism.err
 

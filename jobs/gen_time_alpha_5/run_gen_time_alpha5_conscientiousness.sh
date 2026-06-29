@@ -17,7 +17,7 @@ PYTHON_BIN="$WORKDIR/persona_steering/bin/python3"
 
 CONFIG="config/mistral_7b.yaml"
 VECTOR_BANK="vectors/mean_diff_vectors.npz"
-MASK_BANK="vectors/probe_masks.npz"
+MASK_BANK="vectors/soft_probe_masks.npz"
 PROMPT_IN="inputs/eval_prompts_10.jsonl"
 OUT_DIR="exp_steering_dyn_gen_time_raw/results"
 
