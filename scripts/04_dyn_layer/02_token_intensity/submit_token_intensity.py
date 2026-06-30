@@ -69,10 +69,14 @@ python scripts/04_dyn_layer/02_token_intensity/run_token_intensity_steering.py \
 def main():
     print("Generating SLURM submit scripts...")
     job_files = []
-    
     for trait in TRAITS:
         for conf_id, name, theta_lo, theta_hi, k_lo, k_hi in CONFIGS:
             for m_name, mask_arg in METHODS:
+                # Check if results already exist
+                out_file = OUT_DIR / trait / f"{m_name}_theta_{theta_lo}_{theta_hi}_k_{k_lo}_{k_hi}_Val5.0.jsonl"
+                if out_file.exists():
+                    continue
+                
                 # Write bash script
                 script_content = TEMPLATE.format(
                     workspace=WORKSPACE,
