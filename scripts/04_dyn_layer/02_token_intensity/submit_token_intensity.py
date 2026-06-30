@@ -52,8 +52,8 @@ source persona_steering/bin/activate
 
 python scripts/04_dyn_layer/02_token_intensity/run_token_intensity_steering.py \\
     --config configs/mistral_7b.yaml \\
-    --vector_bank vectors/vector_bank.npz \\
-    --prompts inputs/eval_prompts_10.jsonl \\
+    --vector_bank vectors/mean_diff_vectors.npz \\
+    --prompts inputs/alpaca_prompts_100.jsonl \\
     --out_dir {out_dir} \\
     --axis {trait} \\
     --alpha_max 5.0 \\
@@ -62,7 +62,7 @@ python scripts/04_dyn_layer/02_token_intensity/run_token_intensity_steering.py \
     --theta_hi {theta_hi} \\
     --k_lo {k_lo} \\
     --k_hi {k_hi} \\
-    --num_prompts 10 \\
+    --num_prompts 100 \\
     {mask_arg}
 """
 

@@ -13,7 +13,7 @@ source persona_steering/bin/activate
 
 python scripts/04_dyn_layer/02_token_intensity/run_token_intensity_steering.py \
     --config configs/mistral_7b.yaml \
-    --vector_bank vectors/vector_bank.npz \
+    --vector_bank vectors/mean_diff_vectors.npz \
     --prompts inputs/eval_prompts_10.jsonl \
     --out_dir exp_token_intensity/results_test \
     --axis extraversion \
