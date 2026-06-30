@@ -60,6 +60,7 @@ class DynamicIntensitySteeringController:
             def make_hook(L_idx):
                 def hook(module, inp, out):
                     hs = out[0] if isinstance(out, tuple) else out
+                    steered_out = out
                     
                     if hs.size(1) == 1:
                         # Record hidden state of the current token
@@ -75,7 +76,8 @@ class DynamicIntensitySteeringController:
                             else:
                                 steered = hs_f32 + self.alpha * w_dev.view(1, 1, -1)
                             
-                            return (steered.to(hs.dtype), *out[1:]) if isinstance(out, tuple) else steered.to(hs.dtype)
+                            steered_hs = steered.to(hs.dtype)
+                            steered_out = (steered_hs, *out[1:]) if isinstance(out, tuple) else steered_hs
                     else:
                         # Prompt processing step (multiple tokens)
                         self.recorded_states[L_idx] = hs[0, -1, :].detach().clone()
@@ -84,7 +86,7 @@ class DynamicIntensitySteeringController:
                     if L_idx == max(self.candidate_layers):
                         self.update_layer()
                         
-                    return out
+                    return steered_out
                 return hook
             self.handles.append(stack[L].register_forward_hook(make_hook(L)))
 
