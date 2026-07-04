@@ -74,11 +74,11 @@ def load_data(results_dir: Path, alpha=4.0):
     return pd.DataFrame(records)
 
 def main():
-    results_dir = Path("exp_steering_dyn_layer_raw/results")
+    results_dir = Path("exp_layer_selection/exp_steering_dyn_layer_raw/results")
     df = load_data(results_dir, alpha=4.0)
     
     if df.empty:
-        print("Error: No data loaded. Check if the directory 'exp_steering_dyn_layer_raw/results' exists and contains jsonl files.")
+        print("Error: No data loaded. Check if the directory 'exp_layer_selection/exp_steering_dyn_layer_raw/results' exists and contains jsonl files.")
         return
         
     print(f"Loaded {len(df)} records.")
@@ -129,42 +129,12 @@ def main():
     print("\n--- Summary Table (Sorted by Avg Std Dev within Trait) ---")
     print(df_summary.to_markdown(index=False))
     
-    # Plotting
+    # Plotting (Combined Layer Selection Diversity - All Traits)
     plt.close("all")
-    fig, axes = plt.subplots(3, 2, figsize=(16, 18))
-    axes = axes.flatten()
+    fig, ax_all = plt.subplots(figsize=(10, 7))
     
     method_order = [METHOD_LABELS[m] for m in METHODS]
     
-    # Subplots for each trait
-    for i, trait in enumerate(TRAIT_LABELS.values()):
-        ax = axes[i]
-        df_trait = df[df["trait"] == trait]
-        
-        if df_trait.empty:
-            ax.text(0.5, 0.5, "No Data", ha="center", va="center")
-            ax.set_title(trait)
-            continue
-            
-        sns.boxplot(
-            data=df_trait, x="method", y="dyn_layer", order=method_order,
-            ax=ax, color="#f8f9fa", width=0.5, fliersize=0, boxprops={"zorder": 1, "edgecolor": "gray"}
-        )
-        sns.stripplot(
-            data=df_trait, x="method", y="dyn_layer", order=method_order,
-            ax=ax, size=6, jitter=0.25, palette="Set2", alpha=0.9, zorder=2, hue="method", legend=False
-        )
-        
-        ax.set_title(f"{trait} Layer Selection Diversity (Alpha=4.0)", fontsize=12, fontweight="bold")
-        ax.set_xlabel("")
-        ax.set_ylabel("Selected Layer", fontsize=10)
-        ax.set_ylim(3.5, 30.5)
-        ax.set_yticks(range(4, 31, 2))
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right", fontsize=9)
-        ax.grid(axis="y", linestyle=":", alpha=0.5)
-        
-    # The 6th plot is the global combined view (offset-corrected or raw)
-    ax_all = axes[5]
     sns.boxplot(
         data=df, x="method", y="dyn_layer", order=method_order,
         ax=ax_all, color="#f8f9fa", width=0.5, fliersize=0, boxprops={"zorder": 1, "edgecolor": "gray"}
@@ -173,20 +143,20 @@ def main():
         data=df, x="method", y="dyn_layer", order=method_order, hue="trait",
         ax=ax_all, size=5, jitter=0.25, palette="tab10", alpha=0.7, zorder=2
     )
-    ax_all.set_title("Combined Layer Selection Diversity (All Traits)", fontsize=12, fontweight="bold")
-    ax_all.set_xlabel("")
-    ax_all.set_ylabel("Selected Layer", fontsize=10)
+    
+    ax_all.set_title("Combined Layer Selection Diversity (All Traits, Alpha=4.0)", fontsize=14, fontweight="bold", pad=15)
+    ax_all.set_xlabel("Steering Method", fontsize=11, labelpad=10)
+    ax_all.set_ylabel("Selected Layer", fontsize=11)
     ax_all.set_ylim(3.5, 30.5)
     ax_all.set_yticks(range(4, 31, 2))
-    ax_all.set_xticklabels(ax_all.get_xticklabels(), rotation=45, ha="right", fontsize=9)
+    ax_all.set_xticklabels(ax_all.get_xticklabels(), rotation=45, ha="right", fontsize=10)
     ax_all.grid(axis="y", linestyle=":", alpha=0.5)
-    ax_all.legend(title="Trait", loc="lower right", fontsize=8)
+    ax_all.legend(title="Trait", loc="upper right", fontsize=9, title_fontsize=10)
     
-    plt.suptitle("Fixed-Layer Steering: Layer Selection Diversity across Prompts (Alpha=4.0)", fontsize=16, fontweight="bold", y=0.99)
     plt.tight_layout()
     
     # Save figures
-    out_dir = Path("exp_steering_dyn_layer_raw/figures/layey_selection_diversity")
+    out_dir = Path("exp_layer_selection/exp_steering_dyn_layer_raw/figures/layey_selection_diversity")
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "fixed_layer_diversity.png"
     plt.savefig(out_path, dpi=200, bbox_inches="tight")
