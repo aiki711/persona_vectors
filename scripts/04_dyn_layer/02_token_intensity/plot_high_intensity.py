@@ -32,7 +32,7 @@ ARTIFACTS_DIR = Path("/home/s2550009/.gemini/antigravity-ide/brain/6611299f-19cb
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
-ALPHAS = [1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0]
+ALPHAS = [1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]
 
 THETA_LO = 3.0
 THETA_HI = 7.0

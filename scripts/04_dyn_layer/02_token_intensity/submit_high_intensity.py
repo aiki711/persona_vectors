@@ -23,7 +23,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
-ALPHAS = [1.0, 2.0, 4.0, 6.0, 8.0, 10.0]
+ALPHAS = [1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]
 
 # Gating config for Gentle Gating (Conf 6)
 THETA_LO = 3.0
