@@ -151,7 +151,7 @@ def main():
     ax_all.set_yticks(range(4, 31, 2))
     ax_all.set_xticklabels(ax_all.get_xticklabels(), rotation=45, ha="right", fontsize=10)
     ax_all.grid(axis="y", linestyle=":", alpha=0.5)
-    ax_all.legend(title="Trait", loc="upper right", fontsize=9, title_fontsize=10)
+    ax_all.legend(title="Trait", loc="lower left", fontsize=9, title_fontsize=10)
     
     plt.tight_layout()
     
