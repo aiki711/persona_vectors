@@ -13,7 +13,7 @@ import pandas as pd
 from pathlib import Path
 
 # Set style
-plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available() else 'default')
+plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
 plt.rcParams.update({
     'font.family': 'DejaVu Sans',
     'font.size': 12,
