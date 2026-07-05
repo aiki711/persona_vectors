@@ -24,7 +24,9 @@ def sigmoid_lo(ic, theta_lo, k_lo):
 def sigmoid_hi(ic, theta_hi, k_hi):
     return 1.0 / (1.0 + np.exp(k_hi * (ic - theta_hi)))
 
-def gate_function(ic, p):
+def gate_function(ic, p, name=""):
+    if "No Gating" in name:
+        return np.ones_like(ic)
     return sigmoid_lo(ic, p["theta_lo"], p["k_lo"]) * sigmoid_hi(ic, p["theta_hi"], p["k_hi"])
 
 def main():
@@ -37,14 +39,14 @@ def main():
     grid = fig.add_gridspec(4, 2, height_ratios=[1, 1, 1, 1.8], hspace=0.4, wspace=0.25)
     for i, (name, params) in enumerate(CONFIGS.items()):
         ax = fig.add_subplot(grid[i // 2, i % 2])
-        g_values = gate_function(ic_values, params)
+        g_values = gate_function(ic_values, params, name)
         
         # グラフ線と領域の塗りつぶし
         ax.plot(ic_values, g_values, color=COLORS[i], lw=3, label=name)
         ax.fill_between(ic_values, 0, g_values, color=COLORS[i], alpha=0.15)
         
         # 【工夫点】しきい値 theta の位置を、そのConfの専用色で縦線プロット
-        if params["theta_hi"] < 50:
+        if "No Gating" not in name and params["theta_hi"] < 50:
             t_lo, t_hi = params["theta_lo"], params["theta_hi"]
             ax.axvline(t_lo, color=COLORS[i], linestyle="--", lw=1.5, alpha=0.8)
             ax.axvline(t_hi, color=COLORS[i], linestyle="--", lw=1.5, alpha=0.8)
@@ -69,7 +71,7 @@ def main():
     # 2. 重ね合わせ比較グラフ（パラメータによる形状変化のダイナミックな比較）
     ax_all = fig.add_subplot(grid[3, :])
     for i, (name, params) in enumerate(CONFIGS.items()):
-        g_values = gate_function(ic_values, params)
+        g_values = gate_function(ic_values, params, name)
         linestyle = "--" if "Conf 1" in name else "-"
         alpha = 0.5 if "Conf 1" in name else 0.9
         ax_all.plot(ic_values, g_values, color=COLORS[i], lw=2.5, linestyle=linestyle, alpha=alpha, label=name)
