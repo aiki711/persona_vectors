@@ -14,7 +14,7 @@ from pathlib import Path
 # Paths
 WORKSPACE = Path("/home/s2550009/persona_vectors")
 JOBS_DIR = WORKSPACE / "jobs/02_token_intensity"
-RESULTS_DIR = WORKSPACE / "exp_token_intensity/results"
+RESULTS_DIR = WORKSPACE / "exp_token_intensity/exp_symmetric/results"
 LOG_DIR = WORKSPACE / "log/02_token_intensity"
 
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,7 +34,7 @@ cd {workspace}
 source persona_steering/bin/activate
 
 python scripts/04_dyn_layer/02_token_intensity/batch_eval.py \\
-    --results_dir exp_token_intensity/results/{trait} \\
+    --results_dir exp_token_intensity/exp_symmetric/results/{trait} \\
     --axis {trait} \\
     --quant 4bit
 """
