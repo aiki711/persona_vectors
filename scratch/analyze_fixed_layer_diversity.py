@@ -75,7 +75,7 @@ def load_data(results_dir: Path, alpha=4.0):
 
 def main():
     results_dir = Path("exp_layer_selection/exp_steering_dyn_layer_raw/results")
-    df = load_data(results_dir, alpha=4.0)
+    df = load_data(results_dir, alpha=5.0)
     
     if df.empty:
         print("Error: No data loaded. Check if the directory 'exp_layer_selection/exp_steering_dyn_layer_raw/results' exists and contains jsonl files.")
@@ -144,7 +144,7 @@ def main():
         ax=ax_all, size=5, jitter=0.25, palette="tab10", alpha=0.7, zorder=2
     )
     
-    ax_all.set_title("Combined Layer Selection Diversity (All Traits, Alpha=4.0)", fontsize=14, fontweight="bold", pad=15)
+    ax_all.set_title("Combined Layer Selection Diversity (All Traits, Alpha=5.0)", fontsize=14, fontweight="bold", pad=15)
     ax_all.set_xlabel("Steering Method", fontsize=11, labelpad=10)
     ax_all.set_ylabel("Selected Layer", fontsize=11)
     ax_all.set_ylim(3.5, 30.5)
