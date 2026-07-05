@@ -235,10 +235,19 @@ def main():
     ap.add_argument("--theta_hi",     type=float, default=7.0)
     ap.add_argument("--k_lo",         type=float, default=2.0)
     ap.add_argument("--k_hi",         type=float, default=2.0)
+    ap.add_argument("--gating_mode",  type=str, choices=["standard", "max_normalized", "plateau"], default="standard")
     
     ap.add_argument("--update_interval", type=int, default=1)
     ap.add_argument("--seed",         type=int, default=42)
     args = ap.parse_args()
+
+    # Precompute theoretical maximum for max_normalized mode
+    g_max = 1.0
+    if args.gating_mode == "max_normalized":
+        ic_grid = np.linspace(0.0, 30.0, 3000)
+        f_lo_grid = 1.0 / (1.0 + np.exp(-args.k_lo * (ic_grid - args.theta_lo)))
+        f_hi_grid = 1.0 / (1.0 + np.exp(args.k_hi * (ic_grid - args.theta_hi)))
+        g_max = max(np.max(f_lo_grid * f_hi_grid), 1e-5)
 
     if args.seed is not None:
         import random
@@ -353,7 +362,13 @@ def main():
     if args.mask_bank:
         out_prefix = "masked_" + out_prefix
         
-    out_file = out_dir / f"{out_prefix}_theta_{args.theta_lo}_{args.theta_hi}_k_{args.k_lo}_{args.k_hi}_Val{args.alpha_max}.jsonl"
+    suffix = ""
+    if args.gating_mode == "max_normalized":
+        suffix = "_max_norm"
+    elif args.gating_mode == "plateau":
+        suffix = "_plateau"
+        
+    out_file = out_dir / f"{out_prefix}_theta_{args.theta_lo}_{args.theta_hi}_k_{args.k_lo}_{args.k_hi}{suffix}_Val{args.alpha_max}.jsonl"
     print(f"\nTarget Output: {out_file}")
 
     if out_file.exists():
@@ -420,9 +435,21 @@ def main():
                     ic = -np.log2(token_prob + 1e-10)
                     
                     # Gating sigmoid factor computation
-                    f_lo = 1.0 / (1.0 + np.exp(-args.k_lo * (ic - args.theta_lo)))
-                    f_hi = 1.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
-                    gating_factor = f_lo * f_hi
+                    if args.gating_mode == "standard":
+                        f_lo = 1.0 / (1.0 + np.exp(-args.k_lo * (ic - args.theta_lo)))
+                        f_hi = 1.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
+                        gating_factor = f_lo * f_hi
+                    elif args.gating_mode == "max_normalized":
+                        f_lo = 1.0 / (1.0 + np.exp(-args.k_lo * (ic - args.theta_lo)))
+                        f_hi = 1.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
+                        gating_factor = (f_lo * f_hi) / g_max
+                    elif args.gating_mode == "plateau":
+                        if ic < args.theta_lo:
+                            gating_factor = 2.0 / (1.0 + np.exp(-args.k_lo * (ic - args.theta_lo)))
+                        elif ic <= args.theta_hi:
+                            gating_factor = 1.0
+                        else:
+                            gating_factor = 2.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
                     
                     # Update alpha for the next token's forward pass
                     controller.alpha = args.alpha_max * gating_factor
