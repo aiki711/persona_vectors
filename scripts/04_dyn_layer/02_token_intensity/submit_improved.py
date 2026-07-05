@@ -14,9 +14,9 @@ from pathlib import Path
 
 # Paths
 WORKSPACE = Path("/home/s2550009/persona_vectors")
-JOBS_DIR = WORKSPACE / "jobs/02_token_intensity_improved"
-OUT_DIR = WORKSPACE / "exp_token_intensity/results_improved"
-LOG_DIR = WORKSPACE / "log/02_token_intensity_improved"
+JOBS_DIR = WORKSPACE / "jobs/02_token_intensity_asymmetric"
+OUT_DIR = WORKSPACE / "exp_token_intensity/asymmetric/results"
+LOG_DIR = WORKSPACE / "log/02_token_intensity_asymmetric"
 
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -33,9 +33,9 @@ K_LO = 0.5
 K_HI = 0.5
 
 TEMPLATE = """#!/bin/bash
-#SBATCH --job-name=dlis_imp_{trait}_{gating_mode}_a{alpha}
-#SBATCH --output={log_dir}/dlis_imp_{trait}_{gating_mode}_a{alpha}.log
-#SBATCH --error={log_dir}/dlis_imp_{trait}_{gating_mode}_a{alpha}.err
+#SBATCH --job-name=dlis_asym_{trait}_{gating_mode}_a{alpha}
+#SBATCH --output={log_dir}/dlis_asym_{trait}_{gating_mode}_a{alpha}.log
+#SBATCH --error={log_dir}/dlis_asym_{trait}_{gating_mode}_a{alpha}.err
 #SBATCH --partition=GPU-1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -90,7 +90,7 @@ def main():
                     k_hi=K_HI
                 )
                 
-                script_path = JOBS_DIR / f"run_dlis_imp_{trait}_{gating_mode}_a{alpha}.sh"
+                script_path = JOBS_DIR / f"run_dlis_asym_{trait}_{gating_mode}_a{alpha}.sh"
                 with open(script_path, "w", encoding="utf-8") as f:
                     f.write(script_content)
                 os.chmod(script_path, 0o755)
