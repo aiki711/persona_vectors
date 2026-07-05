@@ -25,8 +25,9 @@ plt.rcParams.update({
 })
 
 WORKSPACE = Path("/home/s2550009/persona_vectors")
-RESULTS_DIR = WORKSPACE / "exp_token_intensity/results"
-FIGURES_DIR = WORKSPACE / "exp_token_intensity/figures"
+RESULTS_DIR = WORKSPACE / "exp_token_intensity/exp_symmetric/results"
+FIGURES_DIR = WORKSPACE / "exp_token_intensity/exp_symmetric/figures"
+NO_GATING_DIR = WORKSPACE / "exp_layer_selection/exp_steering_dyn_layer_raw/results"
 ARTIFACTS_DIR = Path("/home/s2550009/.gemini/antigravity-ide/brain/6611299f-19cb-4461-bbfe-1854feeb8fae")
 
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
@@ -51,15 +52,12 @@ def get_metrics_for_alpha(alpha):
         if csv_path.exists():
             try:
                 df = pd.read_csv(csv_path)
-                # Score
                 scores.append(df["dyn_score"].mean())
-                # PPL (filter out inf/nan)
                 valid_ppl = df["dyn_ppl"][np.isfinite(df["dyn_ppl"])]
                 if not valid_ppl.empty:
                     ppls.append(valid_ppl.mean())
                 else:
                     ppls.append(999.0)
-                # Coherence
                 if "dyn_reason" in df.columns:
                     coh_rate = df["dyn_reason"].str.contains("Coherence: Yes", case=False, na=False).mean()
                     cohs.append(coh_rate)
@@ -68,57 +66,126 @@ def get_metrics_for_alpha(alpha):
             except Exception as e:
                 print(f"Error reading {csv_path}: {e}")
         else:
-            print(f"Warning: {csv_path} does not exist yet.")
+            pass
+            
+    if scores:
+        return np.mean(scores), np.mean(ppls), np.mean(cohs)
+    return None
+
+def get_no_gating_metrics_for_alpha(alpha):
+    scores = []
+    ppls = []
+    cohs = []
+    
+    for trait in TRAITS:
+        csv_name = f"scores_masked_proj_rank_only_Val{alpha}.csv"
+        csv_path = NO_GATING_DIR / trait / csv_name
+        
+        if not csv_path.exists():
+            csv_name = f"scores_masked_proj_rank_only_Val{int(alpha)}.csv"
+            csv_path = NO_GATING_DIR / trait / csv_name
+            
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
+                scores.append(df["dyn_score"].mean())
+                valid_ppl = df["dyn_ppl"][np.isfinite(df["dyn_ppl"])]
+                if not valid_ppl.empty:
+                    ppls.append(valid_ppl.mean())
+                else:
+                    ppls.append(999.0)
+                if "dyn_reason" in df.columns:
+                    coh_rate = df["dyn_reason"].str.contains("Coherence: Yes", case=False, na=False).mean()
+                    cohs.append(coh_rate)
+                else:
+                    cohs.append(1.0)
+            except Exception as e:
+                print(f"Error reading {csv_path}: {e}")
             
     if scores:
         return np.mean(scores), np.mean(ppls), np.mean(cohs)
     return None
 
 def main():
-    print("Aggregating metrics for high-intensity sweep...")
-    plot_data = []
+    print("Aggregating metrics for Gentle Gating (Symmetric)...")
+    gentle_data = []
     for alpha in ALPHAS:
         res = get_metrics_for_alpha(alpha)
         if res is not None:
             mean_score, mean_ppl, mean_coh = res
-            plot_data.append({
+            gentle_data.append({
                 'alpha': alpha,
                 'score': mean_score,
                 'ppl': mean_ppl,
                 'coherence': mean_coh
             })
-            print(f"Alpha={alpha:.1f} -> Score: {mean_score:.2f}, PPL: {mean_ppl:.2f}, Coherence: {mean_coh:.2%}")
+            print(f"Gentle Gating Alpha={alpha:.1f} -> Score: {mean_score:.2f}, PPL: {mean_ppl:.2f}, Coherence: {mean_coh:.2%}")
 
-    if not plot_data:
-        print("No data available to plot.")
+    print("Aggregating metrics for No Gating...")
+    no_gating_data = []
+    NO_GATING_ALPHAS = [1.0, 2.0, 4.0, 5.0, 6.0, 8.0, 10.0]
+    for alpha in NO_GATING_ALPHAS:
+        res = get_no_gating_metrics_for_alpha(alpha)
+        if res is not None:
+            mean_score, mean_ppl, mean_coh = res
+            no_gating_data.append({
+                'alpha': alpha,
+                'score': mean_score,
+                'ppl': mean_ppl,
+                'coherence': mean_coh
+            })
+            print(f"No Gating Alpha={alpha:.1f} -> Score: {mean_score:.2f}, PPL: {mean_ppl:.2f}, Coherence: {mean_coh:.2%}")
+
+    if not gentle_data:
+        print("No Gentle Gating data available to plot.")
         return
 
-    df_plot = pd.DataFrame(plot_data)
+    df_gentle = pd.DataFrame(gentle_data)
+    df_no_gating = pd.DataFrame(no_gating_data) if no_gating_data else None
 
     # Plot 1: Score & PPL on dual-axis
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
-    color = '#1f77b4'
+    color_gentle_score = '#1f77b4'
+    color_no_gating_score = '#aec7e8'
+    
     ax1.set_xlabel('Maximum Steering Intensity (alpha_max)')
-    ax1.set_ylabel('Steering Alignment Score (1.0 - 5.0)', color=color)
-    line1 = ax1.plot(df_plot['alpha'], df_plot['score'], color=color, marker='o', linewidth=2.5, label='Steering Score')
-    ax1.tick_params(axis='y', labelcolor=color)
+    ax1.set_ylabel('Steering Alignment Score (1.0 - 5.0)', color='#1f77b4')
+    
+    line1 = ax1.plot(df_gentle['alpha'], df_gentle['score'], color=color_gentle_score, marker='o', linewidth=2.5, label='Gentle Gating Score')
+    lines = line1
+    
+    if df_no_gating is not None:
+        line2 = ax1.plot(df_no_gating['alpha'], df_no_gating['score'], color=color_no_gating_score, marker='d', linestyle='--', linewidth=2, label='No Gating Score')
+        lines += line2
+        
+    ax1.tick_params(axis='y', labelcolor=color_gentle_score)
     ax1.set_ylim(1.0, 5.0)
 
     ax2 = ax1.twinx()  
-    color = '#d62728'
-    ax2.set_ylabel('Text Perplexity (PPL)', color=color)
-    line2 = ax2.plot(df_plot['alpha'], df_plot['ppl'], color=color, marker='s', linestyle='--', linewidth=2, label='Perplexity (PPL)')
-    ax2.tick_params(axis='y', labelcolor=color)
+    color_gentle_ppl = '#d62728'
+    color_no_gating_ppl = '#ff9896'
+    
+    ax2.set_ylabel('Text Perplexity (PPL)', color='#d62728')
+    
+    line3 = ax2.plot(df_gentle['alpha'], df_gentle['ppl'], color=color_gentle_ppl, marker='s', linestyle='-', linewidth=2.5, label='Gentle Gating PPL')
+    lines += line3
+    
+    if df_no_gating is not None:
+        line4 = ax2.plot(df_no_gating['alpha'], df_no_gating['ppl'], color=color_no_gating_ppl, marker='x', linestyle='--', linewidth=2, label='No Gating PPL')
+        lines += line4
+        
+    ax2.tick_params(axis='y', labelcolor=color_gentle_ppl)
+    ax2.set_ylim(0.0, 35.0)
+    
     # Baseline PPL reference line
     ax2.axhline(8.5, color='gray', linestyle=':', alpha=0.7, label='Baseline PPL (~8.5)')
 
     # Add legends
-    lines = line1 + line2
     labels = [l.get_label() for l in lines]
     ax1.legend(lines, labels, loc='upper left')
 
-    plt.title('DLIS Gentle Gating: Steering Score and PPL vs. Alpha Max', pad=20)
+    plt.title('DLIS Gating Comparison: Steering Score and PPL vs. Alpha Max', pad=20)
     fig.tight_layout()
     
     fig_path = FIGURES_DIR / "high_intensity_score_ppl.png"
@@ -133,10 +200,14 @@ def main():
 
     # Plot 2: Coherence Rate
     plt.figure(figsize=(10, 5))
-    plt.plot(df_plot['alpha'], df_plot['coherence'] * 100, color='#2ca02c', marker='D', linewidth=2.5, label='Coherence Rate')
+    plt.plot(df_gentle['alpha'], df_gentle['coherence'] * 100, color='#2ca02c', marker='D', linewidth=2.5, label='Gentle Gating Coherence')
+    
+    if df_no_gating is not None:
+        plt.plot(df_no_gating['alpha'], df_no_gating['coherence'] * 100, color='#a1d99b', marker='x', linestyle='--', linewidth=2, label='No Gating Coherence')
+        
     plt.xlabel('Maximum Steering Intensity (alpha_max)')
     plt.ylabel('Coherence Rate (%)')
-    plt.title('DLIS Gentle Gating: Coherence Rate vs. Alpha Max', pad=20)
+    plt.title('DLIS Gating Comparison: Coherence Rate vs. Alpha Max', pad=20)
     plt.ylim(0, 105)
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.legend(loc='lower left')
