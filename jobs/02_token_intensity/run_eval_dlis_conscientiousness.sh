@@ -12,6 +12,6 @@ cd /home/s2550009/persona_vectors
 source persona_steering/bin/activate
 
 python scripts/04_dyn_layer/02_token_intensity/batch_eval.py \
-    --results_dir exp_token_intensity/results/conscientiousness \
+    --results_dir exp_token_intensity/exp_symmetric/results/conscientiousness \
     --axis conscientiousness \
     --quant 4bit
