@@ -52,18 +52,29 @@ def get_score(model, tokenizer, text, trait, device):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--results_dir", required=True, help="Path to the results directory (e.g. exp_token_intensity/results/extraversion)")
+    ap.add_argument("--results_dir", default=None, help="Path to the results directory (e.g. exp_token_intensity/results/extraversion)")
+    ap.add_argument("--file", default=None, help="Path to a single JSONL file to evaluate")
     ap.add_argument("--axis", required=True, help="Personality trait (e.g. extraversion)")
     ap.add_argument("--model", default="meta-llama/Meta-Llama-3-70B-Instruct")
     ap.add_argument("--quant", default="4bit", choices=["auto", "8bit", "4bit", "none"])
     args = ap.parse_args()
 
-    results_dir = Path(args.results_dir)
-    if not results_dir.exists():
-        print(f"[ERROR] Directory not found: {results_dir}")
-        return
-
-    jsonl_files = sorted(list(results_dir.glob("*.jsonl")))
+    if args.file:
+        file_path = Path(args.file)
+        if not file_path.exists():
+            print(f"[ERROR] File not found: {file_path}")
+            return
+        jsonl_files = [file_path]
+        results_dir = file_path.parent
+    else:
+        if not args.results_dir:
+            print("[ERROR] Either --results_dir or --file must be specified.")
+            return
+        results_dir = Path(args.results_dir)
+        if not results_dir.exists():
+            print(f"[ERROR] Directory not found: {results_dir}")
+            return
+        jsonl_files = sorted(list(results_dir.glob("*.jsonl")))
     pending_files = []
     for f in jsonl_files:
         m = re.search(r"_Val([0-9.]+)", f.stem)

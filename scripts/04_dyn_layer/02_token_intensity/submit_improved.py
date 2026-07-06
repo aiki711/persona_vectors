@@ -45,6 +45,7 @@ TEMPLATE = """#!/bin/bash
 cd {workspace}
 source persona_steering/bin/activate
 
+# 1. Run generation
 python scripts/04_dyn_layer/02_token_intensity/run_token_intensity_steering.py \\
     --config configs/mistral_7b.yaml \\
     --vector_bank vectors/mean_diff_vectors.npz \\
@@ -60,6 +61,12 @@ python scripts/04_dyn_layer/02_token_intensity/run_token_intensity_steering.py \
     --gating_mode {gating_mode} \\
     --num_prompts 10 \\
     --mask_bank vectors/soft_probe_masks.npz
+
+# 2. Run evaluation immediately
+python scripts/04_dyn_layer/02_token_intensity/batch_eval.py \\
+    --file {out_dir}/{trait}/{out_filename} \\
+    --axis {trait} \\
+    --quant 4bit
 """
 
 def main():
@@ -87,7 +94,8 @@ def main():
                     theta_lo=THETA_LO,
                     theta_hi=THETA_HI,
                     k_lo=K_LO,
-                    k_hi=K_HI
+                    k_hi=K_HI,
+                    out_filename=out_file.name
                 )
                 
                 script_path = JOBS_DIR / f"run_dlis_asym_{trait}_{gating_mode}_a{alpha}.sh"
