@@ -238,17 +238,18 @@ def main():
     ax2.tick_params(axis='y', labelcolor='#d62728')
     ax2.set_ylim(0.0, 35.0)
     
-    # Baseline PPL reference line and legend
-    baseline_line = ax2.axhline(8.5, color='gray', linestyle=':', alpha=0.7, label='Baseline PPL (~8.5)')
-    lines = lines + [baseline_line]
+    # Baseline PPL reference line
+    ax2.axhline(8.5, color='gray', linestyle=':', alpha=0.7, label='Baseline PPL (~8.5)')
+
+    # Add legends
     labels = [l.get_label() for l in lines]
-    
-    ax1.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=True)
+    ax1.legend(lines, labels, loc='lower right')
 
     plt.title('DLIS Gating Comparison: Steering Score and PPL vs. Alpha Max', pad=20)
+    fig.tight_layout()
     
     fig_path = FIGURES_DIR / "high_intensity_score_ppl.png"
-    plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+    plt.savefig(fig_path, dpi=300)
     print(f"Saved: {fig_path}")
     if ARTIFACTS_DIR.exists():
         import shutil
@@ -272,10 +273,11 @@ def main():
     plt.title('DLIS Gating Comparison: Coherence Rate vs. Alpha Max', pad=20)
     plt.ylim(0, 105)
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=True)
+    plt.legend(loc='lower left')
+    plt.tight_layout()
 
     fig_path_coh = FIGURES_DIR / "high_intensity_coherence.png"
-    plt.savefig(fig_path_coh, dpi=300, bbox_inches='tight')
+    plt.savefig(fig_path_coh, dpi=300)
     print(f"Saved: {fig_path_coh}")
     if ARTIFACTS_DIR.exists():
         import shutil
