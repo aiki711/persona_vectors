@@ -29,7 +29,7 @@ from persona_vectors.live_axes import (
 LAYERS = list(range(32))
 
 class DynamicIntensitySteeringController:
-    def __init__(self, layer_w, layer_midpoint, score_mode, layer_priors, h_pos_dict, probe_masks, alpha_max, norm_mode, update_interval=1):
+    def __init__(self, layer_w, layer_midpoint, score_mode, layer_priors, h_pos_dict, probe_masks, alpha_max, norm_mode, update_interval=1, static_layer=False):
         self.layer_w = layer_w # dict L -> GPU tensor
         self.layer_midpoint = layer_midpoint # dict L -> GPU tensor
         self.score_mode = score_mode
@@ -39,6 +39,7 @@ class DynamicIntensitySteeringController:
         self.alpha_max = alpha_max
         self.norm_mode = norm_mode
         self.update_interval = update_interval
+        self.static_layer = static_layer
         
         # State
         self.alpha = alpha_max # dynamic alpha, initially alpha_max
@@ -100,7 +101,11 @@ class DynamicIntensitySteeringController:
             return
             
         self.step_counter += 1
-        if self.step_counter % self.update_interval != 0:
+        if self.static_layer and self.step_counter > 1:
+            self.layer_history.append(self.active_steering_layer)
+            return
+            
+        if not self.static_layer and self.step_counter % self.update_interval != 0:
             self.layer_history.append(self.active_steering_layer)
             return
 
@@ -238,12 +243,13 @@ def main():
     ap.add_argument("--gating_mode",  type=str, choices=["standard", "max_normalized", "plateau"], default="standard")
     
     ap.add_argument("--update_interval", type=int, default=1)
+    ap.add_argument("--static_layer", action="store_true", help="Select steering layer only once at prompt decoding start and freeze it")
     ap.add_argument("--seed",         type=int, default=42)
     args = ap.parse_args()
 
-    # Precompute theoretical maximum for max_normalized mode
+    # Precompute theoretical maximum for standard and max_normalized modes to scale peak to 1.0
     g_max = 1.0
-    if args.gating_mode == "max_normalized":
+    if args.gating_mode in ["standard", "max_normalized"]:
         ic_grid = np.linspace(0.0, 30.0, 3000)
         f_lo_grid = 1.0 / (1.0 + np.exp(-args.k_lo * (ic_grid - args.theta_lo)))
         f_hi_grid = 1.0 / (1.0 + np.exp(args.k_hi * (ic_grid - args.theta_hi)))
@@ -384,7 +390,7 @@ def main():
         controller = DynamicIntensitySteeringController(
             layer_w_dev_all, layer_midpoint_dev_all, args.score_mode, layer_priors,
             h_pos_dict_all, probe_masks_all, args.alpha_max, args.norm_mode,
-            update_interval=args.update_interval
+            update_interval=args.update_interval, static_layer=args.static_layer
         )
         controller.register_hooks(model)
 
@@ -435,11 +441,7 @@ def main():
                     ic = -np.log2(token_prob + 1e-10)
                     
                     # Gating sigmoid factor computation
-                    if args.gating_mode == "standard":
-                        f_lo = 1.0 / (1.0 + np.exp(-args.k_lo * (ic - args.theta_lo)))
-                        f_hi = 1.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
-                        gating_factor = f_lo * f_hi
-                    elif args.gating_mode == "max_normalized":
+                    if args.gating_mode in ["standard", "max_normalized"]:
                         f_lo = 1.0 / (1.0 + np.exp(-args.k_lo * (ic - args.theta_lo)))
                         f_hi = 1.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
                         gating_factor = (f_lo * f_hi) / g_max
