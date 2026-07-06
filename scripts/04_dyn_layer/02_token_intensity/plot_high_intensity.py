@@ -243,7 +243,7 @@ def main():
 
     # Add legends
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='lower right')
+    ax1.legend(lines, labels, loc='lower right', fontsize=10)
 
     plt.title('DLIS Gating Comparison: Steering Score and PPL vs. Alpha Max', pad=20)
     fig.tight_layout()
