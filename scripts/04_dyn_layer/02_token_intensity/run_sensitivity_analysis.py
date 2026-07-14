@@ -269,6 +269,11 @@ def main():
             if mp_key in v_data:
                 layer_midpoint_dev_all[L] = torch.tensor(v_data[mp_key], dtype=torch.float32, device=device)
 
+        # Load final layer steering vector (layer 31) for alignment gain projection
+        w_final_key = f"31|{trait}|w"
+        w_final = torch.tensor(v_data[w_final_key], dtype=torch.float32, device=device)
+        w_final_unit = w_final / (torch.norm(w_final) + 1e-10)
+
         # Load trait soft masks
         probe_masks_all = {}
         if args.mask_bank:
@@ -324,15 +329,13 @@ def main():
                         # 1. Unsteered forward pass
                         controller.alpha = 0.0
                         unsteered_kv = clone_past_key_values(past_key_values)
-                        unsteered_out = model(input_ids[:, -1:], past_key_values=unsteered_kv, use_cache=True)
+                        unsteered_out = model(input_ids[:, -1:], past_key_values=unsteered_kv, use_cache=True, output_hidden_states=True)
                         unsteered_logits = unsteered_out.logits[:, -1, :].clone()
-                        h_unsteered = controller.recorded_states[L_star].clone()
                         
                         # 2. Steered forward pass
                         controller.alpha = args.alpha_max
-                        steered_out = model(input_ids[:, -1:], past_key_values=past_key_values, use_cache=True)
+                        steered_out = model(input_ids[:, -1:], past_key_values=past_key_values, use_cache=True, output_hidden_states=True)
                         steered_logits = steered_out.logits[:, -1, :].clone()
-                        h_steered = controller.recorded_states[L_star].clone()
                         
                         # Update main cache with steered outputs
                         past_key_values = steered_out.past_key_values
@@ -359,10 +362,11 @@ def main():
                         # D_KL(P_unsteered || P_steered)
                         kl = torch.sum(probs_unsteered * (torch.log(probs_unsteered + 1e-10) - torch.log(probs_steered + 1e-10))).item()
                         
-                        # 3. Alignment Gain (Projection onto normalized steering vector)
-                        proj_steered = torch.dot(h_steered, w_unit).item()
-                        proj_unsteered = torch.dot(h_unsteered, w_unit).item()
-                        align_gain = proj_steered - proj_unsteered
+                        # 3. Alignment Gain (Projection of downstream change in final hidden state onto final steering direction)
+                        h_unsteered_final = unsteered_out.hidden_states[-1][0, 0, :]
+                        h_steered_final = steered_out.hidden_states[-1][0, 0, :]
+                        delta_h_final = h_steered_final - h_unsteered_final
+                        align_gain = torch.dot(delta_h_final.to(torch.float32), w_final_unit.to(torch.float32)).item()
                         
                         token_str = tokenizer.decode([token_id])
                         
