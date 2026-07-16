@@ -240,8 +240,7 @@ def main():
     ap.add_argument("--theta_hi",     type=float, default=7.0)
     ap.add_argument("--k_lo",         type=float, default=2.0)
     ap.add_argument("--k_hi",         type=float, default=2.0)
-    ap.add_argument("--gating_mode",  type=str, choices=["standard", "max_normalized", "plateau"], default="standard")
-    
+    ap.add_argument("--gating_mode",  type=str, choices=["standard", "max_normalized", "plateau", "entropy", "dual"], default="standard")
     ap.add_argument("--update_interval", type=int, default=1)
     ap.add_argument("--static_layer", action="store_true", help="Select steering layer only once at prompt decoding start and freeze it")
     ap.add_argument("--seed",         type=int, default=42)
@@ -373,6 +372,10 @@ def main():
         suffix = "_max_norm"
     elif args.gating_mode == "plateau":
         suffix = "_plateau"
+    elif args.gating_mode == "entropy":
+        suffix = "_entropy"
+    elif args.gating_mode == "dual":
+        suffix = "_dual"
         
     out_file = out_dir / f"{out_prefix}_theta_{args.theta_lo}_{args.theta_hi}_k_{args.k_lo}_{args.k_hi}{suffix}_Val{args.alpha_max}.jsonl"
     print(f"\nTarget Output: {out_file}")
@@ -452,6 +455,14 @@ def main():
                             gating_factor = 1.0
                         else:
                             gating_factor = 2.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
+                    elif args.gating_mode == "entropy":
+                        entropy = -torch.sum(probs * torch.log2(probs + 1e-10), dim=-1).item()
+                        gating_factor = 1.0 / (1.0 + np.exp(-args.k_lo * (entropy - args.theta_lo)))
+                    elif args.gating_mode == "dual":
+                        entropy = -torch.sum(probs * torch.log2(probs + 1e-10), dim=-1).item()
+                        f_syntax = 1.0 / (1.0 + np.exp(-args.k_lo * (entropy - args.theta_lo)))
+                        f_rare = 1.0 / (1.0 + np.exp(args.k_hi * (ic - args.theta_hi)))
+                        gating_factor = f_syntax * f_rare
                     
                     # Update alpha for the next token's forward pass
                     controller.alpha = args.alpha_max * gating_factor
