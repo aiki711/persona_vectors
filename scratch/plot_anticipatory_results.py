@@ -17,16 +17,13 @@ TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agree
 # Configs definition for plotting
 CONFIGS = {
     "P-Conf 3 (Delay)": {"dir": OLD_DIR, "suffix": "_plateau", "theta_lo": 1.0, "theta_hi": 9.0, "k_lo": 2.0, "k_hi": 2.0, "fallback": (4.20, 10.79), "color": "#3498db"},
-    "P-Conf 3 (Anticipatory)": {"dir": NEW_DIR, "suffix": "_anticipatory", "theta_lo": 1.0, "theta_hi": 9.0, "k_lo": 2.0, "k_hi": 2.0, "fallback": (3.46, 8.72), "color": "#95a5a6"},
-    "P-Conf 3 (Resampled)": {"dir": NEW_DIR, "suffix": "_anticipatory_resampled", "theta_lo": 1.0, "theta_hi": 9.0, "k_lo": 2.0, "k_hi": 2.0, "fallback": (4.08, 9.60), "color": "#2ecc71"},
+    "P-Conf 3 (Resampled)": {"dir": NEW_DIR, "suffix": "_anticipatory_resampled", "theta_lo": 1.0, "theta_hi": 9.0, "k_lo": 2.0, "k_hi": 2.0, "fallback": (4.08, 9.60), "color": "#3498db"},
     
     "P-Conf 6 (Delay)": {"dir": OLD_DIR, "suffix": "_plateau", "theta_lo": 3.0, "theta_hi": 7.0, "k_lo": 0.5, "k_hi": 0.5, "fallback": (4.12, 9.96), "color": "#9b59b6"},
-    "P-Conf 6 (Anticipatory)": {"dir": NEW_DIR, "suffix": "_anticipatory", "theta_lo": 3.0, "theta_hi": 7.0, "k_lo": 0.5, "k_hi": 0.5, "fallback": (3.78, 8.84), "color": "#7f8c8d"},
-    "P-Conf 6 (Resampled)": {"dir": NEW_DIR, "suffix": "_anticipatory_resampled", "theta_lo": 3.0, "theta_hi": 7.0, "k_lo": 0.5, "k_hi": 0.5, "fallback": (4.00, 9.50), "color": "#e67e22"},
+    "P-Conf 6 (Resampled)": {"dir": NEW_DIR, "suffix": "_anticipatory_resampled", "theta_lo": 3.0, "theta_hi": 7.0, "k_lo": 0.5, "k_hi": 0.5, "fallback": (4.00, 9.50), "color": "#9b59b6"},
     
     "A-Conf 3 (Delay)": {"dir": OLD_DIR, "suffix": "_plateau", "theta_lo": 1.0, "theta_hi": 5.0, "k_lo": 1.0, "k_hi": 4.0, "fallback": (4.12, 9.42), "color": "#e74c3c"},
-    "A-Conf 3 (Anticipatory)": {"dir": NEW_DIR, "suffix": "_anticipatory", "theta_lo": 1.0, "theta_hi": 5.0, "k_lo": 1.0, "k_hi": 4.0, "fallback": (3.30, 8.50), "color": "#bdc3c7"},
-    "A-Conf 3 (Resampled)": {"dir": NEW_DIR, "suffix": "_anticipatory_resampled", "theta_lo": 1.0, "theta_hi": 5.0, "k_lo": 1.0, "k_hi": 4.0, "fallback": (4.10, 9.10), "color": "#e84393"},
+    "A-Conf 3 (Resampled)": {"dir": NEW_DIR, "suffix": "_anticipatory_resampled", "theta_lo": 1.0, "theta_hi": 5.0, "k_lo": 1.0, "k_hi": 4.0, "fallback": (4.10, 9.10), "color": "#e74c3c"},
 }
 
 def load_results():
@@ -84,6 +81,7 @@ def main():
     plt.title("Alignment Score: Delay vs Anticipatory (Predictive) Gating", fontsize=13, fontweight="bold", pad=15)
     plt.ylim(1.0, 5.0)
     plt.grid(axis='y', linestyle=':', alpha=0.6)
+    plt.xticks(rotation=30, ha="right")
     plt.legend(loc="lower left", fontsize=10)
     plt.tight_layout()
     
@@ -92,7 +90,7 @@ def main():
     print(f"Saved score chart to {score_path}")
     
     # ----------------- 2. Perplexity (PPL) Bar Chart -----------------
-    plt.figure(figsize=(10, 6.5))
+    plt.figure(figsize=(10, 6.0))
     ppls = [results[n]["ppl"] for n in names]
     
     bars = plt.bar(names, ppls, color=colors, edgecolor="black", alpha=0.85, width=0.5)
@@ -107,6 +105,7 @@ def main():
     plt.title("Text Perplexity (PPL): Delay vs Anticipatory (Predictive) Gating", fontsize=13, fontweight="bold", pad=15)
     plt.ylim(0, 12.5)
     plt.grid(axis='y', linestyle=':', alpha=0.6)
+    plt.xticks(rotation=30, ha="right")
     plt.legend(loc="upper left", fontsize=10)
     plt.tight_layout()
     
@@ -115,7 +114,7 @@ def main():
     print(f"Saved PPL chart to {ppl_path}")
 
     # ----------------- 3. 2D Trade-off Scatter Plot -----------------
-    plt.figure(figsize=(10, 7.5))
+    plt.figure(figsize=(10, 7.0))
     plt.scatter(base_nogating_ppl, base_nogating_score, color="#e74c3c", marker="s", s=180, zorder=5, label="No Gating (Baseline)")
     plt.text(base_nogating_ppl + 0.05, base_nogating_score, "No Gating", fontsize=10, fontweight="bold", va="center", ha="left")
     
@@ -127,28 +126,25 @@ def main():
     # Arrow for P-Conf 3 (Delay -> Resampled)
     p3_delay = results["P-Conf 3 (Delay)"]
     p3_res = results["P-Conf 3 (Resampled)"]
-    plt.annotate("", xy=(p3_res["ppl"], p3_res["score"]), xytext=(p3_delay["ppl"], p3_delay["score"]),
-                 arrowprops=dict(facecolor='#2ecc71', arrowstyle="->", connectionstyle="arc3,rad=-0.1", lw=2))
+    plt.annotate("", xy=(p3_res["ppl"], p3_res["score"]), xytext=(p3_delay["ppl"], p3_delay["score"]))
                  
     # Arrow for P-Conf 6 (Delay -> Resampled)
     p6_delay = results["P-Conf 6 (Delay)"]
     p6_res = results["P-Conf 6 (Resampled)"]
-    plt.annotate("", xy=(p6_res["ppl"], p6_res["score"]), xytext=(p6_delay["ppl"], p6_delay["score"]),
-                 arrowprops=dict(facecolor='#e67e22', arrowstyle="->", connectionstyle="arc3,rad=-0.1", lw=2))
+    plt.annotate("", xy=(p6_res["ppl"], p6_res["score"]), xytext=(p6_delay["ppl"], p6_delay["score"]))
                  
     # Arrow for A-Conf 3 (Delay -> Resampled)
     a3_delay = results["A-Conf 3 (Delay)"]
     a3_res = results["A-Conf 3 (Resampled)"]
-    plt.annotate("", xy=(a3_res["ppl"], a3_res["score"]), xytext=(a3_delay["ppl"], a3_delay["score"]),
-                 arrowprops=dict(facecolor='#e84393', arrowstyle="->", connectionstyle="arc3,rad=-0.1", lw=2))
+    plt.annotate("", xy=(a3_res["ppl"], a3_res["score"]), xytext=(a3_delay["ppl"], a3_delay["score"]))
 
     plt.xlabel("Text Perplexity (PPL) - Lower is Better (X >= 8.0)", fontsize=11, fontweight="bold")
     plt.ylabel("Steering Alignment Score - Higher is Better (Y >= 3.0)", fontsize=11, fontweight="bold")
     plt.title("Performance Trade-off Comparison: Delay vs Anticipatory Gating", fontsize=13, fontweight="bold", pad=15)
-    plt.xlim(8.0, 11.2)
-    plt.ylim(3.0, 4.5)
+    plt.xlim(9.0, 11.2)
+    plt.ylim(3.9, 4.4)
     plt.grid(True, linestyle=":", alpha=0.6)
-    plt.legend(loc="lower left", fontsize=10)
+    plt.legend(loc="lower right", fontsize=10)
     plt.tight_layout()
     
     scatter_path = OUT_DIR / "anticipatory_tradeoff_scatter.png"

@@ -47,14 +47,26 @@ def gating_function(ic, k_lo, k_hi, theta_lo, theta_hi):
 def main():
     # ----------------- 1. Plot Gating Curves Matrix -----------------
     plt.close("all")
-    fig, axes = plt.subplots(4, 4, figsize=(16, 14))
+    fig, axes = plt.subplots(3, 5, figsize=(18, 10.5))
     axes = axes.flatten()
     
     ic_values = np.linspace(0, 15, 500)
     
     for idx, (name, val) in enumerate(ALL_CONFIGS.items()):
         theta_lo, theta_hi, k_lo, k_hi, mode, score, ppl = val
-        ax = axes[idx]
+        
+        # Determine subplot index to align by category rows:
+        # Row 0 (0-4): P-Conf (5 configs)
+        # Row 1 (5-8): A-Conf (4 configs, index 9 is skipped)
+        # Row 2 (10-14): Opt-Plat / Optimized (5 configs)
+        if idx < 5:
+            ax_idx = idx
+        elif idx < 9:
+            ax_idx = idx
+        else:
+            ax_idx = idx + 1
+            
+        ax = axes[ax_idx]
         gain = gating_function(ic_values, k_lo, k_hi, theta_lo, theta_hi)
         
         # Color categorizing
@@ -79,16 +91,20 @@ def main():
         
         ax.set_title(name, fontsize=11, fontweight="bold")
         
-    # Disable unused subplots (we have 14 configs, so 16 - 14 = 2 unused axes)
-    for i in range(14, 16):
-        fig.delaxes(axes[i])
+    # Disable unused subplots (A-Conf row has only 4 configs, so delete index 9)
+    fig.delaxes(axes[9])
         
     # Axis labels
-    for i in range(4):
-        for j in range(4):
-            idx = 4 * i + j
-            if idx < 14:
-                if i == 3 or (i == 2 and j >= 2): # bottom row subplots
+    for i in range(3):
+        for j in range(5):
+            idx = 5 * i + j
+            if idx == 9:
+                continue
+                
+            config_idx = idx if idx < 9 else idx - 1
+            if config_idx < 14:
+                # Row 2 is always the bottom row for all columns
+                if i == 2:
                     axes[idx].set_xlabel("IC [bits]", fontsize=10)
                 if j == 0:
                     axes[idx].set_ylabel("Steering α", fontsize=10)

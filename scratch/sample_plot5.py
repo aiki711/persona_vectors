@@ -65,6 +65,11 @@ def main():
     ax_tokens.set_xticks(np.arange(len(tokens)))
     ax_tokens.set_xticklabels([f"'{t}'" for t in tokens], fontsize=10, fontweight="bold", rotation=30, ha="right")
     
+    for idx, label in enumerate(ax_tokens.get_xticklabels()):
+        ic_val = ic_sim[idx]
+        if 6.0 <= ic_val <= 10.0:
+            label.set_color("#e74c3c")
+    
     ax_tokens.set_title("Step-by-Step Simulation of Gating Gain (Plateau Mode)", fontsize=13, fontweight="bold", pad=12)
     ax_tokens.set_xlabel("Generated Token Sequence", fontsize=11, labelpad=8)
     ax_tokens.set_ylabel("Applied Intervention Rate (Gain)", fontsize=11, labelpad=8)
@@ -82,14 +87,14 @@ def main():
     print(f"Saved normalized plot to: {out_path}")
     
     try:
-        artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/6611299f-19cb-4461-bbfe-1854feeb8fae")
+        artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/d66404fe-b75d-437e-af64-1fc20e801469")
         artifact_dir.mkdir(parents=True, exist_ok=True)
         dest_path = artifact_dir / "surprisal_gating_normalized.png"
         import shutil
         shutil.copy(out_path, dest_path)
         print(f"Copied to artifact path: {dest_path}")
     except Exception as e:
-        pass
+        print(f"Error copying to artifact: {e}")
 
 if __name__ == "__main__":
     main()
