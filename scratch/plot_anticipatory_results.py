@@ -140,7 +140,7 @@ def main():
 
     plt.xlabel("Text Perplexity (PPL) - Lower is Better (X >= 8.0)", fontsize=11, fontweight="bold")
     plt.ylabel("Steering Alignment Score - Higher is Better (Y >= 3.0)", fontsize=11, fontweight="bold")
-    plt.title("Performance Trade-off Comparison: Delay vs Anticipatory Gating", fontsize=13, fontweight="bold", pad=15)
+    plt.title("Performance Trade-off Comparison", fontsize=13, fontweight="bold", pad=15)
     plt.xlim(9.0, 11.2)
     plt.ylim(3.9, 4.4)
     plt.grid(True, linestyle=":", alpha=0.6)

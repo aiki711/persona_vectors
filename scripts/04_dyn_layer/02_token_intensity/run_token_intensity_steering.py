@@ -240,18 +240,23 @@ def main():
     ap.add_argument("--theta_hi",     type=float, default=7.0)
     ap.add_argument("--k_lo",         type=float, default=2.0)
     ap.add_argument("--k_hi",         type=float, default=2.0)
-    ap.add_argument("--gating_mode",  type=str, choices=["standard", "max_normalized", "plateau", "entropy", "dual"], default="standard")
+    ap.add_argument("--gating_mode",  type=str, choices=["standard", "max_normalized", "plateau", "entropy", "dual", "entropy_plateau"], default="standard")
     ap.add_argument("--update_interval", type=int, default=1)
     ap.add_argument("--static_layer", action="store_true", help="Select steering layer only once at prompt decoding start and freeze it")
     ap.add_argument("--seed",         type=int, default=42)
     args = ap.parse_args()
 
-    # Precompute theoretical maximum for standard and max_normalized modes to scale peak to 1.0
+    # Precompute theoretical maximum for standard, max_normalized, and entropy_plateau modes to scale peak to 1.0
     g_max = 1.0
     if args.gating_mode in ["standard", "max_normalized"]:
         ic_grid = np.linspace(0.0, 30.0, 3000)
         f_lo_grid = 1.0 / (1.0 + np.exp(-args.k_lo * (ic_grid - args.theta_lo)))
         f_hi_grid = 1.0 / (1.0 + np.exp(args.k_hi * (ic_grid - args.theta_hi)))
+        g_max = max(np.max(f_lo_grid * f_hi_grid), 1e-5)
+    elif args.gating_mode == "entropy_plateau":
+        h_grid = np.linspace(0.0, 20.0, 2000)
+        f_lo_grid = 1.0 / (1.0 + np.exp(-args.k_lo * (h_grid - args.theta_lo)))
+        f_hi_grid = 1.0 / (1.0 + np.exp(args.k_hi * (h_grid - args.theta_hi)))
         g_max = max(np.max(f_lo_grid * f_hi_grid), 1e-5)
 
     if args.seed is not None:
@@ -374,6 +379,8 @@ def main():
         suffix = "_plateau"
     elif args.gating_mode == "entropy":
         suffix = "_entropy"
+    elif args.gating_mode == "entropy_plateau":
+        suffix = "_entropy_plateau"
     elif args.gating_mode == "dual":
         suffix = "_dual"
         
@@ -458,6 +465,11 @@ def main():
                     elif args.gating_mode == "entropy":
                         entropy = -torch.sum(probs * torch.log2(probs + 1e-10), dim=-1).item()
                         gating_factor = 1.0 / (1.0 + np.exp(-args.k_lo * (entropy - args.theta_lo)))
+                    elif args.gating_mode == "entropy_plateau":
+                        entropy = -torch.sum(probs * torch.log2(probs + 1e-10), dim=-1).item()
+                        f_lo = 1.0 / (1.0 + np.exp(-args.k_lo * (entropy - args.theta_lo)))
+                        f_hi = 1.0 / (1.0 + np.exp(args.k_hi * (entropy - args.theta_hi)))
+                        gating_factor = (f_lo * f_hi) / g_max
                     elif args.gating_mode == "dual":
                         entropy = -torch.sum(probs * torch.log2(probs + 1e-10), dim=-1).item()
                         f_syntax = 1.0 / (1.0 + np.exp(-args.k_lo * (entropy - args.theta_lo)))
