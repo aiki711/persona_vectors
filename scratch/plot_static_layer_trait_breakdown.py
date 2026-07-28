@@ -43,7 +43,7 @@ def main():
     # Output directories
     out_dir = Path("exp_layer_selection")
     out_dir.mkdir(parents=True, exist_ok=True)
-    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/6611299f-19cb-4461-bbfe-1854feeb8fae")
+    artifact_dir = Path("/home/s2550009/.gemini/antigravity-ide/brain/d66404fe-b75d-437e-af64-1fc20e801469")
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Plot Score separately
@@ -51,11 +51,9 @@ def main():
     for idx, method in enumerate(methods):
         offset = (idx - len(methods)/2 + 0.5) * width
         rects = plt.bar(x + offset, scores[method], width, label=method, color=colors[idx], edgecolor="black", alpha=0.9)
-        
-        if method in ["Unsteered Baseline", "PDF Proj Rank-Only"]:
-            for rect in rects:
-                h = rect.get_height()
-                plt.text(rect.get_x() + rect.get_width()/2.0, h + 0.05, f"{h:.2f}", ha='center', va='bottom', fontsize=8, fontweight="bold")
+        for rect in rects:
+            h = rect.get_height()
+            plt.text(rect.get_x() + rect.get_width()/2.0, h + 0.05, f"{h:.2f}", ha='center', va='bottom', fontsize=7.5, fontweight="bold")
 
     plt.ylabel("Steering Alignment Score", fontsize=11, fontweight="bold")
     plt.title("Steering Alignment Score", fontsize=12, fontweight="bold", pad=10)
@@ -75,11 +73,9 @@ def main():
     for idx, method in enumerate(methods):
         offset = (idx - len(methods)/2 + 0.5) * width
         rects = plt.bar(x + offset, ppls[method], width, label=method, color=colors[idx], edgecolor="black", alpha=0.9)
-        
-        if method in ["Unsteered Baseline", "PDF Proj Rank-Only"]:
-            for rect in rects:
-                h = rect.get_height()
-                plt.text(rect.get_x() + rect.get_width()/2.0, h + 0.15, f"{h:.1f}", ha='center', va='bottom', fontsize=8, fontweight="bold")
+        for rect in rects:
+            h = rect.get_height()
+            plt.text(rect.get_x() + rect.get_width()/2.0, h + 0.15, f"{h:.1f}", ha='center', va='bottom', fontsize=7.5, fontweight="bold")
 
     plt.ylabel("Text Perplexity (PPL)", fontsize=11, fontweight="bold")
     plt.title("Text Perplexity (Language Quality)", fontsize=12, fontweight="bold", pad=10)

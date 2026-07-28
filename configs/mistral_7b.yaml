@@ -1,2 +1,5 @@
-model_name: 'mistralai/Mistral-7B-v0.1'
-quant: '4bit'
+model_name: 'mistralai/Mistral-7B-Instruct-v0.3'
+quant: 'auto'
+per_axis: 2000
+batch_size: 2
+seed: 42
