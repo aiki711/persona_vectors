@@ -18,7 +18,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 
 # Updated and extended Rise-stage grid based on heatmap analysis:
-# theta_lo shifted smaller (0.0 to 1.2), k_lo shifted larger (1.0 to 6.0)
+# theta_lo shifted smaller (0.1 to 0.6), k_lo shifted larger (2.0 to 6.0)
 THETA_LO_LIST = [0.1, 0.2, 0.3, 0.4, 0.6]
 K_LO_LIST = [2.0, 3.0, 4.0, 5.0, 6.0]
 

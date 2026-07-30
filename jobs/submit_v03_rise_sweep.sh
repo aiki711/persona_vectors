@@ -8,7 +8,6 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=12:00:00
-#SBATCH --exclude=spcc-a40g04
 
 set -e
 

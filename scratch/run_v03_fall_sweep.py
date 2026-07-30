@@ -18,7 +18,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 TRAITS = ["extraversion", "neuroticism", "openness", "conscientiousness", "agreeableness"]
 
 # Updated and extended Fall-stage grid based on heatmap analysis:
-# theta_hi shifted smaller (1.5 to 7.0), k_hi shifted smaller (0.05 to 1.5)
+# theta_hi shifted smaller (1.5 to 3.5), k_hi shifted smaller (0.05 to 0.4)
 THETA_HI_LIST = [1.5, 2.0, 2.5, 3.0, 3.5]
 K_HI_LIST = [0.05, 0.1, 0.2, 0.3, 0.4]
 
